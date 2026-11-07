@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 // writeBack re-encrypts the current plaintext image back to the SQLCipher file. It verifies the
@@ -95,6 +97,19 @@ func (s *Store) DeleteSession(id int64) error {
 		return err
 	}
 	if _, err := s.db.Exec(`DELETE FROM sessions WHERE id=?`, id); err != nil {
+		return err
+	}
+	return s.writeBack()
+}
+
+// SaveSSHTrust records an accepted SSH host key (trust-on-first-use "accept and save"), matching the
+// Rust ssh_trust table (host lowercased, key base64). A duplicate is ignored.
+func (s *Store) SaveSSHTrust(host string, port int, algorithm, keyB64 string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.db.Exec(
+		`INSERT OR IGNORE INTO ssh_trust(host, port, algorithm, key, added_at) VALUES(?,?,?,?,?)`,
+		strings.ToLower(host), port, algorithm, keyB64, time.Now().Unix()); err != nil {
 		return err
 	}
 	return s.writeBack()

@@ -38,7 +38,7 @@ func (a *App) SftpConnect(sessionID int64) (*SftpSession, error) {
 		return nil, err
 	}
 	c, err := sftpconn.Connect(sshconn.Config{
-		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password, HostKey: hostKeyCallback(),
+		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password, HostKey: a.sshHostKeyCallback(sv.Host, sv.Port),
 	})
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func (a *App) ConnectSftpDemo() (*SftpSession, error) {
 		return nil, errors.New("no demo target")
 	}
 	user, pass, host, port := parseTarget(v)
-	c, err := sftpconn.Connect(sshconn.Config{Host: host, Port: port, User: user, Password: pass, HostKey: hostKeyCallback()})
+	c, err := sftpconn.Connect(sshconn.Config{Host: host, Port: port, User: user, Password: pass, HostKey: a.sshHostKeyCallback(host, port)})
 	if err != nil {
 		return nil, err
 	}

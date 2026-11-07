@@ -9,7 +9,8 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { DeleteSession } from "./api";
+import { DeleteSession, SshTrustRespond } from "./api";
+import { Events } from "@wailsio/runtime";
 import TerminalView from "./Terminal.vue";
 import FileBrowser from "./FileBrowser.vue";
 import VncCanvas from "./VncView.vue";
@@ -72,6 +73,7 @@ async function openDemos() {
 }
 
 onMounted(async () => {
+  Events.On("ssh:trust", (ev: { data: unknown }) => { trustReq.value = ev.data as TrustReq; });
   try { locked.value = await Locked(); } catch { locked.value = true; }
   if (locked.value) { loading.value = false; return; }
   await loadData();
@@ -115,6 +117,15 @@ function openVnc(title: string, connect: () => Promise<VncView>) {
 const editorOpen = ref(false);
 const editorSessionId = ref<number | null>(null);
 const ctx = ref<{ x: number; y: number; session: Session } | null>(null);
+
+// SSH host-key trust prompt (TOFU): the backend emits "ssh:trust" for an unknown key and blocks.
+type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string };
+const trustReq = ref<TrustReq | null>(null);
+function respondTrust(decision: "once" | "save" | "reject") {
+  if (!trustReq.value) return;
+  void SshTrustRespond(trustReq.value.reqId, decision);
+  trustReq.value = null;
+}
 
 function newSession() { editorSessionId.value = null; editorOpen.value = true; }
 function importSessions() { /* TODO: MobaXterm .mxtsessions / rustXterm import */ }
@@ -326,6 +337,24 @@ const tabIcon = (t: Tab) => icon(t.icon);
       @saved="onEditorSaved"
       @close="editorOpen = false"
     />
+
+    <!-- SSH host-key trust (trust-on-first-use) -->
+    <div v-if="trustReq" class="modal-backdrop" style="z-index: 65">
+      <div class="dialog" style="width: 470px">
+        <div class="dialog-title">Unknown host key</div>
+        <div class="dialog-body">
+          <p class="dialog-sub">The SSH host key of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not known. No credentials are sent until you accept.</p>
+          <div class="fp-head"><img :src="icon('key')" class="dbtn-ico" /> {{ trustReq.algorithm }} key fingerprint</div>
+          <div class="fp">{{ trustReq.fingerprint }}</div>
+          <p class="dialog-sub">Accept only if it matches the fingerprint published by the server administrator.</p>
+          <div class="dialog-actions">
+            <button class="dbtn primary" @click="respondTrust('once')">Accept once</button>
+            <button class="dbtn" @click="respondTrust('save')">Accept and save</button>
+            <button class="dbtn" @click="respondTrust('reject')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -390,6 +419,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .dbtn.primary:hover { background: linear-gradient(#55a0e0, #3277c0); }
 .dbtn.primary:disabled { opacity: .55; cursor: default; }
 .dbtn-ico { height: 14px; width: 14px; }
+.fp-head { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #4a5a68; background: #e7ecf1; border: 1px solid #d6dde4; padding: 4px 8px; margin: 4px 0; }
+.fp { font-family: "DejaVu Sans Mono", monospace; font-size: 12px; color: #1e3a5a; background: #fff; border: 1px solid #c2ccd6; padding: 8px 10px; word-break: break-all; margin-bottom: 10px; }
 /* tree context menu */
 .ctx-mask { position: fixed; inset: 0; z-index: 70; }
 .ctx { position: fixed; min-width: 180px; background: #f7f9fb; border: 1px solid #9aa7b4; box-shadow: 0 8px 24px rgba(0,0,0,.28); padding: 3px; }

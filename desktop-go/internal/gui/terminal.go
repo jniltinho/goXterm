@@ -4,11 +4,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
-
-	"golang.org/x/crypto/ssh"
 
 	"rustxterm-go/internal/sshconn"
 	"rustxterm-go/internal/store"
@@ -154,7 +151,7 @@ func (a *App) dial(host string, port int, user, password string) (string, error)
 	tabID, onData, onClose := a.newStreamTab()
 	sess, err := sshconn.Connect(sshconn.Config{
 		Host: host, Port: port, User: user, Password: password,
-		HostKey: hostKeyCallback(), Cols: 80, Rows: 24,
+		HostKey: a.sshHostKeyCallback(host, port), Cols: 80, Rows: 24,
 	}, onData, onClose)
 	if err != nil {
 		return "", err
@@ -196,24 +193,6 @@ func (a *App) session(tabID string) termStream {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.term[tabID]
-}
-
-// hostKeyCallback verifies against ~/.ssh/known_hosts. RXT_SSH_INSECURE=1 accepts any key (lab tests
-// only). A trust-on-first-use prompt and the DB ssh_trust records are a follow-up.
-func hostKeyCallback() ssh.HostKeyCallback {
-	insecure := os.Getenv("RXT_SSH_INSECURE") == "1"
-	known, kherr := store.KnownHostsCallback()
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		if insecure {
-			return nil
-		}
-		if kherr == nil {
-			if known(hostname, remote, key) == nil {
-				return nil
-			}
-		}
-		return fmt.Errorf("host key not trusted for %s (%s)", hostname, ssh.FingerprintSHA256(key))
-	}
 }
 
 // viewOf maps a stored session row to a SessionView (same mapping as Sessions()).

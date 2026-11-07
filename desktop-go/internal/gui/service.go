@@ -24,6 +24,7 @@ type App struct {
 	remote map[string]remoteFS         // tabId → live SFTP/FTP file session
 	vnc    map[string]*vncconn.Session // tabId → live VNC session
 	rdp    map[string]*rdpconn.Session // tabId → live RDP session
+	trust  map[string]chan string      // reqId → pending SSH host-key trust decision
 }
 
 // termStream is any byte-stream terminal the SPA drives the same way (SSH/Telnet/Serial); each

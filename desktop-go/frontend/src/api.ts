@@ -39,6 +39,9 @@ export const SaveSession = (js: string) => call<number>("SaveSession", js);
 export const DeleteSession = (id: number) => call<void>("DeleteSession", id);
 export const SessionJSON = (id: number) => call<string>("SessionJSON", id);
 
+// SSH host-key trust (TOFU): the backend emits "ssh:trust" for an unknown key; answer once/save/reject.
+export const SshTrustRespond = (reqId: string, decision: string) => call<void>("SshTrustRespond", reqId, decision);
+
 // Terminal (SSH) — output streams as Wails events "term:out:<tabId>" (base64) and "term:close:<tabId>".
 export const Connect = (id: number) => call<string>("Connect", id);
 export const QuickConnect = (host: string, port: number, user: string, password: string) =>
