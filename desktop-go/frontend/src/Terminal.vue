@@ -351,6 +351,21 @@ onMounted(async () => {
   wireEvents();
   await attach();
   startMon();
+  // Keystrokes go out one call at a time, in order: concurrent Send calls are served by separate
+  // goroutines and fast typing could arrive swapped ("conpty" → "cnopty"); input typed while a call is
+  // in flight is batched into the next one.
+  let pending = "";
+  let sending = false;
+  const pump = async () => {
+    sending = true;
+    while (pending) {
+      const chunk = pending;
+      pending = "";
+      try { await Send(tabId, chunk); } catch { /* the tab has closed: the close event reports it */ }
+    }
+    sending = false;
+  };
+  const send = (d: string) => { pending += d; if (!sending) void pump(); };
   term.onData((d) => {
     if (stopped) {
       if (d === "\r" || d === "\x04") emit("close"); // Return or Ctrl+D closes the tab
@@ -358,7 +373,7 @@ onMounted(async () => {
       else if (d === "s" || d === "S") void saveOutput();
       return;
     }
-    void Send(tabId, d);
+    send(d);
     if (d.includes("\r")) {
       clearTimeout(enterTimer);
       enterTimer = setTimeout(() => emit("enter"), 500); // let a `cd` finish first
