@@ -41,7 +41,7 @@ const menu = ref("");
 const sidebarCollapsed = ref(false);
 function toggleMenu(name: string) { menu.value = menu.value === name ? "" : name; }
 function runMenu(fn: () => void) { menu.value = ""; fn(); }
-function aboutApp() { alert("rustXterm — native terminal & remote session manager (Go + Wails)."); }
+function aboutApp() { void showInfo("About rustXterm", "rustXterm — native terminal & remote session manager (Go + Wails)."); }
 
 // Global keyboard shortcuts. Chord combos (Ctrl+Shift+…, Ctrl+Tab) work anywhere; single keys
 // (Enter/F2/Delete) only when focus is not in a text field or the terminal, so terminal input is never
@@ -76,6 +76,8 @@ import RdpCanvas from "./RdpView.vue";
 import SessionEditor from "./SessionEditor.vue";
 import SettingsDialog from "./SettingsDialog.vue";
 import SftpPanel from "./SftpPanel.vue";
+import AskDialog from "./AskDialog.vue";
+import { askText, askConfirm, showInfo } from "./ask";
 import TunnelsDialog from "./TunnelsDialog.vue";
 
 const sessions = ref<Session[]>([]);
@@ -350,7 +352,7 @@ function importSessions() { /* TODO: MobaXterm .mxtsessions / rustXterm import *
 function editSession(s: Session) { editorSessionId.value = s.id; editorOpen.value = true; }
 async function onEditorSaved(_id: number) { editorOpen.value = false; await loadData(); }
 async function delSession(s: Session) {
-  if (!confirm(`Delete session "${s.name}"? This cannot be undone.`)) return;
+  if (!(await askConfirm("Delete session", `Delete session "${s.name}"? This cannot be undone.`, "Delete"))) return;
   try { await DeleteSession(s.id); if (selected.value?.id === s.id) selected.value = null; await loadData(); }
   catch (e) { error.value = String(e); }
 }
@@ -358,22 +360,22 @@ async function dupSession(s: Session) {
   try { await DuplicateSession(s.id); await loadData(); } catch (e) { error.value = String(e); }
 }
 async function renameSession(s: Session) {
-  const name = prompt("Rename session:", s.name);
+  const name = await askText("Rename session", "Session name:", s.name);
   if (name === null || !name.trim() || name === s.name) return;
   try { await RenameSession(s.id, name.trim()); await loadData(); } catch (e) { error.value = String(e); }
 }
 async function newFolder(parent: number | null) {
-  const name = prompt("New folder name:");
+  const name = await askText("New folder", "Folder name:");
   if (!name || !name.trim()) return;
   try { await SaveFolder(0, name.trim(), parent); await loadData(); } catch (e) { error.value = String(e); }
 }
 async function renameFolder(f: Folder) {
-  const name = prompt("Rename folder:", f.name);
+  const name = await askText("Rename folder", "Folder name:", f.name);
   if (name === null || !name.trim() || name === f.name) return;
   try { await SaveFolder(f.id, name.trim(), f.parent); await loadData(); } catch (e) { error.value = String(e); }
 }
 async function delFolder(f: Folder) {
-  if (!confirm(`Delete folder "${f.name}"? Its sessions and subfolders move to the root.`)) return;
+  if (!(await askConfirm("Delete folder", `Delete folder "${f.name}"? Its sessions and subfolders move to the root.`, "Delete"))) return;
   try { await DeleteFolder(f.id); await loadData(); } catch (e) { error.value = String(e); }
 }
 function openCtx(e: MouseEvent, s: Session) { selected.value = s; ctx.value = { x: e.clientX, y: e.clientY, session: s }; }
@@ -718,6 +720,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
       @saved="onEditorSaved"
       @close="editorOpen = false"
     />
+
+    <AskDialog />
 
     <!-- global settings -->
     <SettingsDialog v-if="settingsOpen" @saved="settingsOpen = false; loadUI()" @close="settingsOpen = false" />

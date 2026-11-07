@@ -45,7 +45,7 @@
 ## 6. SFTP + file transfer
 
 - [x] 6.1 Implement SFTP (`pkg/sftp`) and the dual-pane file tab and verify list, download and upload with progress and error reporting against the lab
-- [ ] 6.2 Implement the SFTP side panel parity and verify it matches the egui panel's actions
+- [x] 6.2 Implement the SFTP side panel parity and verify it matches the egui panel's actions — DONE (Go): panel on the SSH tab's connection; verified in the Docker lab: listing, parent/refresh/path, Follow terminal folder (cd /etc), new folder, rename, delete (confirm), download (native save dialog, content checked) and upload (native open dialog, file checked on the server)
 
 ## 7. FTP / FTPS
 

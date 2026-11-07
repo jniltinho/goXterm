@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { askConfirm } from "./ask";
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import {
@@ -58,7 +59,7 @@ async function save() {
 }
 
 async function del(t: Tunnel) {
-  if (!confirm(`Delete tunnel "${t.name}"?`)) return;
+  if (!(await askConfirm("Delete tunnel", `Delete tunnel "${t.name}"?`, "Delete"))) return;
   try { await TunnelDelete(t.via, t.name); await refresh(); } catch (e) { err.value = String(e); }
 }
 async function toggle(t: Tunnel) {

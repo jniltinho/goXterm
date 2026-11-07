@@ -4,6 +4,7 @@ import {
   TermFiles, TermCwd, RemoteList, RemoteMkdir, RemoteRemove, RemoteRename, RemoteDownloadAs, RemoteUploadPick,
   type Entry,
 } from "./api";
+import { askText, askConfirm } from "./ask";
 
 // The SFTP browser side panel of the active SSH terminal tab (Rust/MobaXterm parity): an SFTP
 // channel on the tab's own connection, a toolbar, the path, the listing, and at the bottom
@@ -86,19 +87,21 @@ async function act(f: () => Promise<unknown>) {
 }
 const download = (name = sel.value) => name && act(() => RemoteDownloadAs(props.termId, join(path.value, name)));
 const upload = () => act(async () => { if (await RemoteUploadPick(props.termId, path.value)) await list(path.value); });
-const mkdir = () => {
-  const n = prompt("New folder name:");
-  if (n) void act(async () => { await RemoteMkdir(props.termId, join(path.value, n)); await list(path.value); });
-};
-const remove = () => {
-  if (sel.value && confirm(`Delete "${sel.value}"?`))
-    void act(async () => { await RemoteRemove(props.termId, join(path.value, sel.value)); await list(path.value); });
-};
-const rename = () => {
-  const n = sel.value && prompt("New name:", sel.value);
-  if (n && n !== sel.value)
-    void act(async () => { await RemoteRename(props.termId, join(path.value, sel.value), join(path.value, n)); await list(path.value); });
-};
+async function mkdir() {
+  const n = await askText("New folder", "Folder name:");
+  if (n) await act(async () => { await RemoteMkdir(props.termId, join(path.value, n)); await list(path.value); });
+}
+async function remove() {
+  const name = sel.value;
+  if (name && (await askConfirm("Confirm delete", `Delete "${name}"?`, "Delete")))
+    await act(async () => { await RemoteRemove(props.termId, join(path.value, name)); await list(path.value); });
+}
+async function rename() {
+  const old = sel.value;
+  const n = old && (await askText("Rename", "New name:", old));
+  if (n && n !== old)
+    await act(async () => { await RemoteRename(props.termId, join(path.value, old), join(path.value, n)); await list(path.value); });
+}
 </script>
 
 <template>
