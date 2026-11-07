@@ -13,6 +13,8 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+
+	"rustxterm-go/internal/store"
 )
 
 // dist is the built SPA, written here by `make frontend` (frontend/ → internal/gui/dist). Kept out of git.
@@ -46,6 +48,10 @@ func Run(version string, safeGPU bool) error {
 			application.PermissionNotifications: application.PermissionDeny,
 			application.PermissionClipboardRead: application.PermissionDeny,
 		},
+	}
+	// Settings › Display › Rendering backend "Software (CPU)" (shared config.toml value "cpu").
+	if s, err := store.LoadSettings(); err == nil && s.GPUBackend == "cpu" {
+		safeGPU = true
 	}
 	if safeGPU {
 		safeGraphics(&opts, &winOpts)

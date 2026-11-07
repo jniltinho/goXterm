@@ -146,30 +146,30 @@ const rename = () => {
 </template>
 
 <style scoped>
-.sp-head { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; font-size: 12.5px; font-weight: 600; color: #2b3a47; background: #e7ecf1; border-bottom: 1px solid #c9d1d9; }
+.sp-head { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; font-size: 12.5px; font-weight: 600; color: var(--k-2b3a47); background: var(--k-e7ecf1); border-bottom: 1px solid var(--k-c9d1d9); }
 .sp-hico { width: 16px; height: 16px; }
-.sp-tools { display: flex; gap: 1px; padding: 3px 4px; border-bottom: 1px solid #d6dde4; background: #f3f5f8; }
+.sp-tools { display: flex; gap: 1px; padding: 3px 4px; border-bottom: 1px solid var(--k-d6dde4); background: var(--k-f3f5f8); }
 .sp-tb { width: 24px; height: 22px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; cursor: pointer; }
 .sp-tb img { width: 16px; height: 16px; }
-.sp-tb:hover:not(:disabled) { background: #d7e3f4; border-color: #a9c7ef; }
+.sp-tb:hover:not(:disabled) { background: var(--k-d7e3f4); border-color: var(--k-a9c7ef); }
 .sp-tb:disabled { opacity: .35; cursor: default; }
-.sp-path { margin: 4px; height: 24px; padding: 0 6px; font-size: 12px; background: #fff; border: 1px solid #a9b4c0; outline: none; }
-.sp-path:focus { border-color: #6aa0da; }
+.sp-path { margin: 4px; height: 24px; padding: 0 6px; font-size: 12px; background: var(--k-ffffff); border: 1px solid var(--k-a9b4c0); outline: none; }
+.sp-path:focus { border-color: var(--k-6aa0da); }
 .sp-cols, .sp-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 62px 104px; align-items: center; gap: 4px; padding: 0 6px; }
-.sp-cols { grid-template-columns: minmax(0, 1fr) 62px 104px; height: 22px; font-size: 11.5px; color: #4a5a68; background: #eef1f4; border-top: 1px solid #d6dde4; border-bottom: 1px solid #d6dde4; }
+.sp-cols { grid-template-columns: minmax(0, 1fr) 62px 104px; height: 22px; font-size: 11.5px; color: var(--k-4a5a68); background: var(--k-eef1f4); border-top: 1px solid var(--k-d6dde4); border-bottom: 1px solid var(--k-d6dde4); }
 .sp-cols .c-name { padding-left: 22px; }
-.sp-row { height: 21px; font-size: 12px; color: #1e2a36; cursor: default; user-select: none; }
-.sp-row:hover { background: #e3ebf3; }
-.sp-row.sel { background: #cfe0f6; }
+.sp-row { height: 21px; font-size: 12px; color: var(--k-1e2a36); cursor: default; user-select: none; }
+.sp-row:hover { background: var(--k-e3ebf3); }
+.sp-row.sel { background: var(--k-cfe0f6); }
 .sp-ico { width: 16px; height: 16px; }
-.c-size { text-align: right; color: #4a5a68; }
-.c-time { color: #6b7a8a; font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+.c-size { text-align: right; color: var(--k-4a5a68); }
+.c-time { color: var(--k-6b7a8a); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
 .sp-list.busy { opacity: .6; }
-.sp-err { padding: 4px 8px; font-size: 11.5px; color: #c0392b; border-top: 1px solid #d6dde4; }
-.sp-empty { flex: 1; padding: 12px 10px; font-size: 12px; color: #6b7a8a; }
-.sp-foot { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-top: 1px solid #c9d1d9; background: #eef1f4; }
-.sp-follow { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #2b3a47; }
-.sp-mon { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; font-size: 12.5px; color: #2b3a47; background: linear-gradient(#ffffff, #e9eef3); border: 1px solid #a9b4c0; cursor: pointer; text-align: left; }
-.sp-mon.on { background: #cfe0f6; border-color: #6aa0da; }
+.sp-err { padding: 4px 8px; font-size: 11.5px; color: var(--k-c0392b); border-top: 1px solid var(--k-d6dde4); }
+.sp-empty { flex: 1; padding: 12px 10px; font-size: 12px; color: var(--k-6b7a8a); }
+.sp-foot { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-top: 1px solid var(--k-c9d1d9); background: var(--k-eef1f4); }
+.sp-follow { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--k-2b3a47); }
+.sp-mon { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; font-size: 12.5px; color: var(--k-2b3a47); background: linear-gradient(var(--k-ffffff), var(--k-e9eef3)); border: 1px solid var(--k-a9b4c0); cursor: pointer; text-align: left; }
+.sp-mon.on { background: var(--k-cfe0f6); border-color: var(--k-6aa0da); }
 .sp-mon:disabled { opacity: .5; cursor: default; }
 </style>

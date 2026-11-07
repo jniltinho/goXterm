@@ -6,4 +6,5 @@ import "./style.css";
 // context menus on the session tree, and elsewhere a right-click should do nothing.
 window.addEventListener("contextmenu", (e) => e.preventDefault());
 
+document.documentElement.dataset.theme = "system"; // until Settings load (App.vue applies the Skin)
 createApp(App).mount("#app");

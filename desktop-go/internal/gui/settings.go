@@ -33,8 +33,11 @@ func (a *App) GetSettings() (store.Settings, error) {
 	if s.UIScale == "" {
 		s.UIScale = "auto"
 	}
-	if s.GPUBackend == "" {
+	switch s.GPUBackend { // the Rust app's values; "hardware"/"software" were an earlier Go-only spelling
+	case "", "hardware":
 		s.GPUBackend = "auto"
+	case "software":
+		s.GPUBackend = "cpu"
 	}
 	on := true
 	if s.ToolbarCaptions == nil {

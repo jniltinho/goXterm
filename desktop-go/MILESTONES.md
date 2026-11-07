@@ -23,10 +23,11 @@ core modular (um pacote por protocolo). Cada marco é verificado (testes / lab D
 | **M11 — Servidor MCP** | MCP stdio só com as ferramentas permitidas; mutação ausente/rejeitada-e-auditada | 3.2 | e2e stdio |
 | **M12 — Paridade GUI** | Unlock, home, editor 8 protocolos (+Browse da chave), Settings 8 abas (skin/toolbar/tabs), barra de menus, toolbar com captions, árvore colapsável, traço da sessão encerrada | fase 4 | screenshots |
 | **M13 — Builds multiplataforma** | Binário único (cobra: desktop+CLI+MCP) + AppImage; Linux/Windows/macOS em `dist/` | 1.3 (~) | builds verdes |
+| **M14 — SFTP lateral + abas** | Painel "SFTP browser" na conexão da aba SSH (toolbar, caminho, lista, download/upload por diálogo nativo, nova pasta/renomear/apagar); *Follow terminal folder* (OSC 7 ou cwd do shell após Return); faixa vertical Sessions/SFTP (abre SFTP ao conectar, volta a Sessions ao desconectar); abas estilo Rust (🏠, `+`, borda azul, ponto de estado); barra de monitoramento com ícones; zoom Ctrl+roda; RDP sem as linhas verticais (padding do bitmap recortado) | 6.2 | lab Docker (Xvfb), testes |
+| **M15 — Skins** | Light / Dark / System (tokens de cor em `theme.css`, `prefers-color-scheme`); selects com texto alinhado; Rendering backend com os valores do Rust (`cpu` liga o modo GPU seguro) | fase 4 | screenshots light/dark |
 
 ## Restante antes do cutover
 
 - Clipboard RDP (CLIPRDR); ops *live*/write do plano de controle + transportes macOS/Windows;
-  fronteira de confiança web (3.4); gate headless (3.5); painel lateral SFTP (6.2);
-  acabamento de UI (faixa de ícones da sidebar, cores/alinhamento, atalhos); gate de
+  fronteira de confiança web (3.4); gate headless (3.5); gate de
   paridade multiplataforma (13.x). A GUI Rust permanece até o gate passar.

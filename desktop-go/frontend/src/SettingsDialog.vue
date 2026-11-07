@@ -109,7 +109,7 @@ async function save() {
           </fieldset>
           <fieldset class="grp"><legend>Graphics</legend>
             <div class="field"><label>Rendering backend</label>
-              <select v-model="s.gpuBackend" class="in"><option value="auto">Automatic</option><option value="hardware">Hardware (GPU)</option><option value="software">Software (CPU)</option></select>
+              <select v-model="s.gpuBackend" class="in"><option value="auto">Automatic</option><option value="gl">OpenGL</option><option value="dx12">DirectX 12</option><option value="vulkan">Vulkan</option><option value="cpu">Software (CPU)</option></select>
             </div>
             <p class="st-note">Applies at the next start. After a driver crash rustXterm picks a safer one.</p>
           </fieldset>
@@ -161,35 +161,35 @@ async function save() {
 
 <style scoped>
 .st-backdrop { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(20,28,38,.3); }
-.st { width: 540px; max-width: 92%; background: #f2f4f7; border: 1px solid #9aa7b4; box-shadow: 0 16px 44px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); color: #1e1e1e; }
-.st-title { font-size: 12px; font-weight: 700; color: #33465a; background: linear-gradient(#e9eef3, #dbe3ea); border-bottom: 1px solid #c2ccd6; padding: 7px 12px; }
-.st-tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid #c2ccd6; background: #eef1f4; }
-.st-tab { padding: 6px 14px; font-size: 12px; background: #e7ecf1; border: 1px solid #c2ccd6; border-bottom: none; color: #4a5a68; cursor: pointer; }
-.st-tab.on { background: #f7f9fb; color: #1e3a5a; font-weight: 600; margin-bottom: -1px; }
-.st-body { padding: 16px; min-height: 180px; display: flex; flex-direction: column; gap: 10px; background: #f7f9fb; }
+.st { width: 640px; max-width: 94%; background: var(--k-f2f4f7); border: 1px solid var(--k-9aa7b4); box-shadow: 0 16px 44px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); color: var(--k-1e1e1e); }
+.st-title { font-size: 12px; font-weight: 700; color: var(--k-33465a); background: linear-gradient(var(--k-e9eef3), var(--k-dbe3ea)); border-bottom: 1px solid var(--k-c2ccd6); padding: 7px 12px; }
+.st-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--k-c2ccd6); background: var(--k-eef1f4); }
+.st-tab { padding: 6px 14px; font-size: 12px; background: var(--k-e7ecf1); border: 1px solid var(--k-c2ccd6); border-bottom: none; color: var(--k-4a5a68); cursor: pointer; }
+.st-tab.on { background: var(--k-f7f9fb); color: var(--k-1e3a5a); font-weight: 600; margin-bottom: -1px; }
+.st-body { padding: 16px; min-height: 180px; display: flex; flex-direction: column; gap: 10px; background: var(--k-f7f9fb); }
 .row { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .field { display: flex; align-items: center; gap: 12px; }
 .field label { font-size: 13px; min-width: 130px; }
-.in { height: 26px; padding: 0 8px; font-size: 13px; background: #fff; border: 1px solid #a9b4c0; }
+.in { height: 26px; padding: 0 8px; font-size: 13px; background: var(--k-ffffff); border: 1px solid var(--k-a9b4c0); }
 .in-sm { width: 90px; }
-.st-err { color: #c0392b; font-size: 12px; }
-.st-note { font-size: 12px; color: #7a8794; margin-top: 4px; }
-.grp { border: 1px solid #c2ccd6; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; background: #fbfcfd; }
-.grp legend { font-size: 12px; font-weight: 600; color: #33465a; padding: 0 6px; }
+.st-err { color: var(--k-c0392b); font-size: 12px; }
+.st-note { font-size: 12px; color: var(--k-7a8794); margin-top: 4px; }
+.grp { border: 1px solid var(--k-c2ccd6); padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; background: var(--k-fbfcfd); }
+.grp legend { font-size: 12px; font-weight: 600; color: var(--k-33465a); padding: 0 6px; }
 .sc { display: flex; flex-direction: column; gap: 1px; }
-.sc-row { display: flex; justify-content: space-between; gap: 16px; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid #e3e9ee; }
-.sc-key { color: #1e3a5a; font-weight: 600; }
-.sc-act { color: #4a5a68; text-align: right; }
+.sc-row { display: flex; justify-content: space-between; gap: 16px; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid var(--k-e3e9ee); }
+.sc-key { color: var(--k-1e3a5a); font-weight: 600; }
+.sc-act { color: var(--k-4a5a68); text-align: right; }
 .diag { display: flex; flex-direction: column; gap: 2px; }
-.diag-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #e3e9ee; }
-.diag-row span { color: #4a5a68; }
-.diag-row b { color: #1e3a5a; }
+.diag-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--k-e3e9ee); }
+.diag-row span { color: var(--k-4a5a68); }
+.diag-row b { color: var(--k-1e3a5a); }
 .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 11.5px; word-break: break-all; }
-.st-actions { display: flex; justify-content: center; gap: 10px; padding: 12px; border-top: 1px solid #d6dde4; background: #eef1f4; }
-.dbtn { height: 30px; padding: 0 22px; font-size: 13px; background: linear-gradient(#ffffff, #e9eef3); border: 1px solid #a9b4c0; box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; }
-.dbtn:hover { border-color: #8fb4dd; }
-.dbtn.primary { background: linear-gradient(#5aa469, #3f8b50); border-color: #367a46; color: #fff; }
-.dbtn.primary:hover { background: linear-gradient(#64b074, #459657); }
+.st-actions { display: flex; justify-content: center; gap: 10px; padding: 12px; border-top: 1px solid var(--k-d6dde4); background: var(--k-eef1f4); }
+.dbtn { height: 30px; padding: 0 22px; font-size: 13px; background: linear-gradient(var(--k-ffffff), var(--k-e9eef3)); border: 1px solid var(--k-a9b4c0); box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; }
+.dbtn:hover { border-color: var(--k-8fb4dd); }
+.dbtn.primary { background: linear-gradient(var(--k-5aa469), var(--k-3f8b50)); border-color: var(--k-367a46); color: #fff; }
+.dbtn.primary:hover { background: linear-gradient(var(--k-64b074), var(--k-459657)); }
 .dbtn.primary:disabled { opacity: .55; }
 :deep(*) { border-radius: 0 !important; }
 </style>
