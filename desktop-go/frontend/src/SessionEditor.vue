@@ -605,7 +605,7 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
 .tab { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: -1px; cursor: pointer; }
 .tab img { width: 24px; height: 24px; }
 .tab:hover { background: var(--hover); }
-.tab.on { background: var(--panel); border-bottom-color: var(--panel); box-shadow: inset 0 2px 0 var(--tab-top); }
+.tab.on { background: var(--panel); border-bottom-color: var(--panel); }
 .panel { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: center; margin-top: -1px; padding: 12px; background: var(--panel); border: 1px solid var(--border); }
 .page { flex: 1; align-self: stretch; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .big { flex: none; width: 64px; height: 64px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--input); border: 1px solid var(--border); cursor: pointer; }

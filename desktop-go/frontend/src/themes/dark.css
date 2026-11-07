@@ -38,7 +38,6 @@
   --title-bg: transparent;
   --title-fg: var(--text);
   --title-weight: 400;
-  --tab-top: transparent;
   --tile-on: var(--selection);
   --tile-line: var(--border);
 }

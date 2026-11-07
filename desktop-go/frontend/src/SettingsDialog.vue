@@ -332,7 +332,7 @@ watch(tab, async (t) => {
 .st-tab { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: -1px; cursor: pointer; }
 .st-tab img { width: 24px; height: 24px; }
 .st-tab:hover { background: var(--hover); }
-.st-tab.on { background: var(--panel); border-bottom-color: var(--panel); box-shadow: inset 0 2px 0 var(--tab-top); }
+.st-tab.on { background: var(--panel); border-bottom-color: var(--panel); }
 .st-page { flex: 1; min-height: 0; overflow-y: auto; margin-top: -1px; padding: 8px; background: var(--panel); border: 1px solid var(--border); }
 .st-foot { flex: none; display: flex; justify-content: center; padding: 8px; }
 .ok { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 80px; height: 30px; padding: 0 12px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }

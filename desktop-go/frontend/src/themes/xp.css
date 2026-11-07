@@ -1,6 +1,6 @@
 /* Windows XP skin (Luna blue), after the ad-manager "Classic blue (XP)" theme: #ece9d8 dialog face,
-   blue gradient title bars with white bold text, #316ac5 selection, orange tops on the active tabs,
-   Tahoma. Square corners like every skin. */
+   blue gradient title bars with white bold text, #316ac5 selection, Tahoma; active tabs
+   carry no accent line, like every skin. Square corners like every skin. */
 :root[data-theme="xp"] {
   color-scheme: light;
   --surface: #ffffff;
@@ -39,7 +39,6 @@
   --title-bg: linear-gradient(180deg, #3d95ff 0%, #0a5fe8 12%, #0050e0 50%, #0046d0 88%, #003cbe 100%);
   --title-fg: #ffffff;
   --title-weight: 700;
-  --tab-top: #e68b2c;
   --tile-on: #c1d2ee;
   --tile-line: #316ac5;
 }

@@ -940,7 +940,6 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tab, .tab-home, .tab-new { height: 26px; flex: none; display: flex; align-items: center; background: var(--tab-inactive); border: 1px solid var(--border); cursor: pointer; color: var(--text); font-size: 12px; position: relative; }
 .tab:hover, .tab-home:hover, .tab-new:hover { background: var(--hover); }
 .tab.sel, .tab-home.sel { background: var(--tab-active); border-bottom-color: transparent; height: 27px; margin-bottom: -1px; } /* joins the work area */
-.tab.sel::before, .tab-home.sel::before { content: ""; position: absolute; left: -1px; right: -1px; top: -1px; height: 2px; background: var(--tab-top); } /* no line in Light/Dark; the XP skin keeps its orange top */
 .tab-home { width: 36px; justify-content: center; }
 .tab-home img { width: 16px; height: 16px; }
 .tab-new { width: 26px; justify-content: center; }
