@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ordered } from "./ordered";
 import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, RdpSyncClipboard, type RdpView } from "./api";
+const input = ordered(); // pointer and key events reach the session in order
 
 const props = defineProps<{ connect: (tabW: number, tabH: number) => Promise<RdpView> }>();
 const emit = defineEmits<{ close: []; state: ["connecting" | "connected" | "stopped"] }>();
@@ -132,16 +134,16 @@ onBeforeUnmount(() => {
 
 // Offer what was copied locally to the remote desktop each time the view gets focus.
 function onFocus() { if (tabId && !stopped.value) void RdpSyncClipboard(tabId); }
-function onMove(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "move", 0, x, y); } }
-function onDown(e: MouseEvent) { if (stopped.value) return; canvas.value?.focus(); const [x, y] = pos(e); void RdpMouse(tabId, "down", e.button, x, y); }
-function onUp(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "up", e.button, x, y); } }
-function onWheel(e: WheelEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "wheel", e.deltaY < 0 ? 120 : -120, x, y); } }
+function onMove(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); input(() => RdpMouse(tabId, "move", 0, x, y)); } }
+function onDown(e: MouseEvent) { if (stopped.value) return; canvas.value?.focus(); const [x, y] = pos(e); input(() => RdpMouse(tabId, "down", e.button, x, y)); }
+function onUp(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); input(() => RdpMouse(tabId, "up", e.button, x, y)); } }
+function onWheel(e: WheelEvent) { if (!stopped.value) { const [x, y] = pos(e); input(() => RdpMouse(tabId, "wheel", e.deltaY < 0 ? 120 : -120, x, y)); } }
 function onKey(e: KeyboardEvent, down: boolean) {
   if (stopped.value) return;
   const sc = SC[e.code];
   if (sc === undefined) return;
   e.preventDefault();
-  void RdpKey(tabId, down, sc);
+  input(() => RdpKey(tabId, down, sc));
 }
 </script>
 

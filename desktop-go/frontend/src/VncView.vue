@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ordered } from "./ordered";
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import { VncStart, VncPointer, VncKey, VncDisconnect, VncSendClipboard, type VncView } from "./api";
+const input = ordered(); // pointer and key events reach the session in order
 
 const props = defineProps<{ connect: () => Promise<VncView> }>();
 const emit = defineEmits<{ state: ["connecting" | "connected" | "stopped"] }>();
@@ -84,30 +86,30 @@ onBeforeUnmount(() => {
 
 function onMove(e: MouseEvent) {
   const [x, y] = pos(e);
-  void VncPointer(tabId, buttons, x, y);
+  input(() => VncPointer(tabId, buttons, x, y));
 }
 function onDown(e: MouseEvent) {
   canvas.value?.focus();
   buttons |= 1 << e.button; // 0 left,1 middle,2 right
   const [x, y] = pos(e);
-  void VncPointer(tabId, buttons, x, y);
+  input(() => VncPointer(tabId, buttons, x, y));
 }
 function onUp(e: MouseEvent) {
   buttons &= ~(1 << e.button);
   const [x, y] = pos(e);
-  void VncPointer(tabId, buttons, x, y);
+  input(() => VncPointer(tabId, buttons, x, y));
 }
 function onWheel(e: WheelEvent) {
   const [x, y] = pos(e);
   const bit = e.deltaY < 0 ? 8 : 16; // wheel up / down
-  void VncPointer(tabId, buttons | bit, x, y);
-  void VncPointer(tabId, buttons, x, y);
+  input(() => VncPointer(tabId, buttons | bit, x, y));
+  input(() => VncPointer(tabId, buttons, x, y));
 }
 function onKey(e: KeyboardEvent, down: boolean) {
   const k = keysym(e);
   if (k === null) return;
   e.preventDefault();
-  void VncKey(tabId, down, k);
+  input(() => VncKey(tabId, down, k));
 }
 </script>
 
