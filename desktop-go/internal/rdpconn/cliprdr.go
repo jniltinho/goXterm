@@ -1,7 +1,9 @@
-// Package cliprdr is the client side of the RDP clipboard virtual channel (MS-RDPECLIP), text only:
-// the server's copied text is delivered to OnText, and the local text set with SetText is offered to
-// the server and sent when it pastes. Static virtual channel framing (MS-RDPBCGR 2.2.6.1) included.
-package cliprdr
+// The client side of the RDP clipboard virtual channel (MS-RDPECLIP), text only: the server's copied
+// text is delivered to OnText, and the local text set with SetText is offered to the server and sent
+// when it pastes. Static virtual channel framing (MS-RDPBCGR 2.2.6.1) included. Written for this
+// project (not derived from grdp).
+
+package rdpconn
 
 import (
 	"bytes"
@@ -10,11 +12,11 @@ import (
 	"unicode/utf16"
 )
 
-// ChannelName is the static virtual channel this plugin speaks on.
-const ChannelName = "cliprdr"
+// clipChannel is the static virtual channel this plugin speaks on.
+const clipChannel = "cliprdr"
 
 // Channel definition options for the client network data (MS-RDPBCGR 2.2.1.3.4.1).
-const ChannelOptions = 0x80000000 | 0x40000000 | 0x00200000 // INITIALIZED | ENCRYPT_RDP | SHOW_PROTOCOL
+const clipOptions = 0x80000000 | 0x40000000 | 0x00200000 // INITIALIZED | ENCRYPT_RDP | SHOW_PROTOCOL
 
 const (
 	chanFirst        = 0x01

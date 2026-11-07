@@ -8,7 +8,6 @@ require (
 	github.com/danieljoos/wincred v1.2.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/jlaffaye/ftp v0.2.4
-	github.com/lunixbochs/struc v0.0.0-20241101090106-8d528fa2c543
 	github.com/pkg/sftp v1.13.12
 	github.com/spf13/cobra v1.10.2
 	github.com/wailsapp/wails/v3 v3.1.0

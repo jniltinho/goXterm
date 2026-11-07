@@ -215,7 +215,7 @@ export const TunnelStop = (via: number, name: string) => call<void>("TunnelStop"
 export const TunnelStartAll = () => call<void>("TunnelStartAll");
 export const TunnelStopAll = () => call<void>("TunnelStopAll");
 
-// RDP — the framebuffer is decoded in Go (vendored grdp) and streamed as per-rectangle PNGs over "rdp:frame:<tab>".
+// RDP — the framebuffer is decoded in Go (vendored go-rdp, internal/rdpmit) and streamed as per-rectangle PNGs over "rdp:frame:<tab>".
 export interface RdpView { tabId: string; width: number; height: number }
 // tabW/tabH: the tab's size in CSS px — the remote desktop is created at that size ("fit to tab")
 // unless the session has a fixed resolution.

@@ -39,4 +39,4 @@ at runtime; it does not need SQLCipher.
 - FTP/FTPS: `github.com/jlaffaye/ftp`
 - Serial: `go.bug.st/serial`
 - VNC/RFB: `github.com/kward/go-vnc` (upstream RFB client; decoded to a `<canvas>`)
-- RDP: `github.com/tomatome/grdp` (the most-used pure-Go RDP; NLA/perf confirmed in the phase-0 spike)
+- RDP: `github.com/rcarmo/go-rdp` (MIT), vendored at `internal/rdpmit` (it replaced the GPL-3.0 grdp; see `internal/rdpmit/README.md`)

@@ -1,4 +1,4 @@
-package cliprdr
+package rdpconn
 
 import (
 	"encoding/binary"
