@@ -50,7 +50,11 @@ type Config struct {
 	// cannot work on Go's crypto/tls (its 1/n-1 CBC record split, which cannot be disabled, makes
 	// 2008 SChannel abort the first CredSSP record); use SSL for those.
 	LegacyTLS bool
-	// OnClipboard, when set, receives text copied on the remote desktop.
+	// KeyboardLayout is the Windows input locale id sent to the server (0x0416 Portuguese (Brazil));
+	// 0 lets the server pick its default, as the Rust app did.
+	KeyboardLayout uint32
+	// OnClipboard, when set, receives text copied on the remote desktop; nil leaves the clipboard
+	// channel closed (no text crosses in either direction).
 	OnClipboard func(string)
 	// VerifyTLS decides whether the server certificate is trusted (tlstrust.Verifier); nil accepts
 	// any certificate (tests only). It runs inside the TLS handshake, before any credential is sent.
@@ -123,9 +127,12 @@ func (s *Session) Start() error {
 		return err
 	}
 	c.SetUseNLA(useNLA(cfg.Protocol))
+	c.SetKeyboardLayout(cfg.KeyboardLayout)
 	c.SetTLSClientConfig(tlsConfig(cfg))
-	s.clip.Send = func(b []byte) error { return c.SendStaticChannel(clipChannel, b) }
-	c.AddStaticChannel(clipChannel, clipOptions, s.clip.Receive)
+	if cfg.OnClipboard != nil {
+		s.clip.Send = func(b []byte) error { return c.SendStaticChannel(clipChannel, b) }
+		c.AddStaticChannel(clipChannel, clipOptions, s.clip.Receive)
+	}
 
 	s.mu.Lock()
 	closed := s.closed

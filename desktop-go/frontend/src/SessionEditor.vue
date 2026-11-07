@@ -487,7 +487,7 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
                   <div class="checks">
                     <label class="chk"><input v-model="s.rdp.clipboard" type="checkbox" /> Share clipboard text</label>
                     <label class="chk"><input v-model="s.rdp.allow_legacy_tls" type="checkbox" /> Allow legacy TLS 1.0/1.1 (old Windows servers, less secure)</label>
-                    <label class="chk"><input v-model="s.rdp.allow_standard_security" type="checkbox" /> Allow legacy RDP security (no TLS, insecure)</label>
+                    <label class="chk" title="Standard RDP security sends the logon without TLS; this client always refuses it"><input type="checkbox" disabled /> Allow legacy RDP security (no TLS) — not supported</label>
                   </div>
                 </template>
 

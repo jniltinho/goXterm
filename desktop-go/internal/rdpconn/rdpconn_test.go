@@ -66,6 +66,7 @@ func waitFrame(t *testing.T, frame chan Rect, closed chan error, d time.Duration
 // Monitor Ready reached the client). Needs the lab up; skipped unless RXT_SSH_LAB=1.
 func TestLabRDP(t *testing.T) {
 	cfg := labConfig(t)
+	cfg.OnClipboard = func(string) {} // opens the cliprdr channel (checked below)
 	verified := false
 	cfg.VerifyTLS = func(cs tls.ConnectionState) error {
 		if len(cs.PeerCertificates) == 0 {
@@ -168,12 +169,13 @@ func TestLabRDPClipboard(t *testing.T) {
 // (connectivity/decode check only — no input is sent, nothing on the server is changed). All
 // connection details, including the password, come from env so no credentials live in the source.
 // Skipped unless RXT_RDP_REAL=1. Env: RXT_RDP_HOST, RXT_RDP_PORT (default 3389), RXT_RDP_USER,
-// RXT_RDP_PASS, RXT_RDP_PROTO (ssl|nla|std, default nla).
+// RXT_RDP_PASS, RXT_RDP_PROTO (ssl|nla|std, default nla), RXT_RDP_LAYOUT (keyboard layout, e.g. 0x0416).
 func TestRealRDP(t *testing.T) {
 	if os.Getenv("RXT_RDP_REAL") == "" {
 		t.Skip("set RXT_RDP_REAL=1 with RXT_RDP_HOST/USER/PASS to run")
 	}
 	port, _ := strconv.Atoi(os.Getenv("RXT_RDP_PORT"))
+	layout, _ := strconv.ParseUint(os.Getenv("RXT_RDP_LAYOUT"), 0, 32)
 	proto := Protocol(os.Getenv("RXT_RDP_PROTO"))
 	if proto == "" {
 		proto = NLA
@@ -182,7 +184,7 @@ func TestRealRDP(t *testing.T) {
 		Host: os.Getenv("RXT_RDP_HOST"), Port: port,
 		User: os.Getenv("RXT_RDP_USER"), Password: os.Getenv("RXT_RDP_PASS"),
 		Width: 1024, Height: 768, Protocol: proto,
-		LegacyTLS: os.Getenv("RXT_RDP_LEGACY") != "",
+		LegacyTLS: os.Getenv("RXT_RDP_LEGACY") != "", KeyboardLayout: uint32(layout),
 	})
 	defer s.Close()
 	if err := s.Start(); err != nil {
