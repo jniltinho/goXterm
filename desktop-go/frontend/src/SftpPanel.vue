@@ -294,9 +294,13 @@ function listKey(ev: KeyboardEvent) {
 .sp-scroll .sp-cols { position: sticky; top: 0; z-index: 1; }
 .sp-err { padding: 4px 8px; font-size: 11.5px; color: var(--k-c0392b); border-top: 1px solid var(--k-d6dde4); }
 .sp-empty { flex: 1; padding: 12px 10px; font-size: 12px; color: var(--k-6b7a8a); }
-.sp-foot { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-top: 1px solid var(--k-c9d1d9); background: var(--k-eef1f4); }
-.sp-follow { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--k-2b3a47); }
-.sp-mon { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; font-size: 12.5px; color: var(--k-2b3a47); background: linear-gradient(var(--k-ffffff), var(--k-e9eef3)); border: 1px solid var(--k-a9b4c0); cursor: pointer; text-align: left; }
-.sp-mon.on { background: var(--k-cfe0f6); border-color: var(--k-6aa0da); }
-.sp-mon:disabled { opacity: .5; cursor: default; }
+/* The Remote monitoring row is a 26 px strip flush with the bottom, like the terminal's monitor bar
+   (Terminal.vue .mon), so both line up across the window. */
+.sp-foot { display: flex; flex-direction: column; border-top: 1px solid var(--border); background: var(--panel); }
+.sp-follow { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; font-size: 12px; color: var(--text); }
+.sp-mon { display: flex; align-items: center; gap: 6px; height: 26px; flex: none; padding: 0 8px; font-size: 12px; color: var(--text); background: var(--panel); border: none; border-top: 1px solid var(--border); border-radius: 0 !important; cursor: pointer; text-align: left; }
+.sp-mon:hover:not(:disabled) { background: var(--hover); }
+.sp-mon.on { background: var(--pressed); }
+.sp-mon:disabled { color: var(--text-disabled); cursor: default; }
+.sp-mon:disabled img { opacity: .5; }
 </style>
