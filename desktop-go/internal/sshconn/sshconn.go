@@ -73,9 +73,16 @@ func DialClient(cfg Config) (*ssh.Client, error) {
 		}
 	}
 	if cfg.KeyFile != "" {
-		if signer, err := loadKey(cfg.KeyFile, cfg.AskPassword); err == nil {
-			auths = append(auths, ssh.PublicKeys(signer))
-		}
+		// Lazily: the key is loaded only if the agent did not already authenticate, so a
+		// passphrase-protected key never prompts when the agent holds it (fixes "asks the password
+		// even with a key"). A load error skips the method and falls through to the password.
+		auths = append(auths, ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
+			signer, err := loadKey(cfg.KeyFile, cfg.AskPassword)
+			if err != nil {
+				return nil, nil
+			}
+			return []ssh.Signer{signer}, nil
+		}))
 	}
 	if cfg.Password != "" {
 		pw := cfg.Password

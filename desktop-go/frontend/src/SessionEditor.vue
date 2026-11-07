@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, computed } from "vue";
-import { SaveSession, SessionJSON, type Folder } from "./api";
+import { SaveSession, SessionJSON, PickKeyFile, type Folder } from "./api";
 
 const props = defineProps<{ sessionId: number | null; folders: Folder[] }>();
 const emit = defineEmits<{ saved: [id: number]; close: [] }>();
+
+// Open the native file picker for the SSH private key; keep the current value on cancel/error.
+async function browseKey() {
+  try { const p = await PickKeyFile(); if (p) form.ssh.key_file = p; } catch { /* cancelled */ }
+}
 
 const PROTOCOLS = [
   { id: "ssh", label: "SSH", icon: "ssh", port: 22 },
@@ -175,7 +180,10 @@ const icon = (name: string) => `./icons/${name}.png`;
               <label class="row"><input type="checkbox" v-model="form.ssh.agent_forwarding" /> Agent forwarding</label>
               <label class="row"><input type="checkbox" v-model="form.ssh.compression" /> Compression</label>
               <label class="row"><input type="checkbox" v-model="form.ssh.auto_reconnect" /> Reconnect automatically</label>
-              <div class="field"><label>Private key file</label><input v-model="form.ssh.key_file" class="in" /></div>
+              <div class="field"><label>Private key file</label>
+                <input v-model="form.ssh.key_file" class="in" />
+                <button type="button" class="browse" @click="browseKey">Browse…</button>
+              </div>
               <div class="field"><label>Execute command</label><input v-model="form.ssh.remote_command" class="in" /></div>
               <div class="field"><label>Keepalive (s, 0 = off)</label><input v-model.number="form.ssh.keepalive_secs" type="number" class="in in-port" /></div>
             </div>
@@ -272,6 +280,8 @@ const icon = (name: string) => `./icons/${name}.png`;
 .in { height: 26px; padding: 0 8px; font-size: 13px; background: #fff; border: 1px solid #a9b4c0; box-shadow: inset 0 1px 2px rgba(0,0,0,.06); width: 100%; }
 .in:focus { outline: none; border-color: #5b9bd5; box-shadow: 0 0 0 2px rgba(91,155,213,.3); }
 .in-port { width: 110px; }
+.browse { height: 28px; padding: 0 12px; font-size: 12.5px; background: linear-gradient(#ffffff, #e9eef3); border: 1px solid #a9b4c0; cursor: pointer; white-space: nowrap; }
+.browse:hover { border-color: #8fb4dd; }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid #c2ccd6; }
 .etab { padding: 6px 12px; font-size: 12px; background: #e7ecf1; border: 1px solid #c2ccd6; border-bottom: none; color: #4a5a68; cursor: pointer; }
 .etab-on { background: #f7f9fb; color: #1e3a5a; font-weight: 600; margin-bottom: -1px; }

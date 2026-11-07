@@ -7,6 +7,8 @@ import (
 	"embed"
 	"io/fs"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -60,6 +62,13 @@ func Run(version string, safeGPU bool) error {
 	}
 	app := application.New(opts)
 	svc.emit = func(name string, data any) { app.Event.Emit(name, data) }
+	svc.pickFile = func() (string, error) {
+		d := app.Dialog.OpenFile().CanChooseFiles(true).SetTitle("Select SSH private key")
+		if home, err := os.UserHomeDir(); err == nil {
+			d.SetDirectory(filepath.Join(home, ".ssh"))
+		}
+		return d.PromptForSingleSelection()
+	}
 	// Agent control channel (CLI/MCP), off unless the agent_control setting is on; removed on shutdown.
 	svc.startControl(app.Logger)
 	app.OnShutdown(svc.stopControl)

@@ -42,6 +42,8 @@ export interface Settings {
   uiScale: string; remoteMonitoring: boolean; remoteMonitoringInterval: number; notifications: boolean;
   gpuBackend: string; firstRunThemeDone: boolean; terminal: TerminalPrefs;
 }
+// Native open-file dialog to pick an SSH private key; returns "" when cancelled.
+export const PickKeyFile = () => call<string>("PickKeyFile");
 export const GetSettings = () => call<Settings>("GetSettings");
 export const SaveSettings = (s: Settings) => call<void>("SaveSettings", s);
 export interface Diag {
