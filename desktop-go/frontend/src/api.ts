@@ -75,6 +75,14 @@ export const DuplicateSession = (id: number) => call<number>("DuplicateSession",
 export const RenameSession = (id: number, name: string) => call<void>("RenameSession", id, name);
 export const SaveFolder = (id: number, name: string, parent: number | null) => call<number>("SaveFolder", id, name, parent);
 export const DeleteFolder = (id: number) => call<void>("DeleteFolder", id);
+// Import MobaXterm.ini: pick (native dialog) → preview → apply. Passwords are never read.
+export interface ImportEntry { line: number; name: string; reason: string }
+export interface ImportPreview {
+  path: string;
+  report: { sessions: { folder: string; session: Record<string, unknown> }[] | null; folders: string[] | null; skipped: ImportEntry[] | null; warnings: ImportEntry[] | null };
+}
+export const ImportMobaPick = () => call<ImportPreview | null>("ImportMobaPick");
+export const ImportMobaApply = (path: string) => call<number>("ImportMobaApply", path);
 // Folder icon ("folder" = default yellow) and moving a session (null = the root).
 export const SetFolderIcon = (id: number, icon: string) => call<void>("SetFolderIcon", id, icon);
 export const MoveSession = (id: number, folder: number | null) => call<void>("MoveSession", id, folder);

@@ -116,3 +116,48 @@ func TestFolderEdits(t *testing.T) {
 }
 
 func itoa(i int64) string { return strconv.FormatInt(i, 10) }
+
+// Import creates folder paths once, reuses existing folders and adds the sessions.
+func TestImportSessions(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "lab-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir, "lab-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	lab, _ := s.SaveFolder(0, "Lab", nil)
+	n, err := s.ImportSessions([]ImportItem{
+		{Folder: "Lab/Staging", Session: map[string]any{"name": "a", "protocol": "ssh", "host": "a.example", "port": 22}},
+		{Folder: "Lab/Staging", Session: map[string]any{"name": "b", "protocol": "ssh", "host": "b.example", "port": 22}},
+		{Folder: "", Session: map[string]any{"name": "c", "protocol": "telnet", "host": "c.example", "port": 23}},
+	})
+	if err != nil || n != 3 {
+		t.Fatalf("%d %v", n, err)
+	}
+	fs, _ := s.Folders()
+	if len(fs) != 2 {
+		t.Fatalf("folders %v", fs)
+	}
+	var staging int64
+	for _, f := range fs {
+		if f["name"] == "Staging" {
+			staging = f["id"].(int64)
+			if f["parent"] != lab {
+				t.Fatalf("Staging parent %v, want existing Lab %d", f["parent"], lab)
+			}
+		}
+	}
+	rows, _ := s.Sessions()
+	in := 0
+	for _, r := range rows {
+		if r["folder"] == staging {
+			in++
+		}
+	}
+	if len(rows) != 3 || in != 2 {
+		t.Fatalf("sessions %v", rows)
+	}
+}

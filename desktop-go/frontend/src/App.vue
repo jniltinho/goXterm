@@ -11,6 +11,8 @@ import {
 } from "./api";
 import { SetMultiExec, SelectMultiExec, WslConnect, SetFolderIcon, MoveSession } from "./api";
 import FolderDialog from "./FolderDialog.vue";
+import ImportDialog from "./ImportDialog.vue";
+import { ImportMobaPick, ImportMobaApply, type ImportPreview } from "./api";
 import { SaveSettings } from "./api";
 import { DeleteSession, DuplicateSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
 
@@ -357,7 +359,28 @@ function respondPassword(ok: boolean) {
 // New session (in a folder when started from the tree).
 const editorFolder = ref<number | null>(null);
 function newSession(folder: number | null = null) { editorSessionId.value = null; editorFolder.value = folder; editorOpen.value = true; }
-function importSessions() { /* TODO: MobaXterm .mxtsessions / rustXterm import */ }
+// Import sessions…: MobaXterm.ini → preview dialog → import (Rust StoreDialog::Import).
+const importPreview = ref<ImportPreview | null>(null);
+const importing = ref(false);
+async function importSessions() {
+  if (locked.value) { unlockError.value = ""; showUnlock.value = true; return; }
+  try { importPreview.value = await ImportMobaPick(); } catch (e) { void showInfo("Import MobaXterm.ini", `Cannot import: ${e}`); }
+}
+async function confirmImport() {
+  const p = importPreview.value;
+  if (!p || importing.value) return;
+  importing.value = true;
+  try {
+    const n = await ImportMobaApply(p.path);
+    importPreview.value = null;
+    status.value = `Imported ${n} session(s).`;
+    await loadData();
+  } catch (e) {
+    void showInfo("Import MobaXterm.ini", `Cannot import: ${e}`);
+  } finally {
+    importing.value = false;
+  }
+}
 function editSession(s: Session) { editorSessionId.value = s.id; editorOpen.value = true; }
 async function onEditorSaved(_id: number) { editorOpen.value = false; await loadData(); }
 async function delSession(s: Session) {
@@ -750,7 +773,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
         <template v-else>
           <button class="ctx-item" @click="newSession(ctx!.folder?.id ?? null); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
           <button class="ctx-item" @click="newFolder(ctx!.folder?.id ?? null); closeCtx()"><img :src="icon('new-folder')" class="ctx-ico" /> New folder</button>
-          <button class="ctx-item" disabled title="Import is not available yet"><img :src="icon('download')" class="ctx-ico" /> Import sessions…</button>
+          <button class="ctx-item" @click="closeCtx(); importSessions()"><img :src="icon('download')" class="ctx-ico" /> Import sessions…</button>
           <template v-if="ctx.folder">
             <div class="ctx-sep"></div>
             <button class="ctx-item" @click="editFolder(ctx!.folder!); closeCtx()"><img :src="icon('edit')" class="ctx-ico" /> Edit folder…<span class="ctx-sc">F2</span></button>
@@ -766,6 +789,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
       </div>
     </div>
 
+    <ImportDialog v-if="importPreview" :preview="importPreview" :busy="importing" @ok="confirmImport" @cancel="importPreview = null" />
     <FolderDialog v-if="folderDlg" :title="folderDlg.title" :name="folderDlg.name" :icon="folderDlg.icon" @ok="saveFolderDlg" @cancel="folderDlg = null" />
 
     <!-- session editor -->
