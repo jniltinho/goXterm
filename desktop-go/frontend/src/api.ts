@@ -62,6 +62,9 @@ export const Diagnostics = () => call<Diag>("Diagnostics");
 // Store unlock — Locked() is true until the master password is entered (or the keyring/env unlocks it).
 export const Locked = () => call<boolean>("Locked");
 export const Unlock = (password: string) => call<void>("Unlock", password);
+// First start: no store yet → "Create master password" (at least 8 characters).
+export const FirstRun = () => call<boolean>("FirstRun");
+export const CreateStore = (password: string) => call<void>("CreateStore", password);
 
 // Session editing — SaveSession takes the session JSON document (id 0 = new) and returns its id.
 export const SaveSession = (js: string) => call<number>("SaveSession", js);

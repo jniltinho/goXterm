@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, shallowRef } from "vue";
 import {
-  Sessions, Folders, Locked, Unlock, Connect, ConnectDemo, HasDemo, LocalShell, QuickConnect,
+  Sessions, Folders, Locked, Unlock, FirstRun, CreateStore, Connect, ConnectDemo, HasDemo, LocalShell, QuickConnect,
   TelnetConnect, TelnetQuickConnect, ConnectTelnetDemo, HasTelnetDemo,
   SerialConnect, ConnectSerialDemo, HasSerialDemo,
   SftpConnect, FtpConnect, ConnectSftpDemo, HasSftpDemo, ConnectFtpDemo, HasFtpDemo,
@@ -132,17 +132,38 @@ onMounted(async () => {
   window.addEventListener("click", (e) => { if (!(e.target as HTMLElement).closest(".menubar")) menu.value = ""; });
   window.addEventListener("keydown", onKey);
   try { locked.value = await Locked(); } catch { locked.value = true; }
+  try { firstRun.value = locked.value && (await FirstRun()); } catch { /* older backend */ }
   await openDemos(); // lab targets from env vars: they need no saved sessions, so not gated on unlock
   if (locked.value) { loading.value = false; return; }
   await loadData();
 });
 
+// First start (no store yet): "Create master password", as the Rust store_ui (MIN_MASTER 8).
+const firstRun = ref(false);
+const confirmPw = ref("");
+const MIN_MASTER = 8;
+function strength(p: string) {
+  const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^\p{L}\p{N}]/u].filter((r) => r.test(p)).length;
+  const n = [...p].length;
+  if (n < MIN_MASTER) return "Too short";
+  if (n >= 16 || (n >= 12 && classes >= 3)) return "Strong";
+  return classes >= 2 ? "Fair" : "Weak";
+}
+const createProblem = computed(() =>
+  [...master.value].length < MIN_MASTER ? `Use at least ${MIN_MASTER} characters.`
+    : master.value !== confirmPw.value ? "The passwords do not match." : "");
+
 async function doUnlock() {
   if (!master.value || unlocking.value) return;
+  if (firstRun.value && createProblem.value) return;
   unlockError.value = "";
   unlocking.value = true;
   try {
-    await Unlock(master.value);
+    if (firstRun.value) {
+      await CreateStore(master.value);
+      firstRun.value = false;
+      confirmPw.value = "";
+    } else await Unlock(master.value);
     locked.value = false;
     master.value = "";
     await loadData();
@@ -372,17 +393,14 @@ const rows = computed<Row[]>(() => {
   }
   const ses = (fid: number | null) =>
     sessions.value.filter((s) => (s.folder ?? null) === fid).sort((a, b) => a.name.localeCompare(b.name));
-  for (const s of ses(null)) out.push({ kind: "session", session: s, depth: 0 });
+  // Rust sidebar folder_contents: each level lists its folders, then its sessions.
   const walk = (parent: number | null, depth: number) => {
     for (const f of (byParent.get(parent) ?? []).sort((a, b) => a.name.localeCompare(b.name))) {
       const open = !collapsed.value.has(f.id);
-      const hasKids = (byParent.get(f.id)?.length ?? 0) + ses(f.id).length > 0;
-      out.push({ kind: "folder", folder: f, depth, open, hasKids });
-      if (open) {
-        for (const s of ses(f.id)) out.push({ kind: "session", session: s, depth: depth + 1 });
-        walk(f.id, depth + 1);
-      }
+      out.push({ kind: "folder", folder: f, depth, open, hasKids: true });
+      if (open) walk(f.id, depth + 1);
     }
+    for (const s of ses(parent)) out.push({ kind: "session", session: s, depth });
   };
   walk(null, 0);
   return out;
@@ -402,9 +420,13 @@ const tabIcon = (t: Tab) => icon(t.icon);
   <div class="app flex h-full flex-col">
     <div v-if="locked && showUnlock" class="modal-backdrop">
       <div class="dialog">
-        <div class="dialog-title">Unlock sessions</div>
+        <div class="dialog-title">{{ firstRun ? "Create master password" : "Unlock sessions" }}</div>
         <div class="dialog-body">
-          <p class="dialog-sub">Enter the master password to open saved sessions.</p>
+          <template v-if="firstRun">
+            <p class="dialog-sub">Saved sessions, credentials and trust records are stored in an encrypted database.</p>
+            <p class="dialog-sub dialog-warn">If you forget the master password, the saved data cannot be recovered.</p>
+          </template>
+          <p v-else class="dialog-sub">Enter the master password to open saved sessions.</p>
           <label class="dialog-label">Master password</label>
           <input
             type="password"
@@ -413,12 +435,18 @@ const tabIcon = (t: Tab) => icon(t.icon);
             @keyup.enter="doUnlock"
             autofocus
           />
+          <template v-if="firstRun">
+            <div v-if="master" class="dialog-hint">Strength: {{ strength(master) }}</div>
+            <label class="dialog-label mt-1">Confirm master password</label>
+            <input type="password" class="dialog-input" v-model="confirmPw" @keyup.enter="doUnlock" />
+            <div v-if="master && confirmPw && createProblem" class="dialog-err">{{ createProblem }}</div>
+          </template>
           <div v-if="unlockError" class="dialog-err">{{ unlockError }}</div>
           <div class="dialog-actions">
-            <button class="dbtn primary" :disabled="!master || unlocking" @click="doUnlock">
-              <img :src="icon('ok')" class="dbtn-ico" /> {{ unlocking ? "Unlocking…" : "Unlock" }}
+            <button class="dbtn primary" :disabled="!master || unlocking || (firstRun && !!createProblem)" @click="doUnlock">
+              <img :src="icon('ok')" class="dbtn-ico" /> {{ unlocking ? "Working..." : firstRun ? "Create" : "Unlock" }}
             </button>
-            <button class="dbtn" @click="showUnlock = false"><img :src="icon('cancel')" class="dbtn-ico" /> Cancel</button>
+            <button class="dbtn" @click="showUnlock = false"><img :src="icon('cancel')" class="dbtn-ico" /> {{ firstRun ? "Later" : "Cancel" }}</button>
           </div>
         </div>
       </div>
@@ -531,10 +559,11 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <template v-if="rootOpen">
               <div v-if="locked" class="locked-note">
                 <div>Saved sessions are locked.</div>
-                <button class="locked-unlock" @click="unlockError = ''; showUnlock = true">Unlock...</button>
+                <button class="locked-unlock" @click="unlockError = ''; showUnlock = true">{{ firstRun ? "Create master password…" : "Unlock..." }}</button>
               </div>
               <div v-else-if="loading" class="side-note">Loading…</div>
               <div v-else-if="error" class="side-err">{{ error }}</div>
+              <div v-else-if="!rows.length" class="side-note tree-hint">No sessions yet. Create one with New session or import sessions.</div>
               <template v-else>
                 <div v-for="(row, i) in rows" :key="i">
                   <div
@@ -783,6 +812,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .recent-ico { height: 16px; width: 16px; flex: none; }
 
 .side-note { padding: 8px 12px; color: var(--text-muted); }
+.tree-hint { padding: 2px 8px 0 20px; }
 .side-err { margin: 8px; padding: 8px; border: 1px solid var(--k-f0c38a); background: var(--k-fff4e5); color: var(--k-8a4b00); }
 .locked-note { padding: 2px 0 0 20px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; color: var(--text); }
 .locked-unlock { height: 20px; padding: 0 5px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
@@ -798,6 +828,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .dialog-input { width: 100%; height: 20px; padding: 0 4px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }
 .dialog-input:focus { border-color: var(--focus); }
 .dialog-err { color: var(--danger); font-size: 12px; margin-top: 6px; }
+.dialog-warn { color: var(--warning); }
+.dialog-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .dialog-actions { display: flex; justify-content: center; gap: 20px; margin-top: 12px; }
 .dbtn { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 74px; height: 26px; padding: 0 8px; font-size: 12px; background: var(--panel); border: 1px solid var(--border); cursor: pointer; color: var(--text); }
 .dbtn:hover:not(:disabled) { background: var(--hover); border-color: var(--outline); }

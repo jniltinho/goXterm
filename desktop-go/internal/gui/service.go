@@ -162,6 +162,23 @@ func (a *App) Unlock(password string) error {
 	return nil
 }
 
+// FirstRun reports that no store exists yet (Rust first start: "Create master password").
+func (a *App) FirstRun() bool { return !store.Exists(store.DataDir()) }
+
+// minMaster is the Rust MIN_MASTER: the shortest master password accepted for a new store.
+const minMaster = 8
+
+// CreateStore creates the encrypted store under a new master password and unlocks it.
+func (a *App) CreateStore(password string) error {
+	if len([]rune(password)) < minMaster {
+		return fmt.Errorf("use at least %d characters", minMaster)
+	}
+	if err := store.Create(store.DataDir(), password); err != nil {
+		return err
+	}
+	return a.Unlock(password)
+}
+
 // Locked reports whether the store still needs a master password (no keyring, no cached, no env).
 func (a *App) Locked() bool {
 	st, err := openStore()
