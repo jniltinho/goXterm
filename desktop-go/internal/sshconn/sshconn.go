@@ -167,6 +167,23 @@ func (s *Session) Resize(cols, rows int) error {
 	return s.sess.WindowChange(rows, cols)
 }
 
+// Run executes a command on a fresh exec channel of the same connection and returns its combined
+// output. Used by the remote-monitoring collector alongside the shell.
+func (s *Session) Run(cmd string) ([]byte, error) {
+	s.mu.Lock()
+	c, closed := s.client, s.closed
+	s.mu.Unlock()
+	if closed || c == nil {
+		return nil, fmt.Errorf("session closed")
+	}
+	es, err := c.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer es.Close()
+	return es.CombinedOutput(cmd)
+}
+
 // Close ends the session.
 func (s *Session) Close() error {
 	s.markClosed()

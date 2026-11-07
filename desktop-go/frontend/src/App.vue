@@ -42,7 +42,7 @@ const recentSessions = computed(() =>
   recentIds.value.map((id) => sessions.value.find((s) => s.id === id)).filter((s): s is Session => !!s));
 
 type Tab =
-  | { id: string; title: string; kind: "ssh"; icon: string; connect: () => Promise<string> }
+  | { id: string; title: string; kind: "ssh"; icon: string; connect: () => Promise<string>; monitor?: boolean }
   | { id: string; title: string; kind: "files"; icon: string; connect: () => Promise<RemoteSession> }
   | { id: string; title: string; kind: "vnc"; icon: string; connect: () => Promise<VncView> }
   | { id: string; title: string; kind: "rdp"; icon: string; connect: () => Promise<RdpView> };
@@ -63,7 +63,7 @@ async function loadData() {
 }
 
 async function openDemos() {
-  try { if (await HasDemo()) openTerm("lab: ssh demo", "ssh", () => ConnectDemo()); } catch { /* none */ }
+  try { if (await HasDemo()) openTerm("lab: ssh demo", "ssh", () => ConnectDemo(), true); } catch { /* none */ }
   try { if (await HasTelnetDemo()) openTerm("lab: telnet demo", "terminal", () => ConnectTelnetDemo()); } catch { /* none */ }
   try { if (await HasSerialDemo()) openTerm("lab: serial demo", "plug", () => ConnectSerialDemo()); } catch { /* none */ }
   try { if (await HasSftpDemo()) openFiles("lab: sftp demo", "sftp", () => ConnectSftpDemo()); } catch { /* none */ }
@@ -73,8 +73,8 @@ async function openDemos() {
 }
 
 onMounted(async () => {
-  Events.On("ssh:trust", (ev: { data: unknown }) => { trustReq.value = ev.data as TrustReq; });
-  Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passReq.value = ev.data as PassReq; });
+  Events.On("ssh:trust", (ev: { data: unknown }) => { trustQ.value = [...trustQ.value, ev.data as TrustReq]; });
+  Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passQ.value = [...passQ.value, ev.data as PassReq]; });
   try { locked.value = await Locked(); } catch { locked.value = true; }
   if (locked.value) { loading.value = false; return; }
   await loadData();
@@ -98,10 +98,11 @@ async function doUnlock() {
   }
 }
 
-// openTerm opens a terminal tab (SSH, Telnet or Serial — all stream term:out/term:close).
-function openTerm(title: string, icon: string, connect: () => Promise<string>) {
+// openTerm opens a terminal tab (SSH, Telnet or Serial — all stream term:out/term:close). monitor
+// enables the remote-monitoring bar (SSH only).
+function openTerm(title: string, icon: string, connect: () => Promise<string>, monitor = false) {
   const id = "tab" + ++seq;
-  tabs.value = [...tabs.value, { id, title, kind: "ssh", icon, connect }];
+  tabs.value = [...tabs.value, { id, title, kind: "ssh", icon, connect, monitor }];
   active.value = id;
 }
 function openFiles(title: string, icon: string, connect: () => Promise<RemoteSession>) {
@@ -120,22 +121,27 @@ const editorSessionId = ref<number | null>(null);
 const ctx = ref<{ x: number; y: number; session: Session } | null>(null);
 
 // SSH host-key trust prompt (TOFU): the backend emits "ssh:trust" for an unknown key and blocks.
+// Prompts queue so concurrent connections (e.g. the SSH terminal and its SFTP pane) each get one.
 type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string };
-const trustReq = ref<TrustReq | null>(null);
+const trustQ = ref<TrustReq[]>([]);
+const trustReq = computed(() => trustQ.value[0] ?? null);
 function respondTrust(decision: "once" | "save" | "reject") {
-  if (!trustReq.value) return;
-  void SshTrustRespond(trustReq.value.reqId, decision);
-  trustReq.value = null;
+  const r = trustQ.value[0];
+  if (!r) return;
+  void SshTrustRespond(r.reqId, decision);
+  trustQ.value = trustQ.value.slice(1);
 }
 
-// Interactive SSH password prompt (sessions with no saved credential).
+// Interactive SSH password prompt (sessions with no saved credential); also queued.
 type PassReq = { reqId: string; host: string; user: string };
-const passReq = ref<PassReq | null>(null);
+const passQ = ref<PassReq[]>([]);
+const passReq = computed(() => passQ.value[0] ?? null);
 const passValue = ref("");
 function respondPassword(ok: boolean) {
-  if (!passReq.value) return;
-  void SshPasswordRespond(passReq.value.reqId, ok ? passValue.value : "", ok);
-  passReq.value = null;
+  const r = passQ.value[0];
+  if (!r) return;
+  void SshPasswordRespond(r.reqId, ok ? passValue.value : "", ok);
+  passQ.value = passQ.value.slice(1);
   passValue.value = "";
 }
 
@@ -161,7 +167,7 @@ function openSession(s: Session) {
     case "vnc": openVncFor(s); break;
     case "sftp": openSftpFor(s); break;
     case "ftp": case "ftps": openFtpFor(s); break;
-    default: openTerm(s.name, "ssh", () => Connect(s.id)); break; // ssh
+    default: openTerm(s.name, "ssh", () => Connect(s.id), true); break; // ssh
   }
 }
 function openSftpFor(s: Session | null) { if (s) openFiles("SFTP: " + s.name, "sftp", () => SftpConnect(s.id)); }
@@ -240,7 +246,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
     </div>
     <header class="toolbar flex items-center gap-1 px-1.5 py-1">
       <img :src="icon('session-new')" class="tbico" title="New session" />
-      <img :src="icon('ssh')" class="tbico" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id))" :class="selected ? '' : 'off'" />
+      <img :src="icon('ssh')" class="tbico" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true)" :class="selected ? '' : 'off'" />
       <img :src="icon('sftp')" class="tbico" title="Open SFTP file browser" @click="openSftpFor(selected)" :class="selected ? '' : 'off'" />
       <img :src="icon('ftp')" class="tbico" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)" :class="selected ? '' : 'off'" />
       <img :src="icon('vnc')" class="tbico" title="Open VNC" @click="openVncFor(selected)" :class="selected ? '' : 'off'" />
@@ -301,7 +307,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
         </div>
         <div class="relative min-h-0 flex-1">
           <template v-for="t in tabs" :key="t.id">
-            <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" class="absolute inset-0 p-1" />
+            <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" :monitor="t.monitor" @close="closeTab(t.id)" class="absolute inset-0 p-1" />
             <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
             <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
             <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />

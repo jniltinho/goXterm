@@ -26,6 +26,7 @@ type App struct {
 	rdp    map[string]*rdpconn.Session // tabId → live RDP session
 	trust  map[string]chan string      // reqId → pending SSH host-key trust decision
 	pass   map[string]chan passAns     // reqId → pending interactive password entry
+	mon    map[string]chan struct{}    // tabId → stop channel for its remote-monitoring loop
 }
 
 // termStream is any byte-stream terminal the SPA drives the same way (SSH/Telnet/Serial); each

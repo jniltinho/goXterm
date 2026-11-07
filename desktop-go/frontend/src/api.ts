@@ -50,6 +50,14 @@ export const Connect = (id: number) => call<string>("Connect", id);
 export const QuickConnect = (host: string, port: number, user: string, password: string) =>
   call<string>("QuickConnect", host, port, user, password);
 export const Send = (tabId: string, data: string) => call<void>("Send", tabId, data);
+// Remote monitoring (SSH only): metrics stream as "monitor:<tabId>" events once started.
+export const MonitorStart = (tabId: string) => call<void>("MonitorStart", tabId);
+export const MonitorStop = (tabId: string) => call<void>("MonitorStop", tabId);
+export interface Metrics {
+  host: string; os: string; cpu: number; memUsed: number; memTotal: number;
+  netUp: number; netDown: number; uptime: number;
+  disks: { mount: string; usedPct: number; usedKiB: number; sizeKiB: number }[] | null;
+}
 export const Resize = (tabId: string, cols: number, rows: number) => call<void>("Resize", tabId, cols, rows);
 export const Disconnect = (tabId: string) => call<void>("Disconnect", tabId);
 export const HasDemo = () => call<boolean>("HasDemo");

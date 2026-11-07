@@ -133,6 +133,7 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		}
 	}
 	onClose := func(err error) {
+		a.MonitorStop(tabID)
 		a.mu.Lock()
 		delete(a.term, tabID)
 		a.mu.Unlock()

@@ -4,11 +4,22 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Events } from "@wailsio/runtime";
 import "@xterm/xterm/css/xterm.css";
-import { Send, Resize, Disconnect } from "./api";
+import { ref as vref } from "vue";
+import { Send, Resize, Disconnect, MonitorStart, MonitorStop, type Metrics } from "./api";
 
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
-const props = defineProps<{ connect: () => Promise<string> }>();
+// monitor shows the remote-monitoring bar (SSH only).
+const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean }>();
 const emit = defineEmits<{ close: [] }>();
+
+const metrics = vref<Metrics | null>(null);
+let offMon: (() => void) | undefined;
+const fmtRate = (b: number) => (b >= 1048576 ? (b / 1048576).toFixed(1) + " MB/s" : b >= 1024 ? (b / 1024).toFixed(0) + " kB/s" : b + " B/s");
+const fmtSize = (kib: number) => (kib >= 1048576 ? (kib / 1048576).toFixed(1) + " GiB" : (kib / 1024).toFixed(0) + " MiB");
+function fmtUptime(s: number) {
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
 
 const el = ref<HTMLDivElement | null>(null);
 let term: Terminal;
@@ -31,9 +42,18 @@ function wireEvents() {
   });
 }
 
+function startMon() {
+  if (!props.monitor || !tabId) return;
+  offMon?.();
+  offMon = Events.On("monitor:" + tabId, (ev: { data: unknown }) => { metrics.value = ev.data as Metrics; });
+  void MonitorStart(tabId);
+}
+
 async function restart() {
   offOut?.();
   offClose?.();
+  offMon?.();
+  metrics.value = null;
   stopped = false;
   term.reset();
   term.writeln("\x1b[90mReconnecting…\x1b[0m");
@@ -45,6 +65,7 @@ async function restart() {
     return;
   }
   wireEvents();
+  startMon();
   void Resize(tabId, term.cols, term.rows);
   term.focus();
 }
@@ -75,6 +96,7 @@ onMounted(async () => {
     return;
   }
   wireEvents();
+  startMon();
   term.onData((d) => {
     if (stopped) {
       if (d === "\r") emit("close");
@@ -96,11 +118,34 @@ onBeforeUnmount(() => {
   ro?.disconnect();
   offOut?.();
   offClose?.();
+  offMon?.();
+  if (tabId && props.monitor) void MonitorStop(tabId);
   if (tabId) void Disconnect(tabId);
   term?.dispose();
 });
 </script>
 
 <template>
-  <div ref="el" class="h-full w-full"></div>
+  <div class="term-wrap">
+    <div ref="el" class="term-area"></div>
+    <div v-if="monitor && metrics" class="mon">
+      <span class="seg mon-host" :title="metrics.os">{{ metrics.host || "—" }}</span>
+      <span class="seg" v-if="metrics.cpu >= 0" title="CPU"><i>CPU</i>{{ metrics.cpu.toFixed(0) }}%</span>
+      <span class="seg" v-if="metrics.memTotal" title="Memory"><i>MEM</i>{{ fmtSize(metrics.memUsed / 1024) }} / {{ fmtSize(metrics.memTotal / 1024) }}</span>
+      <span class="seg" title="Network up"><i>↑</i>{{ fmtRate(metrics.netUp) }}</span>
+      <span class="seg" title="Network down"><i>↓</i>{{ fmtRate(metrics.netDown) }}</span>
+      <span class="seg" v-if="metrics.uptime" title="Uptime"><i>UP</i>{{ fmtUptime(metrics.uptime) }}</span>
+      <span class="seg" v-for="d in (metrics.disks || []).slice(0, 4)" :key="d.mount" :title="d.mount"><i>{{ d.mount }}</i>{{ d.usedPct }}%</span>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.term-wrap { display: flex; flex-direction: column; height: 100%; width: 100%; }
+.term-area { flex: 1; min-height: 0; }
+.mon { display: flex; align-items: center; height: 22px; padding: 0 2px; background: #11161c; border-top: 1px solid #2a3340; font-size: 11px; color: #9fb0c0; overflow: hidden; white-space: nowrap; }
+.seg { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; height: 13px; border-right: 1px solid #2a3340; }
+.seg:last-child { border-right: none; }
+.seg i { font-style: normal; color: #6b7a8a; font-size: 10px; }
+.mon-host { color: #cbd5e1; font-weight: 600; }
+</style>
