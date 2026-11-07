@@ -3,6 +3,5 @@ dist/
 frontend/node_modules/
 frontend/public/icons/
 frontend/public/fonts/
-# the embedded SPA is rebuilt by `make frontend`; only the committed placeholder index.html is tracked
-internal/gui/dist/*
-!internal/gui/dist/index.html
+# the embedded SPA is rebuilt by `make frontend` (a fresh checkout gets a placeholder from `make embed-stub`)
+internal/gui/dist/

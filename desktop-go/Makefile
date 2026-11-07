@@ -11,7 +11,7 @@ DOCKER     := docker run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp
 GO_ENV     := -e GOFLAGS=-buildvcs=false -e GOCACHE=/src/.cache/go-build -e GOMODCACHE=/src/.cache/mod -e CGO_ENABLED=1
 RUN         = $(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)
 
-.PHONY: prints image tidy check layers test frontend build appimage windows macos dist-all clean
+.PHONY: embed-stub prints image tidy check layers test frontend build appimage windows macos dist-all clean
 
 image:            ## build toolchain image (Go + GTK/WebKitGTK + SQLCipher)
 	docker build -q -t $(IMAGE) -f build/linux.Dockerfile build
@@ -19,13 +19,18 @@ image:            ## build toolchain image (Go + GTK/WebKitGTK + SQLCipher)
 tidy: image       ## resolve modules and write go.sum
 	$(RUN) go mod tidy
 
-check: image      ## gofmt + go vet
+# The binary embeds internal/gui/dist (//go:embed): a fresh checkout has no SPA build yet, so the
+# compile-only targets drop a placeholder page there (git-ignored; `make frontend` replaces it).
+embed-stub:
+	@test -e internal/gui/dist/index.html || { mkdir -p internal/gui/dist && echo '<!doctype html><title>rustXterm</title>' > internal/gui/dist/index.html; }
+
+check: image embed-stub ## gofmt + go vet
 	$(RUN) sh -c 'test -z "$$(gofmt -l cmd internal main.go)" || { gofmt -l cmd internal main.go; exit 1; }; go vet ./...'
 
-layers: image     ## module layering (core never imports the GUI/Wails; protocol packages stay independent)
+layers: image embed-stub ## module layering (core never imports the GUI/Wails; protocol packages stay independent)
 	$(RUN) go test ./internal/archtest
 
-test: image       ## unit tests
+test: image embed-stub ## unit tests
 	$(RUN) go test ./...
 
 icons:            ## copy the bundled icon catalog (assets/icons/app) into frontend/public/icons
