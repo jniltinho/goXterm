@@ -46,6 +46,9 @@ export interface Settings {
 }
 // Native open-file dialog to pick an SSH private key; returns "" when cancelled.
 export const PickKeyFile = () => call<string>("PickKeyFile");
+// System clipboard (native, no WebView permission prompt): terminal Copy/Paste.
+export const ClipboardText = () => call<string>("ClipboardText");
+export const SetClipboardText = (text: string) => call<void>("SetClipboardText", text);
 // Quit the application (Terminal → Exit).
 export const Quit = () => call<void>("Quit");
 export const GetSettings = () => call<Settings>("GetSettings");

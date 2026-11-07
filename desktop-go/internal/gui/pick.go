@@ -30,3 +30,19 @@ func (a *App) Quit() {
 		a.quit()
 	}
 }
+
+// ClipboardText reads the system clipboard (terminal Paste); "" when empty or not text.
+func (a *App) ClipboardText() string {
+	if a.clip == nil {
+		return ""
+	}
+	s, _ := a.clip.Text()
+	return s
+}
+
+// SetClipboardText writes text to the system clipboard (terminal Copy, copy on select).
+func (a *App) SetClipboardText(text string) {
+	if a.clip != nil {
+		a.clip.SetText(text)
+	}
+}

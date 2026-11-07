@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, shallowRef } from "vue";
 import {
-  Sessions, Folders, Locked, Unlock, Connect, ConnectDemo, HasDemo, LocalShell,
-  TelnetConnect, ConnectTelnetDemo, HasTelnetDemo,
+  Sessions, Folders, Locked, Unlock, Connect, ConnectDemo, HasDemo, LocalShell, QuickConnect,
+  TelnetConnect, TelnetQuickConnect, ConnectTelnetDemo, HasTelnetDemo,
   SerialConnect, ConnectSerialDemo, HasSerialDemo,
   SftpConnect, FtpConnect, ConnectSftpDemo, HasSftpDemo, ConnectFtpDemo, HasFtpDemo,
   VncConnect, ConnectVncDemo, HasVncDemo,
@@ -13,10 +13,16 @@ import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolde
 
 // Toolbar/tab appearance flags from Settings → Display (config.toml, no unlock needed).
 const ui = ref({ toolbarCaptions: true, showTabNumbers: true, showCloseButtons: true });
+// Rust Metrics: sidebar 240 px (Settings value), icon strip 34 px, 16 px tree indent.
+const STRIP_W = 34, INDENT = 16;
+const sideW = ref(240);
+const rootOpen = ref(true);
+const status = ref("Ready");
 async function loadUI() {
   try {
     const s = await GetSettings();
     ui.value = { toolbarCaptions: s.toolbarCaptions, showTabNumbers: s.showTabNumbers, showCloseButtons: s.showCloseButtons };
+    sideW.value = Math.min(600, Math.max(160, s.sidebarWidth || 240));
     document.documentElement.dataset.theme = s.theme || "system"; // Skin: theme.css picks the palette
   } catch { /* defaults */ }
 }
@@ -170,6 +176,35 @@ function openTerm(title: string, icon: string, connect: () => Promise<string>, s
   tabs.value = [...tabs.value, { id, title, kind: "ssh", icon, connect, ssh }];
   active.value = id;
 }
+// Toolbar (Rust app.rs TOOLBAR order); Exit is pinned right in the template.
+const TOOLBAR: { icon: string; label: string; run: () => void; on?: () => boolean; disabled?: boolean; hint?: string }[] = [
+  { icon: "session-new", label: "Session", hint: "New session (Ctrl+Shift+N)", run: () => newSession() },
+  { icon: "sessions", label: "Sessions", run: () => (sidebarCollapsed.value = !sidebarCollapsed.value), on: () => !sidebarCollapsed.value },
+  { icon: "tunneling", label: "Tunneling", run: () => (tunnelsOpen.value = true) },
+  { icon: "multiexec", label: "MultiExec", disabled: true, hint: "MultiExec (not available yet)", run: () => {} },
+  { icon: "settings", label: "Settings", hint: "Settings (Ctrl+,)", run: () => (settingsOpen.value = true) },
+  { icon: "help", label: "Help", run: () => aboutApp() },
+];
+
+// Quick connect: [ssh://|telnet://][user@]host[:port] opens a tab (the password is asked when needed).
+const quick = ref("");
+const quickErr = ref("");
+function quickConnect() {
+  const m = /^(?:(ssh|telnet):\/\/)?(?:([^@\s]+)@)?([^\s:@/]+)(?::(\d{1,5}))?$/.exec(quick.value.trim());
+  if (!m) { quickErr.value = "Expected [ssh://|telnet://][user@]host[:port]"; return; }
+  const [, proto = "ssh", user = "", host, p] = m;
+  const port = p ? Number(p) : proto === "telnet" ? 23 : 22;
+  const url = `${proto}://${user ? user + "@" : ""}${host}:${port}`;
+  if (proto === "telnet") openTerm(host, "terminal", () => TelnetQuickConnect(host, port), false, url);
+  else openTerm(user ? `${user}@${host}` : host, "ssh", () => QuickConnect(host, port, user, ""), true, url);
+  quick.value = quickErr.value = "";
+}
+
+// Duplicate tab: the same connection again, in a new tab.
+function duplicateTab(t: Tab) {
+  if (t.kind === "ssh") openTerm(t.title, t.icon, t.connect, t.ssh, tabUrl.value[t.id] ?? "");
+}
+
 const openLocal = () => openTerm("Local terminal", "terminal", () => LocalShell(), false, "local://");
 
 // Side SFTP browser of the active SSH tab: its backend tabId, the folder OSC 7 reported, and a tick per
@@ -209,7 +244,7 @@ const editorOpen = ref(false);
 const settingsOpen = ref(false);
 const tunnelsOpen = ref(false);
 const editorSessionId = ref<number | null>(null);
-const ctx = ref<{ x: number; y: number; session?: Session; folder?: Folder } | null>(null);
+const ctx = ref<{ x: number; y: number; session?: Session; folder?: Folder; root?: boolean } | null>(null);
 
 // SSH host-key trust prompt (TOFU): the backend emits "ssh:trust" for an unknown key and blocks.
 // Prompts queue so concurrent connections (e.g. the SSH terminal and its SFTP pane) each get one.
@@ -365,9 +400,9 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <div v-if="unlockError" class="dialog-err">{{ unlockError }}</div>
           <div class="dialog-actions">
             <button class="dbtn primary" :disabled="!master || unlocking" @click="doUnlock">
-              <img :src="icon('key')" class="dbtn-ico" /> {{ unlocking ? "Unlocking…" : "Unlock" }}
+              <img :src="icon('ok')" class="dbtn-ico" /> {{ unlocking ? "Unlocking…" : "Unlock" }}
             </button>
-            <button class="dbtn" @click="showUnlock = false">Cancel</button>
+            <button class="dbtn" @click="showUnlock = false"><img :src="icon('cancel')" class="dbtn-ico" /> Cancel</button>
           </div>
         </div>
       </div>
@@ -415,109 +450,106 @@ const tabIcon = (t: Tab) => icon(t.icon);
         </div>
       </div>
     </nav>
-    <header class="toolbar flex items-stretch gap-0.5 px-1.5 py-1" :class="ui.toolbarCaptions ? 'cap' : ''">
-      <button class="tbtn" title="New session" @click="newSession()"><img :src="icon('session-new')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">New</span></button>
-      <button class="tbtn" title="Local terminal" @click="openLocal"><img :src="icon('terminal')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Local</span></button>
-      <button class="tbtn" :class="selected ? '' : 'off'" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true, sessionUrl(selected))"><img :src="icon('ssh')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SSH</span></button>
-      <button class="tbtn" :class="selected ? '' : 'off'" title="Open SFTP file browser" @click="openSftpFor(selected)"><img :src="icon('sftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SFTP</span></button>
-      <button class="tbtn" :class="selected ? '' : 'off'" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)"><img :src="icon('ftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">FTP</span></button>
-      <button class="tbtn" :class="selected ? '' : 'off'" title="Open VNC" @click="openVncFor(selected)"><img :src="icon('vnc')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">VNC</span></button>
-      <button class="tbtn" :class="selected ? '' : 'off'" title="Open RDP" @click="openRdpFor(selected)"><img :src="icon('rdp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">RDP</span></button>
-      <span class="tbsep"></span>
-      <button class="tbtn" title="SSH tunnels (port forwarding)" @click="tunnelsOpen = true"><img :src="icon('tunnel')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Tunnels</span></button>
-      <span class="tbsep"></span>
-      <input class="qc self-center" placeholder="Quick connect — user@host[:port]" disabled />
-      <span class="ml-auto flex items-stretch gap-0.5">
-        <button class="tbtn" title="Settings" @click="settingsOpen = true"><img :src="icon('gear')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Settings</span></button>
-        <button class="tbtn" title="Help"><img :src="icon('help')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Help</span></button>
-      </span>
+    <!-- toolbar (Rust app.rs TOOLBAR): 52 px with captions, 34 px without; Exit pinned right -->
+    <header class="toolbar" :class="ui.toolbarCaptions ? 'cap' : ''">
+      <button v-for="b in TOOLBAR" :key="b.label" class="tbtn" :class="b.on?.() ? 'on' : ''" :disabled="b.disabled" :title="b.hint ?? b.label" @click="b.run()">
+        <img :src="icon(b.icon)" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">{{ b.label }}</span>
+      </button>
+      <span class="ml-auto"></span>
+      <button class="tbtn" title="Exit" @click="Quit()"><img :src="icon('exit')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Exit</span></button>
     </header>
 
-    <div class="flex min-h-0 flex-1">
-      <!-- vertical page strip (MobaXterm): Sessions / SFTP; clicking the open page hides the sidebar -->
-      <nav class="strip">
-        <button
-          v-for="p in (['sessions', 'sftp'] as const)"
-          :key="p"
-          class="strip-b"
-          :class="!sidebarCollapsed && sidePage === p ? 'on' : ''"
-          :title="p === 'sessions' ? 'Sessions' : 'SFTP browser'"
-          @click="sidebarCollapsed = !sidebarCollapsed && sidePage === p; sidePage = p"
-        >
-          <img :src="icon(p === 'sessions' ? 'star' : 'sftp')" class="strip-ico" />
-          <span class="strip-t">{{ p === "sessions" ? "Sessions" : "SFTP" }}</span>
+    <!-- 28 px row: Quick connect over the sidebar column, then the tab strip -->
+    <div class="row">
+      <div class="qc-col" :style="{ width: (sidebarCollapsed ? sideW - STRIP_W : sideW) + 'px' }">
+        <input v-model="quick" class="qc" placeholder="Quick connect..." spellcheck="false" aria-label="Quick connect" :class="quickErr ? 'err' : ''" :title="quickErr" @keydown.enter="quickConnect" @keydown.esc="quick = ''; quickErr = ''" />
+      </div>
+      <div class="tabstrip">
+        <button class="tab-home" :class="!active ? 'sel' : ''" title="Home" @click="active = ''"><img :src="icon('house')" /></button>
+        <button v-for="(t, i) in tabs" :key="t.id" class="tab" :class="t.id === active ? 'sel' : ''" :title="tabUrl[t.id] || t.title" @click="active = t.id" @mousedown.middle.prevent="closeTab(t.id)">
+          <img :src="tabIcon(t)" class="tab-ico" />
+          <span class="tab-dot" :class="tabState[t.id] ?? 'connecting'" :title="STATE_LABEL[tabState[t.id] ?? 'connecting']"></span>
+          <span class="tab-t"><template v-if="ui.showTabNumbers">{{ i + 1 }}. </template>{{ t.title }}</span>
+          <span v-if="ui.showCloseButtons" class="tab-x" title="Close" @click.stop="closeTab(t.id)">×</span>
         </button>
-      </nav>
-      <aside v-show="!sidebarCollapsed" class="sidebar flex w-72 shrink-0 flex-col">
-        <SftpPanel
-          v-if="sidePage === 'sftp'"
-          v-model:follow="followFolder"
-          :term-id="sftpTerm"
-          :cwd="tabCwd[activeSsh] ?? ''"
-          :enter-tick="enterTick[activeSsh] ?? 0"
-          :monitor="!!tabMon[activeSsh]"
-          @toggle-monitor="tabMon[activeSsh] = !tabMon[activeSsh]"
-        />
-        <template v-else>
-        <div class="side-head flex items-center justify-between px-2 py-1">
-          <span class="flex items-center gap-1.5"><img :src="icon('session')" class="h-3.5 w-3.5" /> Sessions</span>
-          <span class="flex items-center gap-1.5">
-            <img v-if="!locked" :src="icon('folder')" class="h-3.5 w-3.5 cursor-pointer opacity-70 hover:opacity-100" title="New folder" @click="newFolder(null)" />
-            <span v-if="!loading && !error" class="count">{{ sessions.length }}</span>
-          </span>
-        </div>
-        <div class="min-h-0 flex-1 overflow-y-auto">
-          <div v-if="locked" class="locked-note">
-            <div class="locked-head"><img :src="icon('key')" class="h-3.5 w-3.5 opacity-70" /> Saved sessions are locked.</div>
-            <button class="locked-unlock" @click="unlockError = ''; showUnlock = true">Unlock…</button>
-          </div>
-          <div v-else-if="loading" class="side-note">Loading…</div>
-          <div v-else-if="error" class="side-err">{{ error }}</div>
-          <template v-else>
-            <div v-for="(row, i) in rows" :key="i">
-              <div
-                v-if="row.kind === 'folder'"
-                class="treerow folder"
-                :style="{ paddingLeft: 6 + row.depth * 14 + 'px' }"
-                @click="toggleFolder(row.folder.id)"
-                @contextmenu.prevent="openFolderCtx($event, row.folder)"
-              >
-                <span class="tw">{{ row.hasKids ? (row.open ? "▾" : "▸") : "" }}</span>
-                <img :src="folderIcon(row.folder)" class="ico" />
-                <span class="truncate">{{ row.folder.name }}</span>
-              </div>
-              <div
-                v-else
-                class="treerow session"
-                :class="selected?.id === row.session.id ? 'sel' : ''"
-                :style="{ paddingLeft: 6 + row.depth * 14 + 'px' }"
-                :title="'Click to select, double-click to open, right-click for actions'"
-                @click="selected = row.session"
-                @dblclick="openSession(row.session)"
-                @contextmenu.prevent="openCtx($event, row.session)"
-              >
-                <span class="tw"></span>
-                <img :src="sessionIcon(row.session)" class="ico" />
-                <span class="truncate">{{ row.session.name }}</span>
-                <img v-if="row.session.password === 'saved'" :src="icon('key')" class="ml-auto h-3 w-3 opacity-70" title="password saved" />
-              </div>
+        <button class="tab-new" title="New local terminal" @click="openLocal"></button>
+      </div>
+    </div>
+
+    <div class="flex min-h-0 flex-1">
+      <!-- sidebar: 34 px icon strip (40 px buttons) + the page; a click on the open page collapses it -->
+      <aside class="sidebar" :style="{ width: (sidebarCollapsed ? STRIP_W : sideW) + 'px' }">
+        <nav class="strip">
+          <button
+            v-for="p in (['sessions', 'sftp'] as const)"
+            :key="p"
+            class="strip-b"
+            :class="!sidebarCollapsed && sidePage === p ? 'on' : ''"
+            :title="p === 'sessions' ? 'Sessions' : 'SFTP'"
+            @click="sidebarCollapsed = !sidebarCollapsed && sidePage === p; sidePage = p"
+          >
+            <img :src="icon(p === 'sessions' ? 'star' : 'sftp')" class="strip-ico" />
+          </button>
+          <div class="strip-rest"></div>
+        </nav>
+        <div v-show="!sidebarCollapsed" class="page">
+          <SftpPanel
+            v-if="sidePage === 'sftp'"
+            v-model:follow="followFolder"
+            :term-id="sftpTerm"
+            :cwd="tabCwd[activeSsh] ?? ''"
+            :enter-tick="enterTick[activeSsh] ?? 0"
+            :monitor="!!tabMon[activeSsh]"
+            @toggle-monitor="tabMon[activeSsh] = !tabMon[activeSsh]"
+          />
+          <div v-else class="tree">
+            <div class="treerow root" :style="{ paddingLeft: '4px' }" @click="rootOpen = !rootOpen" @contextmenu.prevent="!locked && (ctx = { x: $event.clientX, y: $event.clientY, root: true })">
+              <span class="tw">{{ rootOpen ? "▼" : "▶" }}</span>
+              <img :src="icon('folder-user')" class="ico" />
+              <span class="truncate">User sessions</span>
             </div>
-          </template>
+            <template v-if="rootOpen">
+              <div v-if="locked" class="locked-note">
+                <div>Saved sessions are locked.</div>
+                <button class="locked-unlock" @click="unlockError = ''; showUnlock = true">Unlock...</button>
+              </div>
+              <div v-else-if="loading" class="side-note">Loading…</div>
+              <div v-else-if="error" class="side-err">{{ error }}</div>
+              <template v-else>
+                <div v-for="(row, i) in rows" :key="i">
+                  <div
+                    v-if="row.kind === 'folder'"
+                    class="treerow"
+                    :style="{ paddingLeft: 4 + (row.depth + 1) * INDENT + 'px' }"
+                    @click="toggleFolder(row.folder.id)"
+                    @contextmenu.prevent="openFolderCtx($event, row.folder)"
+                  >
+                    <span class="tw">{{ row.hasKids ? (row.open ? "▼" : "▶") : "" }}</span>
+                    <img :src="folderIcon(row.folder)" class="ico" />
+                    <span class="truncate">{{ row.folder.name }}</span>
+                  </div>
+                  <div
+                    v-else
+                    class="treerow session"
+                    :class="selected?.id === row.session.id ? 'sel' : ''"
+                    :style="{ paddingLeft: 4 + (row.depth + 1) * INDENT + 'px' }"
+                    :title="row.session.host ? `${row.session.name} (${row.session.host})` : row.session.name"
+                    @click="selected = row.session"
+                    @dblclick="openSession(row.session)"
+                    @contextmenu.prevent="openCtx($event, row.session)"
+                  >
+                    <span class="tw"></span>
+                    <img :src="sessionIcon(row.session)" class="ico" />
+                    <span class="truncate">{{ row.session.name }}</span>
+                  </div>
+                </div>
+              </template>
+            </template>
+          </div>
         </div>
-        </template>
       </aside>
 
-      <main class="flex min-w-0 flex-1 flex-col bg-[#0b0e11]">
-        <div class="tabbar flex items-stretch">
-          <button class="tab-home" :class="!active ? 'tab-active' : ''" title="Home" @click="active = ''"><img :src="icon('house')" class="h-4 w-4" /></button>
-          <button v-for="(t, i) in tabs" :key="t.id" class="tab flex items-center gap-1.5" :class="t.id === active ? 'tab-active' : ''" :title="tabUrl[t.id] || t.title" @click="active = t.id" @mousedown.middle.prevent="closeTab(t.id)">
-            <img :src="tabIcon(t)" class="h-4 w-4" />
-            <span class="tab-dot" :class="tabState[t.id] ?? 'connecting'" :title="STATE_LABEL[tabState[t.id] ?? 'connecting']"></span>
-            <span class="max-w-[180px] truncate"><template v-if="ui.showTabNumbers">{{ i + 1 }}. </template>{{ t.title }}</span>
-            <span v-if="ui.showCloseButtons" class="tab-x" title="Close" @click.stop="closeTab(t.id)">×</span>
-          </button>
-          <button class="tab-new" title="New local terminal" @click="openLocal">+</button>
-        </div>
+      <main class="central">
         <div class="relative min-h-0 flex-1">
           <template v-for="t in tabs" :key="t.id">
             <TerminalView
@@ -526,6 +558,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
               :connect="t.connect"
               :monitor="!!tabMon[t.id]"
               @close="closeTab(t.id)"
+              @duplicate="duplicateTab(t)"
               @state="(st) => (tabState[t.id] = st)"
               @backend="(b) => onBackend(t.id, b)"
               @cwd="(d) => (tabCwd[t.id] = d)"
@@ -536,16 +569,18 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
             <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
           </template>
+          <!-- Home (Rust home.rs): gear top-right, logo 64 + title 32 px at 22 % height, 200x30 buttons, recents -->
           <div v-if="!active" class="home">
-            <div class="home-brand"><img :src="icon('logo')" class="home-logo" @error="($event.target as HTMLImageElement).src = icon('session')" /><span>rustXterm</span></div>
+            <button class="home-gear" title="Settings" @click="settingsOpen = true"><img :src="icon('settings')" /></button>
+            <div class="home-brand"><img :src="icon('logo')" class="home-logo" /><span>rustXterm</span></div>
             <div class="home-actions">
               <button class="home-btn" @click="newSession"><img :src="icon('session-new')" class="home-btn-ico" /> New session</button>
-              <button class="home-btn" @click="importSessions"><img :src="icon('folder')" class="home-btn-ico" /> Import sessions</button>
+              <button class="home-btn" @click="importSessions"><img :src="icon('open')" class="home-btn-ico" /> Import sessions</button>
             </div>
             <div v-if="recentSessions.length" class="recent">
               <div class="recent-title">Recent sessions</div>
               <div class="recent-grid">
-                <div v-for="s in recentSessions" :key="s.id" class="recent-item" @click="openSession(s)" :title="s.host">
+                <div v-for="s in recentSessions" :key="s.id" class="recent-item" @click="openSession(s)" :title="s.host ? `${s.name} (${s.host})` : s.name">
                   <img :src="sessionIcon(s)" class="recent-ico" /><span class="truncate">{{ s.name }}</span>
                 </div>
               </div>
@@ -555,12 +590,9 @@ const tabIcon = (t: Tab) => icon(t.icon);
       </main>
     </div>
 
-    <footer class="statusbar flex items-center gap-3 px-2">
-      <span>Ready</span>
-      <span class="ml-auto">
-        <template v-if="active && tabUrl[active]">{{ tabUrl[active] }} — {{ STATE_LABEL[tabState[active] ?? "connecting"] }}</template>
-      </span>
-      <span class="sb-tabs">{{ tabs.length }} tab(s)</span>
+    <footer class="statusbar">
+      <span class="truncate">{{ active && tabUrl[active] ? `${tabUrl[active]} — ${STATE_LABEL[tabState[active] ?? "connecting"]}` : status }}</span>
+      <span class="ml-auto shrink-0">{{ tabs.length }} tab(s)</span>
     </footer>
 
     <!-- tree context menu -->
@@ -574,6 +606,10 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <button class="ctx-item danger" @click="delSession(ctx!.session!); closeCtx()"><span class="ctx-ico ctx-del">✕</span> Delete session</button>
           <div class="ctx-sep"></div>
           <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
+        </template>
+        <template v-else-if="ctx.root">
+          <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
+          <button class="ctx-item" @click="newFolder(null); closeCtx()"><img :src="icon('folder')" class="ctx-ico" /> New folder</button>
         </template>
         <template v-else-if="ctx.folder">
           <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session here</button>
@@ -636,109 +672,126 @@ const tabIcon = (t: Tab) => icon(t.icon);
 </template>
 
 <style scoped>
-.app { background: var(--k-eef1f4); color: var(--k-1e1e1e); }
-.menubar { background: var(--k-eef1f4); border-bottom: 1px solid var(--k-c9d1d9); font-size: 12.5px; color: var(--k-2b3a47); user-select: none; }
+/* Shell — Rust Metrics/Tokens: menu 20 px, toolbar 52 (34 compact), row 28, status 18, body 12 px,
+   captions 11 px, flat square widgets, 1 px borders. */
+.app { background: var(--surface); color: var(--text); font-size: 12px; }
+.menubar { height: 20px; background: var(--toolbar); color: var(--text); user-select: none; }
 .menu { position: relative; }
-.menu-t { padding: 3px 10px; background: transparent; border: none; cursor: pointer; color: inherit; }
-.menu-t:hover, .menu-t.on { background: var(--k-d7e3f4); }
-.menu-d { position: absolute; top: 100%; left: 0; z-index: 70; min-width: 190px; background: var(--k-f7f9fb); border: 1px solid var(--k-9aa7b4); box-shadow: 0 8px 22px rgba(0,0,0,.28); padding: 3px; display: flex; flex-direction: column; }
-.menu-i { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: transparent; border: none; cursor: pointer; text-align: left; color: var(--k-1e2a36); font-size: 12.5px; }
-.menu-i:hover { background: var(--k-2f6fb3); color: #fff; }
+.menu-t { height: 20px; padding: 0 6px; background: transparent; border: none; cursor: pointer; color: inherit; font-size: 12px; }
+.menu-t:hover, .menu-t.on { background: var(--hover); }
+.menu-d { position: absolute; top: 100%; left: 0; z-index: 70; min-width: 190px; background: var(--panel); border: 1px solid var(--border); padding: 2px; display: flex; flex-direction: column; }
+.menu-i { display: flex; align-items: center; gap: 8px; height: 22px; padding: 0 8px; background: transparent; border: none; cursor: pointer; text-align: left; color: var(--text); font-size: 12px; }
+.menu-i:hover { background: var(--hover); }
 .menu-ico { height: 16px; width: 16px; }
-.menu-sep { height: 1px; margin: 3px 0; background: var(--k-d6dde4); }
-.toolbar { background: linear-gradient(var(--k-fbfcfd), var(--k-e9edf1)); border-bottom: 1px solid var(--k-c9d1d9); }
-.tbtn { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; background: transparent; border: 1px solid transparent; cursor: pointer; color: var(--k-2b3a47); }
-.tbtn:hover { background: var(--k-d7e3f4); border-color: var(--k-a9c7ef); }
-.tbtn.off { opacity: .4; cursor: default; }
-.tbtn.off:hover { background: transparent; border-color: transparent; }
-.toolbar.cap .tbtn { flex-direction: column; gap: 1px; padding: 2px 8px; min-width: 46px; }
-.tbico { height: 20px; width: 20px; padding: 1px; }
-.toolbar.cap .tbico { height: 24px; width: 24px; }
-.tbcap { font-size: 10.5px; line-height: 1; white-space: nowrap; }
-.tbsep { width: 1px; margin: 2px 4px; background: var(--k-c9d1d9); align-self: stretch; }
-.qc { width: 300px; height: 24px; padding: 0 8px; font-size: 12px; background: var(--k-ffffff); border: 1px solid var(--k-c9d1d9); }
-.sidebar { background: var(--k-f3f5f8); border-right: 1px solid var(--k-c9d1d9); }
-.side-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--k-5a6b7b); background: var(--k-e7ecf1); border-bottom: 1px solid var(--k-d6dde4); }
-.count { background: var(--k-d6dde4); color: var(--k-4a5a68); font-size: 10px; font-weight: 600; padding: 0 6px; }
-.treerow { display: flex; align-items: center; gap: 5px; height: 22px; font-size: 13px; cursor: default; user-select: none; }
-.treerow .tw { flex: 0 0 12px; text-align: center; font-size: 9px; color: var(--k-8a97a5); }
-.treerow .ico { height: 16px; width: 16px; flex: none; }
-.treerow.session { cursor: pointer; padding-right: 6px; }
-.treerow.session:hover { background: var(--k-d7e3f4); }
-.treerow.session.sel { background: var(--k-cfe0f6); outline: 1px solid var(--k-a9c7ef); }
-.treerow.folder { color: var(--k-33465a); font-weight: 700; cursor: pointer; }
-.treerow.folder:hover { background: var(--k-e3ebf3); }
-.strip { display: flex; flex-direction: column; width: 26px; flex: none; background: var(--k-e2e7ec); border-right: 1px solid var(--k-c9d1d9); }
-.strip-b { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 8px; background: transparent; border: none; border-left: 2px solid transparent; border-bottom: 1px solid var(--k-d0d7de); cursor: pointer; color: var(--k-4a5a68); }
-.strip-b:hover { background: var(--k-d7e3f4); }
-.strip-b.on { background: var(--k-f3f5f8); color: var(--k-1e2a36); border-left-color: var(--k-2f6fb3); }
-.strip-ico { width: 16px; height: 16px; }
-.strip-t { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11.5px; letter-spacing: .02em; }
-.tabbar { height: 28px; background: var(--k-dfe5eb); border-bottom: 1px solid var(--k-c2ccd6); }
-.tab, .tab-home, .tab-new { border: none; border-right: 1px solid var(--k-c2ccd6); border-top: 2px solid transparent; cursor: pointer; }
-.tab { padding: 0 8px; font-size: 12px; color: var(--k-3a4a5a); background: var(--k-e9edf1); max-width: 240px; }
-.tab:hover, .tab-home:hover, .tab-new:hover { background: var(--k-f4f6f8); }
-.tab-home { width: 32px; display: flex; align-items: center; justify-content: center; background: var(--k-e9edf1); }
-.tab-new { width: 28px; font-size: 17px; line-height: 1; color: var(--k-4a5a68); background: transparent; }
-.tab-active, .tab-active:hover { color: var(--k-11202e); background: var(--k-ffffff); border-top-color: var(--k-2f6fb3); }
-.tab-x { margin-left: 2px; padding: 0 4px; color: var(--k-7f8ea0); }
-.tab-x:hover { color: #fff; background: var(--k-c0392b); }
+.menu-sep { height: 1px; margin: 3px 0; background: var(--border-subtle); }
+
+.toolbar { display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 4px; background: var(--toolbar); }
+.toolbar:not(.cap) { height: 34px; }
+.tbtn { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 56px; height: 48px; padding: 4px 6px 2px; background: transparent; border: none; cursor: pointer; color: var(--text); }
+.toolbar:not(.cap) .tbtn { min-width: 30px; width: 30px; height: 30px; justify-content: center; padding: 0; }
+.tbtn:hover:not(:disabled) { background: var(--hover); }
+.tbtn.on { background: var(--pressed); }
+.tbtn:disabled { cursor: default; }
+.tbtn:disabled .tbico { opacity: .45; }
+.tbtn:disabled .tbcap { color: var(--text-disabled); }
+.tbico { width: 24px; height: 24px; flex: none; }
+.tbcap { margin-top: auto; font-size: 11px; line-height: 14px; white-space: nowrap; }
+
+.row { display: flex; height: 28px; background: var(--toolbar); }
+.qc-col { flex: none; display: flex; align-items: center; padding: 0 2px; }
+.qc { width: 100%; height: 26px; padding: 0 4px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }
+.qc:focus { border-color: var(--focus); }
+.qc.err { border-color: var(--danger); }
+.qc::placeholder { color: var(--text-muted); }
+.tabstrip { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 2px; padding-left: 2px; overflow: hidden; }
+.tab, .tab-home, .tab-new { height: 26px; flex: none; display: flex; align-items: center; background: var(--tab-inactive); border: 1px solid var(--border); cursor: pointer; color: var(--text); font-size: 12px; position: relative; }
+.tab:hover, .tab-home:hover, .tab-new:hover { background: var(--hover); }
+.tab.sel, .tab-home.sel { background: var(--tab-active); border-bottom-color: transparent; }
+.tab.sel::before, .tab-home.sel::before { content: ""; position: absolute; left: -1px; right: -1px; top: -1px; height: 2px; background: var(--accent); }
+.tab-home { width: 36px; justify-content: center; }
+.tab-home img { width: 16px; height: 16px; }
+.tab-new { width: 26px; justify-content: center; }
+.tab-new::after { content: ""; width: 10px; height: 10px; background: linear-gradient(var(--text), var(--text)) center / 10px 1.5px no-repeat, linear-gradient(var(--text), var(--text)) center / 1.5px 10px no-repeat; }
+.tab { min-width: 80px; max-width: 220px; gap: 4px; padding: 0 6px; }
+.tab-ico { width: 16px; height: 16px; flex: none; }
+.tab-t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.tab-x { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); }
+.tab-x:hover { color: #fff; background: var(--danger); }
 .tab-dot { width: 8px; height: 8px; clip-path: circle(50%); flex: none; background: var(--k-d4a72c); }
-.tab-dot.connected { background: var(--k-3fb950); }
-.tab-dot.stopped { background: var(--k-e05561); }
-.sb-tabs { min-width: 56px; text-align: right; }
-.statusbar { height: 22px; font-size: 11px; color: var(--k-5a6b7b); background: var(--k-e7ecf1); border-top: 1px solid var(--k-c9d1d9); }
-/* home (shown behind the unlock dialog and whenever no tab is open) */
-.home { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: var(--k-eef1f4); color: var(--k-2b3a4a); }
-.home-brand { display: flex; align-items: center; gap: 14px; font-size: 34px; font-weight: 600; letter-spacing: .5px; }
-.home-logo { height: 52px; width: 52px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
-.home-actions { display: flex; gap: 14px; }
-.home-btn { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 20px; font-size: 14px; color: var(--k-1e1e1e);
-  background: linear-gradient(var(--k-ffffff), var(--k-eef2f6)); border: 1px solid var(--k-b9c4cf); box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; }
-.home-btn:hover { background: linear-gradient(var(--k-ffffff), var(--k-e3ebf3)); border-color: var(--k-8fb4dd); }
-.home-btn-ico { height: 18px; width: 18px; }
-.recent { width: 540px; max-width: 80%; background: var(--k-f3f6f9); border: 1px solid var(--k-c9d1d9); box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 10px 14px 14px; }
-.recent-title { text-align: center; font-size: 13px; font-weight: 700; color: var(--k-4a5a68); margin-bottom: 8px; }
-.recent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 16px; }
-.recent-item { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 3px 4px; cursor: pointer; color: var(--k-1e1e1e); }
-.recent-item:hover { background: var(--k-d7e3f4); }
+.tab-dot.connected { background: var(--success); }
+.tab-dot.stopped { background: var(--danger); }
+
+.sidebar { flex: none; display: flex; background: var(--surface); border-right: 1px solid var(--border); }
+.strip { width: 34px; flex: none; display: flex; flex-direction: column; background: var(--panel); }
+.strip-b { height: 40px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--panel); border: 1px solid var(--border); border-top: none; cursor: pointer; }
+.strip-b:first-child { border-top: 1px solid var(--border); }
+.strip-b:hover { background: var(--hover); }
+.strip-b.on { background: var(--surface); border-right-color: transparent; }
+.strip-rest { flex: 1; border-right: 1px solid var(--border); }
+.strip-ico { width: 24px; height: 24px; }
+.page { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tree { flex: 1; min-height: 0; overflow-y: auto; padding-top: 2px; }
+.treerow { display: flex; align-items: center; gap: 4px; height: 24px; padding-right: 6px; font-size: 12px; cursor: default; user-select: none; white-space: nowrap; }
+.treerow:hover { background: var(--hover); }
+.treerow .tw { flex: 0 0 12px; text-align: center; font-size: 8px; color: var(--text-muted); }
+.treerow .ico { height: 22px; width: 22px; flex: none; }
+.treerow.session.sel { background: var(--pressed); }
+
+.central { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+.statusbar { height: 18px; display: flex; align-items: center; gap: 12px; padding: 0 6px; font-size: 11px; color: var(--text); background: var(--panel); }
+
+/* Home (Rust home.rs) */
+.home { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; background: var(--surface); color: var(--text); }
+.home::before { content: ""; flex: 0 0 22%; } /* 22 % of the area's height, as home.rs */
+.home-gear { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; }
+.home-gear:hover { background: var(--hover); }
+.home-gear img { width: 24px; height: 24px; }
+.home-brand { display: flex; align-items: center; gap: 16px; font-size: 32px; line-height: 1; }
+.home-logo { height: 64px; width: 64px; }
+.home-actions { display: flex; gap: 24px; margin-top: 24px; }
+.home-btn { display: flex; align-items: center; justify-content: center; gap: 4px; width: 200px; height: 30px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
+.home-btn:hover { background: var(--hover); border-color: var(--outline); }
+.home-btn-ico { height: 16px; width: 16px; }
+.recent { width: 576px; max-width: calc(100% - 32px); margin-top: 24px; background: var(--panel); padding: 12px 20px 10px; }
+.recent-title { height: 22px; text-align: center; font-weight: 700; font-size: 12px; }
+.recent-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.recent-item { display: flex; align-items: center; gap: 6px; height: 24px; padding-right: 8px; font-size: 12px; cursor: pointer; min-width: 0; }
+.recent-item:hover span { text-decoration: underline; }
 .recent-ico { height: 16px; width: 16px; flex: none; }
 
-.side-note { padding: 12px; font-size: 12px; color: var(--k-6b7a8a); }
-.side-err { margin: 8px; padding: 8px; font-size: 12px; border: 1px solid var(--k-f0c38a); background: var(--k-fff4e5); color: var(--k-8a4b00); }
-/* locked sidebar note */
-.locked-note { padding: 10px; }
-.locked-head { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--k-7a6a2a); }
-.locked-unlock { margin-top: 8px; height: 26px; padding: 0 12px; font-size: 12px; background: linear-gradient(var(--k-ffffff), var(--k-eef2f6)); border: 1px solid var(--k-b9c4cf); box-shadow: 0 1px 2px rgba(0,0,0,.1); cursor: pointer; }
-.locked-unlock:hover { border-color: var(--k-8fb4dd); }
+.side-note { padding: 8px 12px; color: var(--text-muted); }
+.side-err { margin: 8px; padding: 8px; border: 1px solid var(--k-f0c38a); background: var(--k-fff4e5); color: var(--k-8a4b00); }
+.locked-note { padding: 2px 0 0 20px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; color: var(--text); }
+.locked-unlock { height: 20px; padding: 0 5px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
+.locked-unlock:hover { background: var(--hover); }
 
-/* modal unlock dialog, raised off the shell with a backdrop and shadow (volume) */
-.modal-backdrop { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(20, 28, 38, .28); }
-.dialog { width: 380px; background: var(--k-f2f4f7); border: 1px solid var(--k-9aa7b4); box-shadow: 0 14px 40px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25); }
-.dialog-title { font-size: 12px; font-weight: 700; color: var(--k-33465a); background: linear-gradient(var(--k-e9eef3), var(--k-dbe3ea)); border-bottom: 1px solid var(--k-c2ccd6); padding: 7px 12px; }
-.dialog-body { padding: 14px 16px 16px; }
-.dialog-sub { font-size: 12.5px; color: var(--k-42536a); margin-bottom: 10px; }
-.dialog-label { display: block; font-size: 12px; color: var(--k-1e1e1e); margin-bottom: 4px; }
-.dialog-input { width: 100%; height: 30px; padding: 0 9px; font-size: 13px; background: var(--k-ffffff); border: 1px solid var(--k-a9b4c0); box-shadow: inset 0 1px 2px rgba(0,0,0,.08); }
-.dialog-input:focus { outline: none; border-color: var(--k-5b9bd5); box-shadow: 0 0 0 2px rgba(91,155,213,.35); }
-.dialog-err { color: var(--k-c0392b); font-size: 12px; margin-top: 8px; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.dbtn { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 16px; font-size: 13px; background: linear-gradient(var(--k-ffffff), var(--k-e9eef3)); border: 1px solid var(--k-a9b4c0); box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; color: var(--k-1e1e1e); }
-.dbtn:hover { border-color: var(--k-8fb4dd); }
-.dbtn.primary { background: linear-gradient(var(--k-4a8fd1), var(--k-2f6fb5)); border-color: var(--k-2a62a0); color: #fff; }
-.dbtn.primary:hover { background: linear-gradient(var(--k-55a0e0), var(--k-3277c0)); }
-.dbtn.primary:disabled { opacity: .55; cursor: default; }
-.dbtn-ico { height: 14px; width: 14px; }
-.fp-head { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--k-4a5a68); background: var(--k-e7ecf1); border: 1px solid var(--k-d6dde4); padding: 4px 8px; margin: 4px 0; }
-.fp { font-family: "DejaVu Sans Mono", monospace; font-size: 12px; color: var(--k-1e3a5a); background: var(--k-ffffff); border: 1px solid var(--k-c2ccd6); padding: 8px 10px; word-break: break-all; margin-bottom: 10px; }
-/* tree context menu */
+/* dialogs (Rust: flat windows, panel fill, 1 px border, no shadow or dimming) */
+.modal-backdrop { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: transparent; }
+.dialog { width: 422px; background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+.dialog-title { font-size: 12px; color: var(--text); background: var(--panel); border-bottom: 1px solid var(--border-subtle); padding: 3px 8px; }
+.dialog-body { padding: 8px 10px 10px; }
+.dialog-sub { font-size: 12px; margin-bottom: 4px; }
+.dialog-label { display: block; font-size: 12px; margin-bottom: 2px; }
+.dialog-input { width: 100%; height: 20px; padding: 0 4px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }
+.dialog-input:focus { border-color: var(--focus); }
+.dialog-err { color: var(--danger); font-size: 12px; margin-top: 6px; }
+.dialog-actions { display: flex; justify-content: center; gap: 20px; margin-top: 12px; }
+.dbtn { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 74px; height: 26px; padding: 0 8px; font-size: 12px; background: var(--panel); border: 1px solid var(--border); cursor: pointer; color: var(--text); }
+.dbtn:hover:not(:disabled) { background: var(--hover); border-color: var(--outline); }
+.dbtn.primary { background: var(--panel); color: var(--text); }
+.dbtn:disabled { color: var(--text-disabled); cursor: default; }
+.dbtn:disabled .dbtn-ico { opacity: .45; }
+.dbtn-ico { height: 16px; width: 16px; }
+.fp-head { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; background: var(--panel); border: 1px solid var(--border-subtle); padding: 4px 8px; margin: 4px 0; }
+.fp { font-family: "DejaVu Sans Mono", monospace; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); padding: 8px 10px; word-break: break-all; margin-bottom: 10px; }
+/* context menus (Rust popup menu: 16 px icons, 22 px items) */
 .ctx-mask { position: fixed; inset: 0; z-index: 70; }
-.ctx { position: fixed; min-width: 180px; background: var(--k-f7f9fb); border: 1px solid var(--k-9aa7b4); box-shadow: 0 8px 24px rgba(0,0,0,.28); padding: 3px; }
-.ctx-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 10px; font-size: 13px; background: transparent; border: none; text-align: left; cursor: pointer; color: var(--k-1e1e1e); }
-.ctx-item:hover { background: var(--k-d7e3f4); }
-.ctx-item.danger:hover { background: var(--k-f4d7d7); }
+.ctx { position: fixed; min-width: 180px; background: var(--panel); border: 1px solid var(--border); padding: 2px; }
+.ctx-item { display: flex; align-items: center; gap: 6px; width: 100%; height: 22px; padding: 0 6px; font-size: 12px; background: transparent; border: none; text-align: left; cursor: pointer; color: var(--text); }
+.ctx-item:hover { background: var(--hover); }
+.ctx-item.danger:hover { background: var(--hover); }
 .ctx-ico { height: 16px; width: 16px; display: inline-flex; align-items: center; justify-content: center; }
-.ctx-del { color: var(--k-c0392b); font-weight: 700; }
-.ctx-sep { height: 1px; background: var(--k-d6dde4); margin: 3px 0; }
+.ctx-del { color: var(--danger); font-weight: 700; }
+.ctx-sep { height: 1px; background: var(--border-subtle); margin: 3px 0; }
 .app :deep(*), .app { border-radius: 0 !important; }
 </style>

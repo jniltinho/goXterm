@@ -6,7 +6,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { Events } from "@wailsio/runtime";
 import "@xterm/xterm/css/xterm.css";
 import { ref as vref } from "vue";
-import { Send, Resize, Disconnect, MonitorStart, MonitorStop, GetSettings, TermAttach, SaveTerminalOutput, type Attach, type Metrics } from "./api";
+import { Send, Resize, Disconnect, MonitorStart, MonitorStop, GetSettings, TermAttach, SaveTerminalOutput, ClipboardText, SetClipboardText, type Attach, type Metrics } from "./api";
 import { renderBanner } from "./banner";
 
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
@@ -15,8 +15,25 @@ const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean }>
 // backend: the backend tabId once connected (the side SFTP browser uses it); enter: the user pressed
 // Return (debounced, for "Follow terminal folder"); cwd: the shell reported its folder (OSC 7).
 const emit = defineEmits<{
-  close: []; state: ["connecting" | "connected" | "stopped"]; backend: [string]; enter: []; cwd: [string];
+  close: []; duplicate: []; state: ["connecting" | "connected" | "stopped"]; backend: [string]; enter: []; cwd: [string];
 }>();
+
+// Context menu (Rust terminal_menu, MobaXterm-like): right click, or Ctrl+right click when right click
+// pastes (Settings › General › Paste with right click).
+const prefs = { rightClickPaste: false, copyOnSelect: false };
+const cmenu = vref<{ x: number; y: number; sel: boolean; live: boolean } | null>(null);
+function onContext(e: MouseEvent) {
+  e.preventDefault();
+  if (prefs.rightClickPaste && !e.ctrlKey) { void paste(); return; }
+  const w = 210, h = 290; // keep the menu inside the window
+  cmenu.value = {
+    x: Math.min(e.clientX, window.innerWidth - w), y: Math.min(e.clientY, window.innerHeight - h),
+    sel: term.hasSelection(), live: !stopped,
+  };
+}
+function menuRun(f: () => void) { cmenu.value = null; f(); term.focus(); }
+const copy = () => { const s = term.getSelection(); if (s) void SetClipboardText(s); };
+async function paste() { const s = await ClipboardText(); if (s && !stopped) term.paste(s); }
 let enterTimer: ReturnType<typeof setTimeout> | undefined;
 const mi = (name: string) => `./icons/${name}.png`; // runtime path (public/), not a bundled import
 
@@ -211,7 +228,12 @@ const SCHEMES: Record<string, Record<string, string>> = {
 
 onMounted(async () => {
   const tp = { fontFamily: "DejaVu Sans Mono", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000, scheme: "xterm" };
-  try { Object.assign(tp, (await GetSettings()).terminal); } catch { /* defaults */ }
+  try {
+    const s = await GetSettings();
+    Object.assign(tp, s.terminal);
+    prefs.rightClickPaste = s.rightClickPaste;
+    prefs.copyOnSelect = s.copyOnSelect;
+  } catch { /* defaults */ }
   const cursorStyle = tp.cursorShape === "block" ? "block" : tp.cursorShape === "underline" ? "underline" : "bar";
   dark = !/light/.test(tp.scheme);
   baseFont = tp.fontSize || 13;
@@ -232,6 +254,8 @@ onMounted(async () => {
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== "keydown" || !(e.ctrlKey || e.metaKey)) return true;
     if (e.shiftKey && e.code === "KeyF") { e.preventDefault(); void openFind(); return false; }
+    if (e.shiftKey && e.code === "KeyC") { e.preventDefault(); copy(); return false; }
+    if (e.shiftKey && e.code === "KeyV") { e.preventDefault(); void paste(); return false; }
     if (e.shiftKey || e.altKey) return true;
     if (e.key === "=" || e.key === "+") { e.preventDefault(); zoom(1); return false; }
     if (e.key === "-") { e.preventDefault(); zoom(-1); return false; }
@@ -239,6 +263,7 @@ onMounted(async () => {
     return true;
   });
   term.open(el.value!);
+  term.onSelectionChange(() => { if (prefs.copyOnSelect && term.hasSelection()) copy(); });
   // OSC 7 (file://host/path): the shell's folder, for the SFTP browser's "Follow terminal folder".
   term.parser.registerOscHandler(7, (data) => {
     try {
@@ -306,7 +331,23 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="term-wrap">
+  <div class="term-wrap" @contextmenu="onContext">
+    <div v-if="cmenu" class="cm-mask" @mousedown.self="cmenu = null" @contextmenu.prevent.stop="cmenu = null" @keydown.esc="cmenu = null">
+      <div class="cm" :style="{ left: cmenu.x + 'px', top: cmenu.y + 'px' }">
+        <button class="cm-i" :disabled="!cmenu.sel" @click="menuRun(copy)"><img :src="mi('copy')" />Copy<span>Ctrl+Shift+C</span></button>
+        <button class="cm-i" :disabled="!cmenu.live" @click="menuRun(paste)"><img :src="mi('paste')" />Paste<span>Ctrl+Shift+V</span></button>
+        <button class="cm-i" @click="menuRun(() => term.selectAll())"><img :src="mi('selection')" />Select all</button>
+        <button class="cm-i" @click="menuRun(openFind)"><img :src="mi('search')" />Find<span>Ctrl+Shift+F</span></button>
+        <button class="cm-i" @click="menuRun(saveOutput)"><img :src="mi('save')" />Save terminal text</button>
+        <div class="cm-sep"></div>
+        <button class="cm-i" @click="menuRun(() => term.clear())"><img :src="mi('remove')" />Clear scrollback</button>
+        <button class="cm-i" @click="menuRun(() => term.reset())"><img :src="mi('refresh')" />Reset terminal</button>
+        <div class="cm-sep"></div>
+        <button class="cm-i" @click="menuRun(() => emit('duplicate'))"><img :src="mi('copy')" />Duplicate tab</button>
+        <button class="cm-i" :disabled="cmenu.live" @click="menuRun(restart)"><img :src="mi('restart')" />Reconnect</button>
+        <button class="cm-i" @click="menuRun(() => emit('close'))"><img :src="mi('close')" />Close tab</button>
+      </div>
+    </div>
     <div v-if="finding" class="findbar">
       <input
         ref="findInput"
@@ -345,6 +386,15 @@ onBeforeUnmount(() => {
 .find-b { width: 24px; height: 24px; font-size: 11px; color: #cbd5e1; background: #222a33; border: 1px solid #3a4654; cursor: pointer; }
 .find-b:hover { border-color: #6aa0da; }
 .term-area { flex: 1; min-height: 0; }
+.cm-mask { position: fixed; inset: 0; z-index: 80; }
+.cm { position: fixed; min-width: 210px; padding: 2px; background: var(--panel); border: 1px solid var(--border); font-family: "Noto Sans", sans-serif; }
+.cm-i { display: flex; align-items: center; gap: 6px; width: 100%; height: 22px; padding: 0 6px; font-size: 12px; color: var(--text); background: transparent; border: none; text-align: left; cursor: pointer; }
+.cm-i img { width: 16px; height: 16px; }
+.cm-i span { margin-left: auto; padding-left: 16px; color: var(--text-muted); }
+.cm-i:hover:not(:disabled) { background: var(--hover); }
+.cm-i:disabled { color: var(--text-disabled); cursor: default; }
+.cm-i:disabled img { opacity: .45; }
+.cm-sep { height: 1px; margin: 3px 0; background: var(--border-subtle); }
 .mon { display: flex; align-items: center; height: 22px; padding: 0 2px; background: #11161c; border-top: 1px solid #2a3340; font-size: 11px; color: #9fb0c0; overflow: hidden; white-space: nowrap; }
 .seg { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; height: 13px; border-right: 1px solid #2a3340; }
 .seg:last-child { border-right: none; }
