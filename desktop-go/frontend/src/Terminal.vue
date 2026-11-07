@@ -13,7 +13,17 @@ const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean }>
 const emit = defineEmits<{ close: [] }>();
 
 const metrics = vref<Metrics | null>(null);
+const cpuHistory = vref<number[]>([]);
 let offMon: (() => void) | undefined;
+// warning/danger colouring and a tiny CPU sparkline for the monitoring bar.
+function lvl(pct: number, warn: number, danger: number) { return pct >= danger ? "danger" : pct >= warn ? "warn" : ""; }
+function sparkPath(h: number[]): string {
+  if (h.length < 2) return "";
+  const w = 38, ht = 11, n = h.length;
+  return h.map((v, i) =>
+    `${i === 0 ? "M" : "L"}${((i / (n - 1)) * w).toFixed(1)},${(ht - (Math.max(0, Math.min(100, v)) / 100) * ht).toFixed(1)}`,
+  ).join(" ");
+}
 const fmtRate = (b: number) => (b >= 1048576 ? (b / 1048576).toFixed(1) + " MB/s" : b >= 1024 ? (b / 1024).toFixed(0) + " kB/s" : b + " B/s");
 const fmtSize = (kib: number) => (kib >= 1048576 ? (kib / 1048576).toFixed(1) + " GiB" : (kib / 1024).toFixed(0) + " MiB");
 function fmtUptime(s: number) {
@@ -45,7 +55,11 @@ function wireEvents() {
 function startMon() {
   if (!props.monitor || !tabId) return;
   offMon?.();
-  offMon = Events.On("monitor:" + tabId, (ev: { data: unknown }) => { metrics.value = ev.data as Metrics; });
+  offMon = Events.On("monitor:" + tabId, (ev: { data: unknown }) => {
+    const m = ev.data as Metrics;
+    metrics.value = m;
+    if (m.cpu >= 0) cpuHistory.value = [...cpuHistory.value, m.cpu].slice(-24);
+  });
   void MonitorStart(tabId);
 }
 
@@ -54,6 +68,7 @@ async function restart() {
   offClose?.();
   offMon?.();
   metrics.value = null;
+  cpuHistory.value = [];
   stopped = false;
   term.reset();
   term.writeln("\x1b[90mReconnecting…\x1b[0m");
@@ -144,12 +159,15 @@ onBeforeUnmount(() => {
     <div ref="el" class="term-area"></div>
     <div v-if="monitor && metrics" class="mon">
       <span class="seg mon-host" :title="metrics.os">{{ metrics.host || "—" }}</span>
-      <span class="seg" v-if="metrics.cpu >= 0" title="CPU"><i>CPU</i>{{ metrics.cpu.toFixed(0) }}%</span>
-      <span class="seg" v-if="metrics.memTotal" title="Memory"><i>MEM</i>{{ fmtSize(metrics.memUsed / 1024) }} / {{ fmtSize(metrics.memTotal / 1024) }}</span>
+      <span class="seg" :class="lvl(metrics.cpu, 70, 90)" v-if="metrics.cpu >= 0" title="CPU">
+        <i>CPU</i>{{ metrics.cpu.toFixed(0) }}%
+        <svg v-if="cpuHistory.length > 1" class="spark" viewBox="0 0 38 11" preserveAspectRatio="none"><path :d="sparkPath(cpuHistory)" /></svg>
+      </span>
+      <span class="seg" :class="lvl((metrics.memUsed / metrics.memTotal) * 100, 80, 95)" v-if="metrics.memTotal" title="Memory"><i>MEM</i>{{ fmtSize(metrics.memUsed / 1024) }} / {{ fmtSize(metrics.memTotal / 1024) }}</span>
       <span class="seg" title="Network up"><i>↑</i>{{ fmtRate(metrics.netUp) }}</span>
       <span class="seg" title="Network down"><i>↓</i>{{ fmtRate(metrics.netDown) }}</span>
       <span class="seg" v-if="metrics.uptime" title="Uptime"><i>UP</i>{{ fmtUptime(metrics.uptime) }}</span>
-      <span class="seg" v-for="d in (metrics.disks || []).slice(0, 4)" :key="d.mount" :title="d.mount"><i>{{ d.mount }}</i>{{ d.usedPct }}%</span>
+      <span class="seg" :class="lvl(d.usedPct, 80, 90)" v-for="d in (metrics.disks || []).slice(0, 4)" :key="d.mount" :title="d.mount"><i>{{ d.mount }}</i>{{ d.usedPct }}%</span>
     </div>
   </div>
 </template>
@@ -162,4 +180,10 @@ onBeforeUnmount(() => {
 .seg:last-child { border-right: none; }
 .seg i { font-style: normal; color: #6b7a8a; font-size: 10px; }
 .mon-host { color: #cbd5e1; font-weight: 600; }
+.seg.warn { color: #e0b341; }
+.seg.danger { color: #e05561; }
+.spark { width: 38px; height: 11px; margin-left: 2px; }
+.spark path { fill: none; stroke: #6aa0da; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.seg.warn .spark path { stroke: #e0b341; }
+.seg.danger .spark path { stroke: #e05561; }
 </style>

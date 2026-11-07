@@ -70,7 +70,7 @@
 
 ## 12. Remote monitoring bar
 
-- [~] 12.1 Implement the remote-monitoring bar (host, CPU+sparkline, memory, up/down, uptime, per-disk, scroll, close) with warning/danger thresholds and verify it appears on a monitored SSH tab and closes per-tab in light/dark/system — bar done and verified live against the lab sshd (host, CPU%, memory, net up/down, uptime, per-disk over an extra SSH exec channel, deltas computed in Go, parser unit-tested); REMAINING: CPU sparkline and warning/danger threshold colouring
+- [x] 12.1 Implement the remote-monitoring bar (host, CPU+sparkline, memory, up/down, uptime, per-disk, scroll, close) with warning/danger thresholds and verify it appears on a monitored SSH tab and closes per-tab in light/dark/system — bar done and verified live against the lab sshd (host, CPU%, memory, net up/down, uptime, per-disk over an extra SSH exec channel, deltas computed in Go, parser unit-tested) plus a CPU sparkline and warning/danger threshold colouring (verified live)
 
 ## 13. Cross-platform verification, benchmark and parity gate
 
