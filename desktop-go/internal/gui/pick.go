@@ -8,3 +8,10 @@ func (a *App) PickKeyFile() (string, error) {
 	}
 	return a.pickFile()
 }
+
+// Quit closes the application (the Terminal → Exit menu).
+func (a *App) Quit() {
+	if a.quit != nil {
+		a.quit()
+	}
+}

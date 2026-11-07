@@ -46,6 +46,8 @@ export interface Settings {
 }
 // Native open-file dialog to pick an SSH private key; returns "" when cancelled.
 export const PickKeyFile = () => call<string>("PickKeyFile");
+// Quit the application (Terminal → Exit).
+export const Quit = () => call<void>("Quit");
 export const GetSettings = () => call<Settings>("GetSettings");
 export const SaveSettings = (s: Settings) => call<void>("SaveSettings", s);
 export interface Diag {

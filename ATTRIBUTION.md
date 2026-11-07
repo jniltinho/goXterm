@@ -45,6 +45,7 @@ Every icon, image, font and test fixture committed to this repository has a row 
 | `assets/fonts/terminus/COPYING` | License text `terminus-ttf-4.49.3/COPYING` from the same Terminus TTF 4.49.3 zip, sha256 `bad278e9c6ac3cfcf8230e279be8b339901c6c64cc9c5c19414c047bf55fc02c` | OFL-1.1 |
 | `assets/icons/rustxterm.svg` | Original rustXterm application icon, drawn by rustXterm developers | MIT |
 | `assets/icons/rustxterm-256.png` | 256 px render of `assets/icons/rustxterm.svg` (window icon) | MIT |
+| `desktop-go/build/linux/rustxterm-go.png` | Copy of `assets/icons/rustxterm-256.png`, used as the AppImage icon | MIT |
 | `vendor/picky/**` | picky 7.0.0-rc.25 by Devolutions Inc. (crates.io), manifest dependency requirements relaxed (see `vendor/README.md`) | MIT OR Apache-2.0 |
 | `vendor/sspi/**` | sspi 0.21.3 by Devolutions Inc. (crates.io), macOS/iOS-only pinned dependencies removed from the manifest (see `vendor/README.md`) | MIT OR Apache-2.0 |
 | `vendor/vnc-rs/**` | vnc-rs 0.6.0 (crates.io), stall timeout and bounded network buffer added (see `vendor/README.md`) | MIT OR Apache-2.0 |

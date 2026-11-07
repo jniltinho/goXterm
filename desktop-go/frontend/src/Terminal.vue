@@ -46,9 +46,12 @@ function wireEvents() {
   offClose = Events.On("term:close:" + tabId, (ev: { data: unknown }) => {
     stopped = true;
     const why = String(ev.data ?? "");
-    term.writeln("\r\n\x1b[31mSession stopped\x1b[0m" + (why ? " \x1b[90m(" + why + ")\x1b[0m" : ""));
-    term.writeln("\x1b[90m  - Press \x1b[0mReturn\x1b[90m to close this tab\x1b[0m");
-    term.writeln("\x1b[90m  - Press \x1b[0mR\x1b[90m to restart the session\x1b[0m");
+    const rule = "\x1b[90m" + "─".repeat(Math.min(term.cols || 60, 60)) + "\x1b[0m";
+    term.writeln("\r\n" + rule);
+    term.writeln("\x1b[31m  ✖ Session stopped\x1b[0m" + (why ? " \x1b[90m(" + why + ")\x1b[0m" : ""));
+    term.writeln("\x1b[90m    - Press \x1b[0mReturn\x1b[90m to close this tab\x1b[0m");
+    term.writeln("\x1b[90m    - Press \x1b[0mR\x1b[90m to restart the session\x1b[0m");
+    term.writeln(rule);
   });
 }
 

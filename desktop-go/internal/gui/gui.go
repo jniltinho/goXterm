@@ -69,6 +69,7 @@ func Run(version string, safeGPU bool) error {
 		}
 		return d.PromptForSingleSelection()
 	}
+	svc.quit = app.Quit
 	// Agent control channel (CLI/MCP), off unless the agent_control setting is on; removed on shutdown.
 	svc.startControl(app.Logger)
 	app.OnShutdown(svc.stopControl)

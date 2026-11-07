@@ -9,13 +9,20 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings } from "./api";
+import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
 
 // Toolbar/tab appearance flags from Settings → Display (config.toml, no unlock needed).
 const ui = ref({ toolbarCaptions: true, showTabNumbers: true, showCloseButtons: true });
 async function loadUI() {
   try { const s = await GetSettings(); ui.value = { toolbarCaptions: s.toolbarCaptions, showTabNumbers: s.showTabNumbers, showCloseButtons: s.showCloseButtons }; } catch { /* defaults */ }
 }
+
+// Header menu bar (MobaXterm parity): one open menu at a time; a click elsewhere closes it.
+const menu = ref("");
+const sidebarCollapsed = ref(false);
+function toggleMenu(name: string) { menu.value = menu.value === name ? "" : name; }
+function runMenu(fn: () => void) { menu.value = ""; fn(); }
+function aboutApp() { alert("rustXterm — native terminal & remote session manager (Go + Wails)."); }
 import { Events } from "@wailsio/runtime";
 import TerminalView from "./Terminal.vue";
 import FileBrowser from "./FileBrowser.vue";
@@ -84,6 +91,7 @@ onMounted(async () => {
   Events.On("ssh:trust", (ev: { data: unknown }) => { trustQ.value = [...trustQ.value, ev.data as TrustReq]; });
   Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passQ.value = [...passQ.value, ev.data as PassReq]; });
   await loadUI();
+  window.addEventListener("click", (e) => { if (!(e.target as HTMLElement).closest(".menubar")) menu.value = ""; });
   try { locked.value = await Locked(); } catch { locked.value = true; }
   if (locked.value) { loading.value = false; return; }
   await loadData();
@@ -278,6 +286,49 @@ const tabIcon = (t: Tab) => icon(t.icon);
         </div>
       </div>
     </div>
+    <nav class="menubar flex items-stretch">
+      <div class="menu">
+        <button class="menu-t" :class="menu === 'terminal' ? 'on' : ''" @click.stop="toggleMenu('terminal')">Terminal</button>
+        <div v-if="menu === 'terminal'" class="menu-d">
+          <button class="menu-i" @click="runMenu(() => newSession())"><img :src="icon('session-new')" class="menu-ico" /> New session</button>
+          <button class="menu-i" @click="runMenu(() => openTerm('Local terminal', 'terminal', () => LocalShell()))"><img :src="icon('terminal')" class="menu-ico" /> Local terminal</button>
+          <div class="menu-sep"></div>
+          <button class="menu-i" @click="runMenu(() => Quit())"><img :src="icon('exit')" class="menu-ico" /> Exit</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button class="menu-t" :class="menu === 'sessions' ? 'on' : ''" @click.stop="toggleMenu('sessions')">Sessions</button>
+        <div v-if="menu === 'sessions'" class="menu-d">
+          <button class="menu-i" @click="runMenu(() => newSession())"><img :src="icon('session-new')" class="menu-ico" /> New session</button>
+          <button class="menu-i" @click="runMenu(() => newFolder(null))"><img :src="icon('folder')" class="menu-ico" /> New folder</button>
+          <button class="menu-i" @click="runMenu(() => importSessions())"><img :src="icon('folder')" class="menu-ico" /> Import sessions</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button class="menu-t" :class="menu === 'view' ? 'on' : ''" @click.stop="toggleMenu('view')">View</button>
+        <div v-if="menu === 'view'" class="menu-d">
+          <button class="menu-i" @click="runMenu(() => sidebarCollapsed = !sidebarCollapsed)"><img :src="icon('layout-sidebar')" class="menu-ico" /> {{ sidebarCollapsed ? "Show" : "Hide" }} sidebar</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button class="menu-t" :class="menu === 'tools' ? 'on' : ''" @click.stop="toggleMenu('tools')">Tools</button>
+        <div v-if="menu === 'tools'" class="menu-d">
+          <button class="menu-i" @click="runMenu(() => tunnelsOpen = true)"><img :src="icon('tunnel')" class="menu-ico" /> SSH tunnels…</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button class="menu-t" :class="menu === 'settings' ? 'on' : ''" @click.stop="toggleMenu('settings')">Settings</button>
+        <div v-if="menu === 'settings'" class="menu-d">
+          <button class="menu-i" @click="runMenu(() => settingsOpen = true)"><img :src="icon('gear')" class="menu-ico" /> Settings…</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button class="menu-t" :class="menu === 'help' ? 'on' : ''" @click.stop="toggleMenu('help')">Help</button>
+        <div v-if="menu === 'help'" class="menu-d">
+          <button class="menu-i" @click="runMenu(() => aboutApp())"><img :src="icon('help')" class="menu-ico" /> About rustXterm</button>
+        </div>
+      </div>
+    </nav>
     <header class="toolbar flex items-stretch gap-0.5 px-1.5 py-1" :class="ui.toolbarCaptions ? 'cap' : ''">
       <button class="tbtn" title="New session" @click="newSession()"><img :src="icon('session-new')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">New</span></button>
       <button class="tbtn" title="Local terminal" @click="openTerm('Local terminal', 'terminal', () => LocalShell())"><img :src="icon('terminal')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Local</span></button>
@@ -297,7 +348,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
     </header>
 
     <div class="flex min-h-0 flex-1">
-      <aside class="sidebar flex w-64 shrink-0 flex-col">
+      <aside v-show="!sidebarCollapsed" class="sidebar flex w-64 shrink-0 flex-col">
         <div class="side-head flex items-center justify-between px-2 py-1">
           <span class="flex items-center gap-1.5"><img :src="icon('session')" class="h-3.5 w-3.5" /> Sessions</span>
           <span class="flex items-center gap-1.5">
@@ -454,6 +505,15 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
 <style scoped>
 .app { background: #eef1f4; color: #1e1e1e; }
+.menubar { background: #eef1f4; border-bottom: 1px solid #c9d1d9; font-size: 12.5px; color: #2b3a47; user-select: none; }
+.menu { position: relative; }
+.menu-t { padding: 3px 10px; background: transparent; border: none; cursor: pointer; color: inherit; }
+.menu-t:hover, .menu-t.on { background: #d7e3f4; }
+.menu-d { position: absolute; top: 100%; left: 0; z-index: 70; min-width: 190px; background: #f7f9fb; border: 1px solid #9aa7b4; box-shadow: 0 8px 22px rgba(0,0,0,.28); padding: 3px; display: flex; flex-direction: column; }
+.menu-i { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: transparent; border: none; cursor: pointer; text-align: left; color: #1e2a36; font-size: 12.5px; }
+.menu-i:hover { background: #2f6fb3; color: #fff; }
+.menu-ico { height: 16px; width: 16px; }
+.menu-sep { height: 1px; margin: 3px 0; background: #d6dde4; }
 .toolbar { background: linear-gradient(#fbfcfd, #e9edf1); border-bottom: 1px solid #c9d1d9; }
 .tbtn { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; background: transparent; border: 1px solid transparent; cursor: pointer; color: #2b3a47; }
 .tbtn:hover { background: #d7e3f4; border-color: #a9c7ef; }

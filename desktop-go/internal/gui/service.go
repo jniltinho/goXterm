@@ -19,6 +19,7 @@ import (
 type App struct {
 	emit     func(name string, data any)   // set by gui.Run; emits Wails events to the SPA
 	pickFile func() (string, error)         // set by gui.Run; native open-file dialog (SSH key picker)
+	quit     func()                        // set by gui.Run; quits the app (Terminal → Exit menu)
 	version  string                        // set by gui.Run, shown in Settings → Diagnostics
 
 	mu     sync.Mutex
