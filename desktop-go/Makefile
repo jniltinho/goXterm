@@ -27,6 +27,7 @@ test: image       ## unit tests
 
 icons:            ## copy the bundled icon catalog (assets/icons/app) into frontend/public/icons
 	mkdir -p frontend/public/icons && cp ../assets/icons/app/32/*.png frontend/public/icons/
+	cp ../assets/icons/rustxterm-256.png frontend/public/icons/logo.png
 
 frontend: icons   ## the Vue/Tailwind SPA (Vite Plus) into internal/gui/dist (embedded by the binary)
 	$(DOCKER) -v $(CURDIR):/src -w /src/frontend $(NODE_IMAGE) sh -c 'npm ci --no-audit --no-fund && npm run build:desktop'

@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/binary"
@@ -83,6 +84,68 @@ func decryptDB(path string, key [32]byte) ([]byte, error) {
 		}
 		out = append(out, pt...)
 		out = append(out, make([]byte, reserve)...) // reserved region (SQLite ignores it)
+	}
+	return out, nil
+}
+
+// encryptDB is the inverse of decryptDB: it turns a plaintext SQLite image (page size 4096 with an
+// 80-byte reserved region per page, as SQLCipher leaves and modernc preserves) back into a SQLCipher
+// 4 file, reusing the original 16-byte salt so the same key keeps decrypting it. Each non-zero page
+// gets a fresh random IV; the HMAC covers the ciphertext, IV and page number (little-endian u32).
+func encryptDB(plain []byte, key [32]byte, salt []byte) ([]byte, error) {
+	if len(plain) < pageSize || len(plain)%pageSize != 0 {
+		return nil, errors.New("plaintext image has unexpected size")
+	}
+	if len(salt) != saltSize {
+		return nil, errors.New("salt must be 16 bytes")
+	}
+	hmacSalt := make([]byte, saltSize)
+	for i := range salt {
+		hmacSalt[i] = salt[i] ^ saltMask
+	}
+	hmacKey := pbkdf2.Key(key[:], hmacSalt, fastIter, 32, sha512.New)
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]byte, 0, len(plain))
+	pages := len(plain) / pageSize
+	for i := 0; i < pages; i++ {
+		page := plain[i*pageSize : (i+1)*pageSize]
+		pgno := uint32(i + 1)
+		if isZero(page) { // unused pages stay zero, as decryptDB passes them through
+			out = append(out, page...)
+			continue
+		}
+		offset := 0
+		if pgno == 1 {
+			offset = saltSize // the salt takes the place of the 16-byte header on page 1
+		}
+		data := page[offset : pageSize-reserve] // real bytes; a multiple of the AES block size
+		iv := make([]byte, ivSize)
+		if _, err := rand.Read(iv); err != nil {
+			return nil, err
+		}
+		ct := make([]byte, len(data))
+		cipher.NewCBCEncrypter(block, iv).CryptBlocks(ct, data)
+
+		enc := make([]byte, 0, pageSize)
+		if pgno == 1 {
+			enc = append(enc, salt...)
+		}
+		enc = append(enc, ct...)
+		enc = append(enc, iv...)
+		mac := hmac.New(sha512.New, hmacKey)
+		mac.Write(enc[offset:]) // ciphertext + IV (the salt on page 1 is not covered)
+		var pg [4]byte
+		binary.LittleEndian.PutUint32(pg[:], pgno)
+		mac.Write(pg[:])
+		enc = append(enc, mac.Sum(nil)...)
+		if len(enc) != pageSize {
+			return nil, errors.New("encrypted page size mismatch")
+		}
+		out = append(out, enc...)
 	}
 	return out, nil
 }

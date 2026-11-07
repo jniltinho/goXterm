@@ -20,9 +20,23 @@ const loading = ref(true);
 const error = ref("");
 const selected = ref<Session | null>(null);
 const locked = ref(false);
+const showUnlock = ref(true); // the unlock dialog is dismissable (Cancel); the sidebar reopens it
 const master = ref("");
 const unlockError = ref("");
 const unlocking = ref(false);
+
+// Recent sessions (per-viewer, localStorage): the ids most recently opened, newest first.
+const recentIds = ref<number[]>(loadRecents());
+function loadRecents(): number[] {
+  try { return JSON.parse(localStorage.getItem("rxt-recent") || "[]"); } catch { return []; }
+}
+function pushRecent(id: number) {
+  const r = [id, ...recentIds.value.filter((x) => x !== id)].slice(0, 9);
+  recentIds.value = r;
+  try { localStorage.setItem("rxt-recent", JSON.stringify(r)); } catch { /* private mode */ }
+}
+const recentSessions = computed(() =>
+  recentIds.value.map((id) => sessions.value.find((s) => s.id === id)).filter((s): s is Session => !!s));
 
 type Tab =
   | { id: string; title: string; kind: "ssh"; icon: string; connect: () => Promise<string> }
@@ -95,8 +109,13 @@ function openVnc(title: string, connect: () => Promise<VncView>) {
   tabs.value = [...tabs.value, { id, title, kind: "vnc", icon: "vnc", connect }];
   active.value = id;
 }
+// newSession / importSessions are the home actions; the editor and importer are the next core step.
+function newSession() { /* TODO: open the session editor (needs store writes, now available) */ }
+function importSessions() { /* TODO: MobaXterm .mxtsessions / rustXterm import */ }
+
 // openSession opens a session in the tab its protocol needs (double-click / Enter).
 function openSession(s: Session) {
+  pushRecent(s.id);
   switch (s.protocol) {
     case "telnet": openTerm(s.name, "terminal", () => TelnetConnect(s.id)); break;
     case "serial": openTerm(s.name, "plug", () => SerialConnect(s.id)); break;
@@ -158,24 +177,26 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
 <template>
   <div class="app flex h-full flex-col">
-    <div v-if="locked" class="unlock-overlay">
-      <div class="unlock-brand"><img :src="icon('session')" class="h-8 w-8" /> rustXterm</div>
-      <div class="unlock-card">
-        <div class="unlock-title">Unlock sessions</div>
-        <p class="unlock-sub">Enter the master password to open saved sessions.</p>
-        <label class="unlock-label">Master password</label>
-        <input
-          type="password"
-          class="unlock-input"
-          v-model="master"
-          @keyup.enter="doUnlock"
-          autofocus
-        />
-        <div v-if="unlockError" class="unlock-err">{{ unlockError }}</div>
-        <div class="unlock-actions">
-          <button class="ubtn primary" :disabled="!master || unlocking" @click="doUnlock">
-            {{ unlocking ? "Unlocking…" : "Unlock" }}
-          </button>
+    <div v-if="locked && showUnlock" class="modal-backdrop">
+      <div class="dialog">
+        <div class="dialog-title">Unlock sessions</div>
+        <div class="dialog-body">
+          <p class="dialog-sub">Enter the master password to open saved sessions.</p>
+          <label class="dialog-label">Master password</label>
+          <input
+            type="password"
+            class="dialog-input"
+            v-model="master"
+            @keyup.enter="doUnlock"
+            autofocus
+          />
+          <div v-if="unlockError" class="dialog-err">{{ unlockError }}</div>
+          <div class="dialog-actions">
+            <button class="dbtn primary" :disabled="!master || unlocking" @click="doUnlock">
+              <img :src="icon('key')" class="dbtn-ico" /> {{ unlocking ? "Unlocking…" : "Unlock" }}
+            </button>
+            <button class="dbtn" @click="showUnlock = false">Cancel</button>
+          </div>
         </div>
       </div>
     </div>
@@ -201,7 +222,11 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <span v-if="!loading && !error" class="count">{{ sessions.length }}</span>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto">
-          <div v-if="loading" class="p-3 text-xs text-neutral-500">Loading…</div>
+          <div v-if="locked" class="locked-note">
+            <div class="locked-head"><img :src="icon('key')" class="h-3.5 w-3.5 opacity-70" /> Saved sessions are locked.</div>
+            <button class="locked-unlock" @click="unlockError = ''; showUnlock = true">Unlock…</button>
+          </div>
+          <div v-else-if="loading" class="p-3 text-xs text-neutral-500">Loading…</div>
           <div v-else-if="error" class="m-2 border border-amber-400 bg-amber-50 p-2 text-xs text-amber-800">{{ error }}</div>
           <template v-else>
             <div v-for="(row, i) in rows" :key="i">
@@ -242,10 +267,19 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
             <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
           </template>
-          <div v-if="!tabs.length" class="flex h-full items-center justify-center text-center text-neutral-500">
-            <div>
-              <div class="text-xl font-semibold text-neutral-300">rustXterm</div>
-              <p class="mt-1 text-sm">Double-click a session for a terminal, or select one and use the SFTP button.</p>
+          <div v-if="!tabs.length" class="home">
+            <div class="home-brand"><img :src="icon('logo')" class="home-logo" @error="($event.target as HTMLImageElement).src = icon('session')" /><span>rustXterm</span></div>
+            <div class="home-actions">
+              <button class="home-btn" @click="newSession"><img :src="icon('session-new')" class="home-btn-ico" /> New session</button>
+              <button class="home-btn" @click="importSessions"><img :src="icon('folder')" class="home-btn-ico" /> Import sessions</button>
+            </div>
+            <div v-if="recentSessions.length" class="recent">
+              <div class="recent-title">Recent sessions</div>
+              <div class="recent-grid">
+                <div v-for="s in recentSessions" :key="s.id" class="recent-item" @click="openSession(s)" :title="s.host">
+                  <img :src="sessionIcon(s)" class="recent-ico" /><span class="truncate">{{ s.name }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -281,18 +315,44 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tab-x { margin-left: 2px; padding: 0 4px; color: #7f8ea0; }
 .tab-x:hover { color: #fff; background: #c0392b; }
 .statusbar { height: 22px; font-size: 11px; color: #5a6b7b; background: #e7ecf1; border-top: 1px solid #c9d1d9; }
-.unlock-overlay { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; background: #eef1f4; }
-.unlock-brand { display: flex; align-items: center; gap: 10px; font-size: 26px; font-weight: 600; color: #2b3a4a; }
-.unlock-card { width: 360px; background: #f7f9fb; border: 1px solid #c9d1d9; }
-.unlock-title { font-size: 12px; font-weight: 700; color: #4a5a68; background: #e7ecf1; border-bottom: 1px solid #d6dde4; padding: 5px 10px; }
-.unlock-sub { font-size: 12px; color: #4a5a68; padding: 10px 12px 4px; }
-.unlock-label { display: block; font-size: 12px; color: #1e1e1e; padding: 2px 12px; }
-.unlock-input { width: calc(100% - 24px); margin: 2px 12px 0; height: 26px; padding: 0 8px; font-size: 13px; background: #fff; border: 1px solid #a9b4c0; }
-.unlock-input:focus { outline: 1px solid #5b9bd5; border-color: #5b9bd5; }
-.unlock-err { color: #c0392b; font-size: 12px; padding: 6px 12px 0; }
-.unlock-actions { display: flex; justify-content: flex-end; padding: 12px; }
-.ubtn { height: 28px; padding: 0 16px; font-size: 13px; border: 1px solid #a9b4c0; background: #eef1f4; cursor: pointer; }
-.ubtn.primary { background: #2f6fb5; border-color: #2a62a0; color: #fff; }
-.ubtn.primary:disabled { opacity: .5; cursor: default; }
+/* home (shown behind the unlock dialog and whenever no tab is open) */
+.home { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: #eef1f4; color: #2b3a4a; }
+.home-brand { display: flex; align-items: center; gap: 14px; font-size: 34px; font-weight: 600; letter-spacing: .5px; }
+.home-logo { height: 52px; width: 52px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.home-actions { display: flex; gap: 14px; }
+.home-btn { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 20px; font-size: 14px; color: #1e1e1e;
+  background: linear-gradient(#ffffff, #eef2f6); border: 1px solid #b9c4cf; box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; }
+.home-btn:hover { background: linear-gradient(#ffffff, #e3ebf3); border-color: #8fb4dd; }
+.home-btn-ico { height: 18px; width: 18px; }
+.recent { width: 540px; max-width: 80%; background: #f3f6f9; border: 1px solid #c9d1d9; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 10px 14px 14px; }
+.recent-title { text-align: center; font-size: 13px; font-weight: 700; color: #4a5a68; margin-bottom: 8px; }
+.recent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 16px; }
+.recent-item { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 3px 4px; cursor: pointer; color: #1e1e1e; }
+.recent-item:hover { background: #d7e3f4; }
+.recent-ico { height: 16px; width: 16px; flex: none; }
+
+/* locked sidebar note */
+.locked-note { padding: 10px; }
+.locked-head { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7a6a2a; }
+.locked-unlock { margin-top: 8px; height: 26px; padding: 0 12px; font-size: 12px; background: linear-gradient(#ffffff, #eef2f6); border: 1px solid #b9c4cf; box-shadow: 0 1px 2px rgba(0,0,0,.1); cursor: pointer; }
+.locked-unlock:hover { border-color: #8fb4dd; }
+
+/* modal unlock dialog, raised off the shell with a backdrop and shadow (volume) */
+.modal-backdrop { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(20, 28, 38, .28); }
+.dialog { width: 380px; background: #f2f4f7; border: 1px solid #9aa7b4; box-shadow: 0 14px 40px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.25); }
+.dialog-title { font-size: 12px; font-weight: 700; color: #33465a; background: linear-gradient(#e9eef3, #dbe3ea); border-bottom: 1px solid #c2ccd6; padding: 7px 12px; }
+.dialog-body { padding: 14px 16px 16px; }
+.dialog-sub { font-size: 12.5px; color: #42536a; margin-bottom: 10px; }
+.dialog-label { display: block; font-size: 12px; color: #1e1e1e; margin-bottom: 4px; }
+.dialog-input { width: 100%; height: 30px; padding: 0 9px; font-size: 13px; background: #fff; border: 1px solid #a9b4c0; box-shadow: inset 0 1px 2px rgba(0,0,0,.08); }
+.dialog-input:focus { outline: none; border-color: #5b9bd5; box-shadow: 0 0 0 2px rgba(91,155,213,.35); }
+.dialog-err { color: #c0392b; font-size: 12px; margin-top: 8px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dbtn { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 16px; font-size: 13px; background: linear-gradient(#ffffff, #e9eef3); border: 1px solid #a9b4c0; box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; color: #1e1e1e; }
+.dbtn:hover { border-color: #8fb4dd; }
+.dbtn.primary { background: linear-gradient(#4a8fd1, #2f6fb5); border-color: #2a62a0; color: #fff; }
+.dbtn.primary:hover { background: linear-gradient(#55a0e0, #3277c0); }
+.dbtn.primary:disabled { opacity: .55; cursor: default; }
+.dbtn-ico { height: 14px; width: 14px; }
 .app :deep(*), .app { border-radius: 0 !important; }
 </style>

@@ -7,18 +7,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite (no cgo); reads the decrypted plaintext image
 )
 
 const dbFile = "rustxterm.db"
 
-// Store is an open, read-only rustXterm database. The SQLCipher file is decrypted in pure Go
-// (sqlcipher.go) into a short-lived plaintext image opened with modernc.org/sqlite, so the whole
-// store needs no cgo. The plaintext temp holds credentials, so it is 0600 and removed on Close.
+// Store is an open rustXterm database. The SQLCipher file is decrypted in pure Go (sqlcipher.go) into
+// a short-lived plaintext image opened with modernc.org/sqlite (no cgo); writes go to that image and
+// are re-encrypted back to the SQLCipher file by writeBack (see write.go). The plaintext temp holds
+// credentials, so it is 0600 and removed on Close.
 type Store struct {
-	db  *sql.DB
-	tmp string
+	db   *sql.DB
+	tmp  string
+	dir  string    // directory holding rustxterm.db (for write-back)
+	key  [32]byte  // raw SQLCipher key (for re-encryption on write-back)
+	salt []byte    // original SQLCipher salt, reused so the same key keeps decrypting
+	mu   sync.Mutex
 }
 
 // Open unlocks the envelope in dir with the master password and opens dir/rustxterm.db.
@@ -41,7 +47,12 @@ func OpenWithKeyring(dir string, kr keyring) (*Store, bool, error) {
 }
 
 func openDB(dir string, key dbKey) (*Store, error) {
-	plain, err := decryptDB(filepath.Join(dir, dbFile), [32]byte(key))
+	dbPath := filepath.Join(dir, dbFile)
+	plain, err := decryptDB(dbPath, [32]byte(key))
+	if err != nil {
+		return nil, err
+	}
+	raw, err := os.ReadFile(dbPath)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +71,9 @@ func openDB(dir string, key dbKey) (*Store, error) {
 		os.Remove(tmp)
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+tmp+"?mode=ro")
+	// Open read-write (a rollback journal, not WAL, so committed writes land in the main temp file
+	// that writeBack re-encrypts); the SQLCipher file itself is only touched by writeBack.
+	db, err := sql.Open("sqlite", "file:"+tmp+"?_pragma=journal_mode(DELETE)&_pragma=foreign_keys(1)")
 	if err != nil {
 		os.Remove(tmp)
 		return nil, err
@@ -70,7 +83,7 @@ func openDB(dir string, key dbKey) (*Store, error) {
 		os.Remove(tmp)
 		return nil, errors.New("wrong master password or not a rustXterm database")
 	}
-	return &Store{db: db, tmp: tmp}, nil
+	return &Store{db: db, tmp: tmp, dir: dir, key: [32]byte(key), salt: raw[:saltSize]}, nil
 }
 
 // Close releases the database and removes the decrypted temp file.
