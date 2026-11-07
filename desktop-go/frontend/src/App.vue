@@ -330,7 +330,7 @@ function onBackend(id: string, backend: string) {
   tabBackend.value[id] = backend;
   if (tabMulti.value[id]) void SelectMultiExec(backend, true); // a reconnect has a new backend id
   delete tabCwd.value[id];
-  if (id === active.value && cfg.value.sftpAutoSwitch) sidePage.value = "sftp"; // Settings › SSH
+  if (id === activeSsh.value && cfg.value.sftpAutoSwitch) sidePage.value = "sftp"; // Settings › SSH: SSH tabs only
 }
 function openFiles(title: string, icon: string, connect: () => Promise<RemoteSession>, url = "") {
   const id = newTab(url);

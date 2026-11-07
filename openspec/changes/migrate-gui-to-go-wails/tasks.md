@@ -74,7 +74,7 @@
 
 ## 13. Cross-platform verification, benchmark and parity gate
 
-- [ ] 13.1 Capture screenshots of every screen in light and dark on Linux (Docker lab), macOS (`reims` VM, login `nilton`) and Windows (`dockur/windows`) into `docs/prints/` and verify `git status` shows none of them
+- [ ] 13.1 Capture screenshots of every screen in light and dark on Linux (Docker lab), macOS (`reims` VM, login `nilton`) and Windows (`dockur/windows`) into `docs/prints/` and verify `git status` shows none of them — PROGRESS (2026-11-07): the app runs on all three. macOS 15.8.1 (reims, universal .app): store creation, Keychain unlock, local zsh, SSH + SFTP browser; same-subnet hosts blocked by macOS Local Network privacy for the unsigned app (needs 13.3). Windows 11 (dockur): WebView2, store + Credential Manager unlock, ConPTY cmd.exe, WSL sessions (WSL 1 Alpine: distribution list from Lxss, `--cd`, startup commands). Screenshot sweep into docs/prints/ still to do
 - [ ] 13.2 Run the `bench/` harness on each platform against the recorded Rust baseline and verify cold start (≤1.5×), terminal throughput (≥80 %) and input latency (keystroke-to-echo, Ctrl+C ≤1.5×) meet the pinned thresholds
 - [ ] 13.3 Produce signed/notarized macOS artifacts and signed Windows artifacts from the Docker/release flow and verify they launch on the reims VM and dockur/windows without a signing warning that blocks use
 - [ ] 13.4 Record the parity gate (screen inventory, theme matrix, protocol behaviors incl. RDP, benchmark across the three platforms) with a named sign-off owner and verify every item is checked
