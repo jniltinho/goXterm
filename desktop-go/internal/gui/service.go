@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 
+	"rustxterm-go/internal/control"
 	"rustxterm-go/internal/rdpconn"
 	"rustxterm-go/internal/store"
 	"rustxterm-go/internal/vncconn"
@@ -29,6 +30,7 @@ type App struct {
 	pass   map[string]chan passAns     // reqId → pending interactive password entry
 	mon    map[string]chan struct{}    // tabId → stop channel for its remote-monitoring loop
 	tun    map[string]*tunRun          // via+name → running port-forwarding tunnel
+	ctl    *control.Listener           // agent control socket listener (nil when agent control is off)
 }
 
 // termStream is any byte-stream terminal the SPA drives the same way (SSH/Telnet/Serial); each

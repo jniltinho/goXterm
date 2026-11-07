@@ -89,6 +89,34 @@ func TestResponseJSONShape(t *testing.T) {
 	}
 }
 
+// TestPermissionMatrix mirrors the Rust matrix_matches_spec test: the fixed agent-control matrix.
+func TestPermissionMatrix(t *testing.T) {
+	entries := []string{EntryGui, EntryCliLive, EntryCliOffline, EntryMcpLive, EntryMcpOffline}
+	rows := []struct {
+		group string
+		want  [5]bool
+	}{
+		{GroupRead, [5]bool{true, true, true, true, true}},
+		{GroupStoreWrite, [5]bool{true, false, true, false, false}},
+		{GroupLive, [5]bool{true, true, false, true, false}},
+		{GroupContentRead, [5]bool{true, true, false, true, false}},
+		{GroupGuiOnly, [5]bool{true, false, false, false, false}},
+	}
+	for _, r := range rows {
+		for i, e := range entries {
+			if got := Allowed(r.group, e); got != r.want[i] {
+				t.Errorf("Allowed(%s, %s) = %v, want %v", r.group, e, got, r.want[i])
+			}
+		}
+	}
+	// op → group, incl. the fail-closed default for an unknown op.
+	for op, want := range map[string]string{"send": GroupLive, "list_sessions": GroupRead, "add_session": GroupStoreWrite, "read": GroupContentRead, "gui_only": GroupGuiOnly, "bogus": GroupGuiOnly} {
+		if got := Group(op); got != want {
+			t.Errorf("Group(%q) = %s, want %s", op, got, want)
+		}
+	}
+}
+
 func TestSessionRefUntagged(t *testing.T) {
 	var byID SessionRef
 	if err := json.Unmarshal([]byte(`2`), &byID); err != nil || byID.ID == nil || *byID.ID != 2 || byID.Name != nil {

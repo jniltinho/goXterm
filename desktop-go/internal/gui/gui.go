@@ -60,6 +60,9 @@ func Run(version string, safeGPU bool) error {
 	}
 	app := application.New(opts)
 	svc.emit = func(name string, data any) { app.Event.Emit(name, data) }
+	// Agent control channel (CLI/MCP), off unless the agent_control setting is on; removed on shutdown.
+	svc.startControl(app.Logger)
+	app.OnShutdown(svc.stopControl)
 	// the app's own page loads only once the navigation guard is on (a blank page first where it needs the webview)
 	winOpts.URL, winOpts.HTML = guardedStart()
 	win = app.Window.NewWithOptions(winOpts)
