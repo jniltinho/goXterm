@@ -57,6 +57,7 @@ Every icon, image, font and test fixture committed to this repository has a row 
 | `assets/icons/rustxterm.svg` | Original rustXterm application icon, drawn by rustXterm developers | MIT |
 | `assets/icons/rustxterm-256.png` | 256 px render of `assets/icons/rustxterm.svg` (window icon) | MIT |
 | `desktop-go/build/linux/rustxterm-go.png` | Copy of `assets/icons/rustxterm-256.png`, used as the AppImage icon | MIT |
+| `desktop-go/internal/grdp/**` | RDP client vendored from x90skysn3k/grdp (fork of tomatome/grdp), with rustXterm fixes (bitmap events, clipboard channel, TLS verification hook); full text in `desktop-go/internal/grdp/LICENSE`. **Being replaced by a MIT implementation; do not ship binaries with it** | GPL-3.0 |
 | `vendor/picky/**` | picky 7.0.0-rc.25 by Devolutions Inc. (crates.io), manifest dependency requirements relaxed (see `vendor/README.md`) | MIT OR Apache-2.0 |
 | `vendor/sspi/**` | sspi 0.21.3 by Devolutions Inc. (crates.io), macOS/iOS-only pinned dependencies removed from the manifest (see `vendor/README.md`) | MIT OR Apache-2.0 |
 | `vendor/vnc-rs/**` | vnc-rs 0.6.0 (crates.io), stall timeout and bounded network buffer added (see `vendor/README.md`) | MIT OR Apache-2.0 |
