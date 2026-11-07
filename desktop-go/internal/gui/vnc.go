@@ -89,6 +89,11 @@ func (a *App) vncDial(host string, port int, password string) (*VncView, error) 
 	if err != nil {
 		return nil, err
 	}
+	sess.OnCutText(func(text string) {
+		if a.emit != nil {
+			a.emit("vnc:clipboard:"+tabID, text)
+		}
+	})
 	a.mu.Lock()
 	if a.vnc == nil {
 		a.vnc = map[string]*vncconn.Session{}
@@ -99,6 +104,15 @@ func (a *App) vncDial(host string, port int, password string) (*VncView, error) 
 		view = &VncView{TabID: tabID}
 	}
 	return view, nil
+}
+
+// VncSendClipboard sends local clipboard text to the VNC server (ClientCutText).
+func (a *App) VncSendClipboard(tabID, text string) error {
+	s := a.vncSession(tabID)
+	if s == nil {
+		return nil
+	}
+	return s.SendCutText(text)
 }
 
 // VncStart begins streaming frames (call after subscribing to vnc:frame events).

@@ -128,6 +128,8 @@ export const VncPointer = (tabId: string, buttonMask: number, x: number, y: numb
   call<void>("VncPointer", tabId, buttonMask, x, y);
 export const VncKey = (tabId: string, down: boolean, keysym: number) => call<void>("VncKey", tabId, down, keysym);
 export const VncDisconnect = (tabId: string) => call<void>("VncDisconnect", tabId);
+// Clipboard: server text arrives as "vnc:clipboard:<tab>" events; send local text with VncSendClipboard.
+export const VncSendClipboard = (tabId: string, text: string) => call<void>("VncSendClipboard", tabId, text);
 
 // RDP — the framebuffer is decoded in Go (vendored grdp) and streamed as per-rectangle PNGs over "rdp:frame:<tab>".
 export interface RdpView { tabId: string; width: number; height: number }

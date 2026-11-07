@@ -43,7 +43,11 @@ type Session struct {
 	width  int
 	height int
 	closed bool
+	onCut  func(string) // ServerCutText → local clipboard
 }
+
+// OnCutText registers a callback for server clipboard text (ServerCutText). Set it before Start.
+func (s *Session) OnCutText(f func(string)) { s.onCut = f }
 
 const (
 	encRaw         = 0
@@ -233,7 +237,7 @@ func (s *Session) loop(onFrame func(Rect), onClose func(error)) {
 			err = s.skipColourMap()
 		case 2: // Bell
 		case 3: // ServerCutText
-			err = s.skipServerCutText()
+			err = s.readServerCutText()
 		default:
 			err = fmt.Errorf("vnc: unknown server message %d", msgType)
 		}
@@ -357,7 +361,9 @@ func (s *Session) skipColourMap() error {
 	return err
 }
 
-func (s *Session) skipServerCutText() error {
+// readServerCutText reads a ServerCutText message and hands the text (Latin-1) to onCut, so the UI
+// can put it on the local clipboard.
+func (s *Session) readServerCutText() error {
 	if _, err := s.r.Discard(3); err != nil {
 		return err
 	}
@@ -365,8 +371,39 @@ func (s *Session) skipServerCutText() error {
 	if err := binary.Read(s.r, binary.BigEndian, &n); err != nil {
 		return err
 	}
-	_, err := s.r.Discard(int(n))
-	return err
+	if n == 0 || n > 1<<20 { // ignore empty or absurdly large clips
+		_, err := s.r.Discard(int(n))
+		return err
+	}
+	b := make([]byte, n)
+	if _, err := io.ReadFull(s.r, b); err != nil {
+		return err
+	}
+	if s.onCut != nil {
+		// RFB cut text is Latin-1; widen each byte to a rune.
+		rs := make([]rune, len(b))
+		for i, c := range b {
+			rs[i] = rune(c)
+		}
+		s.onCut(string(rs))
+	}
+	return nil
+}
+
+// SendCutText sends the local clipboard to the server (ClientCutText). Non-Latin-1 runes are dropped,
+// as RFB cut text is Latin-1.
+func (s *Session) SendCutText(text string) error {
+	body := make([]byte, 0, len(text))
+	for _, r := range text {
+		if r <= 0xff {
+			body = append(body, byte(r))
+		}
+	}
+	buf := make([]byte, 8+len(body))
+	buf[0] = 6 // ClientCutText
+	binary.BigEndian.PutUint32(buf[4:8], uint32(len(body)))
+	copy(buf[8:], body)
+	return s.send(buf)
 }
 
 // Pointer sends a pointer event (buttonMask bit0=left,1=middle,2=right,3=up,4=down).

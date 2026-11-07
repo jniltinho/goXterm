@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
-import { VncStart, VncPointer, VncKey, VncDisconnect, type VncView } from "./api";
+import { VncStart, VncPointer, VncKey, VncDisconnect, VncSendClipboard, type VncView } from "./api";
 
 const props = defineProps<{ connect: () => Promise<VncView> }>();
 
@@ -11,7 +11,13 @@ let tabId = "";
 let ctx: CanvasRenderingContext2D | null = null;
 let offFrame: (() => void) | undefined;
 let offClose: (() => void) | undefined;
+let offClip: (() => void) | undefined;
 let buttons = 0;
+
+// server clipboard → local; local clipboard → server (on focus), so copy/paste crosses the VNC.
+async function pushLocalClipboard() {
+  try { const t = await navigator.clipboard.readText(); if (t) void VncSendClipboard(tabId, t); } catch { /* no permission */ }
+}
 
 // X keysyms for the common non-printable keys; printable chars map to their Unicode code point.
 const special: Record<string, number> = {
@@ -58,6 +64,9 @@ onMounted(async () => {
   offClose = Events.On("vnc:close:" + tabId, (ev: { data: unknown }) => {
     status.value = "[disconnected] " + String(ev.data ?? "");
   });
+  offClip = Events.On("vnc:clipboard:" + tabId, (ev: { data: unknown }) => {
+    try { void navigator.clipboard.writeText(String(ev.data ?? "")); } catch { /* no permission */ }
+  });
   await VncStart(tabId);
   c.focus();
 });
@@ -65,6 +74,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   offFrame?.();
   offClose?.();
+  offClip?.();
   if (tabId) void VncDisconnect(tabId);
 });
 
@@ -108,6 +118,7 @@ function onKey(e: KeyboardEvent, down: boolean) {
       @mouseup="onUp"
       @wheel.prevent="onWheel"
       @contextmenu.prevent
+      @focus="pushLocalClipboard"
       @keydown="onKey($event, true)"
       @keyup="onKey($event, false)"
     ></canvas>
