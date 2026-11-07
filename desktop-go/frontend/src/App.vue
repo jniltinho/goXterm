@@ -228,8 +228,17 @@ function closeTab(id: string) {
 }
 
 type Row =
-  | { kind: "folder"; folder: Folder; depth: number }
+  | { kind: "folder"; folder: Folder; depth: number; open: boolean; hasKids: boolean }
   | { kind: "session"; session: Session; depth: number };
+
+// Collapsed folders (by id); toggled by the tree chevron. A new Set keeps the computed reactive.
+const collapsed = ref<Set<number>>(new Set());
+function toggleFolder(id: number) {
+  const next = new Set(collapsed.value);
+  next.has(id) ? next.delete(id) : next.add(id);
+  collapsed.value = next;
+}
+
 const rows = computed<Row[]>(() => {
   const out: Row[] = [];
   const byParent = new Map<number | null, Folder[]>();
@@ -242,9 +251,13 @@ const rows = computed<Row[]>(() => {
   for (const s of ses(null)) out.push({ kind: "session", session: s, depth: 0 });
   const walk = (parent: number | null, depth: number) => {
     for (const f of (byParent.get(parent) ?? []).sort((a, b) => a.name.localeCompare(b.name))) {
-      out.push({ kind: "folder", folder: f, depth });
-      for (const s of ses(f.id)) out.push({ kind: "session", session: s, depth: depth + 1 });
-      walk(f.id, depth + 1);
+      const open = !collapsed.value.has(f.id);
+      const hasKids = (byParent.get(f.id)?.length ?? 0) + ses(f.id).length > 0;
+      out.push({ kind: "folder", folder: f, depth, open, hasKids });
+      if (open) {
+        for (const s of ses(f.id)) out.push({ kind: "session", session: s, depth: depth + 1 });
+        walk(f.id, depth + 1);
+      }
     }
   };
   walk(null, 0);
@@ -369,8 +382,10 @@ const tabIcon = (t: Tab) => icon(t.icon);
                 v-if="row.kind === 'folder'"
                 class="treerow folder"
                 :style="{ paddingLeft: 6 + row.depth * 14 + 'px' }"
+                @click="toggleFolder(row.folder.id)"
                 @contextmenu.prevent="openFolderCtx($event, row.folder)"
               >
+                <span class="tw">{{ row.hasKids ? (row.open ? "▾" : "▸") : "" }}</span>
                 <img :src="folderIcon(row.folder)" class="ico" />
                 <span class="truncate">{{ row.folder.name }}</span>
               </div>
@@ -384,6 +399,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
                 @dblclick="openSession(row.session)"
                 @contextmenu.prevent="openCtx($event, row.session)"
               >
+                <span class="tw"></span>
                 <img :src="sessionIcon(row.session)" class="ico" />
                 <span class="truncate">{{ row.session.name }}</span>
                 <img v-if="row.session.password === 'saved'" :src="icon('key')" class="ml-auto h-3 w-3 opacity-70" title="password saved" />
@@ -528,12 +544,14 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .sidebar { background: #f3f5f8; border-right: 1px solid #c9d1d9; }
 .side-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #5a6b7b; background: #e7ecf1; border-bottom: 1px solid #d6dde4; }
 .count { background: #d6dde4; color: #4a5a68; font-size: 10px; font-weight: 600; padding: 0 6px; }
-.treerow { display: flex; align-items: center; gap: 6px; height: 22px; font-size: 13px; cursor: default; user-select: none; }
+.treerow { display: flex; align-items: center; gap: 5px; height: 22px; font-size: 13px; cursor: default; user-select: none; }
+.treerow .tw { flex: 0 0 12px; text-align: center; font-size: 9px; color: #8a97a5; }
 .treerow .ico { height: 16px; width: 16px; flex: none; }
 .treerow.session { cursor: pointer; padding-right: 6px; }
 .treerow.session:hover { background: #d7e3f4; }
 .treerow.session.sel { background: #cfe0f6; outline: 1px solid #a9c7ef; }
-.treerow.folder { color: #4a5a68; font-weight: 600; }
+.treerow.folder { color: #33465a; font-weight: 700; cursor: pointer; }
+.treerow.folder:hover { background: #e3ebf3; }
 .tabbar { background: #1b2129; border-bottom: 1px solid #2a3340; }
 .tab { padding: 4px 8px; font-size: 12px; color: #9fb0c0; background: #222a33; border-right: 1px solid #2a3340; max-width: 220px; }
 .tab-active { color: #e6edf3; background: #0b0e11; }
