@@ -34,7 +34,17 @@ func newRdpClient(s *Setting) *RdpClient {
 }
 
 func bitmapDecompress(bitmap *pdu.BitmapData) []byte {
-	return core.Decompress(bitmap.BitmapDataStream, int(bitmap.Width), int(bitmap.Height), Bpp(bitmap.BitsPerPixel))
+	bpp := Bpp(bitmap.BitsPerPixel)
+	out := core.Decompress(bitmap.BitmapDataStream, int(bitmap.Width), int(bitmap.Height), bpp)
+	if bpp == 2 {
+		// The 16bpp RLE decoder writes each pixel high byte first, while RDP pixel data (and the
+		// uncompressed path) is little-endian; swap so every consumer reads RGB565 LE. Verified
+		// against a real 2008 R2 desktop: without this, blues render purple and icons turn to noise.
+		for i := 0; i+1 < len(out); i += 2 {
+			out[i], out[i+1] = out[i+1], out[i]
+		}
+	}
+	return out
 }
 func split(user string) (domain string, uname string) {
 	if strings.Index(user, "\\") != -1 {
