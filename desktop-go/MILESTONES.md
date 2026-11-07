@@ -14,7 +14,7 @@ core modular (um pacote por protocolo). Cada marco é verificado (testes / lab D
 | **M2 — SSH + terminal** | xterm.js sobre `x/crypto/ssh`; TOFU de host-key; auth por chave/agente (chave *lazy* — sem pedir senha à toa) | 5.1, 5.2 | `TestLabKeyAuth`, lab |
 | **M3 — Transferência** | SFTP (`pkg/sftp`) + FTP/FTPS (`jlaffaye/ftp`), painel duplo | 6.1, 7.1 | lab |
 | **M4 — VNC** | Cliente RFB em Go, canvas, clipboard bidirecional | 8.1 | lab |
-| **M5 — RDP** | grdp vendorizado; NLA (Windows moderno) + SSL (2008 R2), TOFU de certificado — clipboard pendente | 9.1 (~) | dockur/windows, 2008 real |
+| **M5 — RDP** | grdp vendorizado; NLA (Windows moderno) + SSL (2008 R2), TOFU de certificado; renderização corrigida (sem flip extra, ordem de bytes do RLE 16bpp, surface commands desligados → bitmap legado); tela "Session stopped" com Return/Ctrl+D/R — clipboard pendente | 9.1 (~) | dockur/windows, captura real do 2008 comparada pixel a pixel |
 | **M6 — Serial/Telnet/Local** | `go.bug.st/serial`, Telnet stdlib, shell local em PTY (`creack/pty`), cross-platform | 10.1, 10.2 | loopback, negociação |
 | **M7 — Monitoramento** | Barra de monitoramento remoto (CPU sparkline + limiares) | 12.1 | lab |
 | **M8 — Túneis SSH** | Local/Remote/Dynamic (SOCKS5) + janela de túneis | 11.1 | tráfego real no lab |
