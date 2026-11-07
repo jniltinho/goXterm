@@ -13,6 +13,9 @@ ignore = [
     # servers; it never decrypts attacker-supplied RSA ciphertext as a network oracle. Revisit when
     # RustCrypto/RSA#626 ships.
     { id = "RUSTSEC-2023-0071", reason = "no fix upstream; client-side use only, no decryption oracle" },
+    # pin-utils (via ironrdp, ironrdp-acceptor): informational "unmaintained" notice (2026-10-01, the
+    # repository was archived), no vulnerability and no safe upgrade. Drop when ironrdp stops using it.
+    { id = "RUSTSEC-2026-0441", reason = "unmaintained notice only, no fix; pulled by ironrdp" },
     # zvariant, zvariant_derive, zbus_names: informational "unmaintained" notices (2026-10-19), no
     # vulnerability; their code moved into zbus 6. They come with zbus 5 through ashpd and oo7 (Linux
     # portals and keyring). Drop these when ashpd and oo7 move to zbus 6.

@@ -54,6 +54,21 @@ jobs:
           tar -xzf "$RUNNER_TEMP/deny.tgz" -C target/tools --strip-components=1 "$DENY/cargo-deny"
           scripts/cargo-docker.sh target/tools/cargo-deny check
 
+  # The Go + Wails desktop app (desktop-go/): gofmt, go vet, unit tests, module layering and skin token
+  # parity in its toolchain image, then the frontend lint. Docker only, like every other job.
+  desktop-go:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: desktop-go
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Go checks (gofmt, vet, tests, layering)
+        run: make check test layers
+      - name: Frontend lint (Vite Plus)
+        run: docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src/frontend node:24 sh -c 'npm ci --no-audit --no-fund && npx vp check --no-fmt'
+
   # Integration tests against the Docker lab (lab/README.md); test names must equal lab/expected-tests.txt.
   lab:
     runs-on: ubuntu-24.04

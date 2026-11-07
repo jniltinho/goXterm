@@ -1,0 +1,323 @@
+// Package sshconn is a minimal SSH terminal client (pure Go, golang.org/x/crypto/ssh): connect,
+// request a PTY, start a shell, and stream bytes both ways. Host-key verification is the caller's
+// (migrate-gui-to-go-wails phase 5 — SSH + terminal).
+package sshconn
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+)
+
+// Config describes one SSH connection.
+type Config struct {
+	Host     string
+	Port     int
+	User     string
+	Password string // static password/keyboard-interactive auth, tried first when non-empty
+	// AskPassword, when set, is called to prompt the user for a password (or a key passphrase) when
+	// one is needed. It may block (e.g. a UI dialog); the answer is reused within this dial.
+	AskPassword func() (string, error)
+	// AskPassphrase, when set, prompts for a key file's passphrase (distinct wording from the account
+	// password). Falls back to AskPassword when nil.
+	AskPassphrase func(keyFile string) (string, error)
+	KeyFile       string // optional private key path (public-key auth); ~ is expanded
+	UseAgent      bool   // also try the ssh-agent at $SSH_AUTH_SOCK
+	HostKey       ssh.HostKeyCallback
+	Cols, Rows    int
+	KeepaliveSecs int // send keepalive@openssh.com every N seconds; 0 = off
+	// Log, when set, receives one-line auth problems (unreadable key, unreachable agent) so the user can
+	// see why a password is being asked instead of the key being used.
+	Log func(string)
+}
+
+func (c Config) log(s string) {
+	if c.Log != nil {
+		c.Log(s)
+	}
+}
+
+// Session is an open SSH shell with a PTY.
+type Session struct {
+	client *ssh.Client
+	sess   *ssh.Session
+	stdin  io.WriteCloser
+	mu     sync.Mutex
+	closed bool
+}
+
+// DialClient authenticates and returns an SSH client (password + keyboard-interactive auth; key and
+// agent come later). Shared by the terminal and SFTP.
+func DialClient(cfg Config) (*ssh.Client, error) {
+	var auths []ssh.AuthMethod
+	// ki builds a keyboard-interactive method that answers every prompt with getPw() (PAM / network
+	// gear ask the password this way).
+	ki := func(getPw func() (string, error)) ssh.AuthMethod {
+		return ssh.KeyboardInteractive(func(_, _ string, questions []string, _ []bool) ([]string, error) {
+			if len(questions) == 0 {
+				return nil, nil
+			}
+			pw, err := getPw()
+			if err != nil {
+				return nil, err
+			}
+			ans := make([]string, len(questions))
+			for i := range ans {
+				ans[i] = pw
+			}
+			return ans, nil
+		})
+	}
+	// Public-key auth is tried before passwords. The explicitly configured key file is offered FIRST,
+	// then the ssh-agent: the user's chosen key is the intent, and trying it first avoids the server's
+	// MaxAuthTries being spent on unrelated agent keys (which would otherwise fall through to a
+	// password prompt even though a working key is configured).
+	if cfg.KeyFile != "" {
+		// Lazily: loaded only when this method is reached, so a passphrase-protected key prompts only
+		// if needed. A load error skips the method and falls through to the agent / password.
+		auths = append(auths, ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
+			ask := cfg.AskPassword
+			if cfg.AskPassphrase != nil {
+				kf := cfg.KeyFile
+				ask = func() (string, error) { return cfg.AskPassphrase(kf) }
+			}
+			signer, err := loadKey(cfg.KeyFile, ask)
+			if err != nil {
+				cfg.log(fmt.Sprintf("key %s could not be loaded: %v", cfg.KeyFile, err))
+				return nil, nil
+			}
+			return []ssh.Signer{signer}, nil
+		}))
+	}
+	if cfg.UseAgent {
+		if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+			if ac, err := net.Dial("unix", sock); err == nil {
+				auths = append(auths, ssh.PublicKeysCallback(agent.NewClient(ac).Signers))
+			} else {
+				cfg.log("ssh-agent: SSH_AUTH_SOCK is set but the agent is not reachable")
+			}
+		}
+	}
+	if cfg.Password != "" {
+		pw := cfg.Password
+		auths = append(auths, ssh.Password(pw), ki(func() (string, error) { return pw, nil }))
+	}
+	if cfg.AskPassword != nil {
+		// Prompt once, then reuse the answer across the remaining method attempts in this dial.
+		var cached string
+		var have bool
+		ask := func() (string, error) {
+			if have {
+				return cached, nil
+			}
+			pw, err := cfg.AskPassword()
+			if err != nil {
+				return "", err
+			}
+			cached, have = pw, true
+			return pw, nil
+		}
+		auths = append(auths, ssh.PasswordCallback(ask), ki(ask))
+	}
+	clientCfg := &ssh.ClientConfig{
+		User:            cfg.User,
+		Auth:            auths,
+		HostKeyCallback: cfg.HostKey,
+		Timeout:         15 * time.Second,
+	}
+	return ssh.Dial("tcp", net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port)), clientCfg)
+}
+
+// loadKey reads a private key file and returns its signer. If the key is passphrase-protected and
+// ask is set, it prompts for the passphrase once.
+func loadKey(path string, ask func() (string, error)) (ssh.Signer, error) {
+	b, err := os.ReadFile(expandHome(path))
+	if err != nil {
+		return nil, err
+	}
+	signer, err := ssh.ParsePrivateKey(b)
+	if err == nil {
+		return signer, nil
+	}
+	var pm *ssh.PassphraseMissingError
+	if errors.As(err, &pm) && ask != nil {
+		pw, aerr := ask()
+		if aerr != nil {
+			return nil, aerr
+		}
+		return ssh.ParsePrivateKeyWithPassphrase(b, []byte(pw))
+	}
+	return nil, err
+}
+
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(h, p[2:])
+		}
+	}
+	return p
+}
+
+// Connect dials, authenticates, opens a PTY shell, and pumps output to onData until it ends, then
+// calls onClose once. onData receives owned copies of the bytes.
+func Connect(cfg Config, onData func([]byte), onClose func(error)) (*Session, error) {
+	client, err := DialClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := client.NewSession()
+	if err != nil {
+		client.Close()
+		return nil, err
+	}
+	cols, rows := cfg.Cols, cfg.Rows
+	if cols <= 0 {
+		cols = 80
+	}
+	if rows <= 0 {
+		rows = 24
+	}
+	modes := ssh.TerminalModes{ssh.ECHO: 1, ssh.TTY_OP_ISPEED: 14400, ssh.TTY_OP_OSPEED: 14400}
+	if err := sess.RequestPty("xterm-256color", rows, cols, modes); err != nil {
+		sess.Close()
+		client.Close()
+		return nil, err
+	}
+	stdin, err := sess.StdinPipe()
+	if err != nil {
+		sess.Close()
+		client.Close()
+		return nil, err
+	}
+	stdout, _ := sess.StdoutPipe()
+	stderr, _ := sess.StderrPipe()
+	if err := sess.Shell(); err != nil {
+		sess.Close()
+		client.Close()
+		return nil, err
+	}
+	s := &Session{client: client, sess: sess, stdin: stdin}
+
+	pump := func(r io.Reader) {
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := r.Read(buf)
+			if n > 0 && onData != nil {
+				onData(append([]byte(nil), buf[:n]...))
+			}
+			if err != nil {
+				return
+			}
+		}
+	}
+	go pump(stdout)
+	go pump(stderr)
+	go func() {
+		err := s.sess.Wait()
+		s.markClosed()
+		if onClose != nil {
+			onClose(exitReason(err))
+		}
+	}()
+	if cfg.KeepaliveSecs > 0 {
+		go s.keepalive(time.Duration(cfg.KeepaliveSecs) * time.Second)
+	}
+	return s, nil
+}
+
+// keepalive sends an OpenSSH keepalive request every interval until the session closes, so idle
+// connections through NAT/firewalls are not dropped (the session's "Keepalive (s)" setting).
+func (s *Session) keepalive(every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for range t.C {
+		s.mu.Lock()
+		closed := s.closed
+		s.mu.Unlock()
+		if closed {
+			return
+		}
+		if _, _, err := s.client.SendRequest("keepalive@openssh.com", true, nil); err != nil {
+			return
+		}
+	}
+}
+
+// ExitStatus is how a remote or local shell ended; its text is the reason in the "Session stopped"
+// notice ("exited with status 0"), matching the Rust app.
+type ExitStatus int
+
+func (e ExitStatus) Error() string { return fmt.Sprintf("exited with status %d", int(e)) }
+
+func exitReason(err error) error {
+	var ee *ssh.ExitError
+	switch {
+	case err == nil:
+		return ExitStatus(0)
+	case errors.As(err, &ee):
+		return ExitStatus(ee.ExitStatus())
+	}
+	return err
+}
+
+// Write sends input to the shell.
+func (s *Session) Write(p []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return fmt.Errorf("session closed")
+	}
+	_, err := s.stdin.Write(p)
+	return err
+}
+
+// SSHClient is the session's connection, for extra channels on it (e.g. the side SFTP browser).
+func (s *Session) SSHClient() *ssh.Client { return s.client }
+
+// ServerVersion is the server's SSH identification string (e.g. "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3").
+func (s *Session) ServerVersion() string { return string(s.client.ServerVersion()) }
+
+// Resize changes the remote terminal size.
+func (s *Session) Resize(cols, rows int) error {
+	return s.sess.WindowChange(rows, cols)
+}
+
+// Run executes a command on a fresh exec channel of the same connection and returns its combined
+// output. Used by the remote-monitoring collector alongside the shell.
+func (s *Session) Run(cmd string) ([]byte, error) {
+	s.mu.Lock()
+	c, closed := s.client, s.closed
+	s.mu.Unlock()
+	if closed || c == nil {
+		return nil, fmt.Errorf("session closed")
+	}
+	es, err := c.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer es.Close()
+	return es.CombinedOutput(cmd)
+}
+
+// Close ends the session.
+func (s *Session) Close() error {
+	s.markClosed()
+	_ = s.sess.Close()
+	return s.client.Close()
+}
+
+func (s *Session) markClosed() {
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+}

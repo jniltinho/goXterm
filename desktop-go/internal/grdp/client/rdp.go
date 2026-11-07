@@ -1,0 +1,280 @@
+package client
+
+import (
+	"context"
+	"net"
+	"strings"
+
+	"rustxterm-go/internal/grdp/core"
+	"rustxterm-go/internal/grdp/protocol/cliprdr"
+	"rustxterm-go/internal/grdp/protocol/nla"
+	"rustxterm-go/internal/grdp/protocol/pdu"
+	"rustxterm-go/internal/grdp/protocol/sec"
+	"rustxterm-go/internal/grdp/protocol/t125"
+	"rustxterm-go/internal/grdp/protocol/tpkt"
+	"rustxterm-go/internal/grdp/protocol/x224"
+)
+
+type RdpClient struct {
+	tpkt    *tpkt.TPKT
+	x224    *x224.X224
+	mcs     *t125.MCSClient
+	sec     *sec.Client
+	pdu     *pdu.Client
+	setting *Setting
+	pending []pendingOn // On() calls made before Login created the pdu layer
+	clip    *cliprdr.Clip
+}
+
+type pendingOn struct {
+	event string
+	f     interface{}
+}
+
+func newRdpClient(s *Setting) *RdpClient {
+	return &RdpClient{setting: s, clip: &cliprdr.Clip{}}
+}
+
+func bitmapDecompress(bitmap *pdu.BitmapData) []byte {
+	bpp := Bpp(bitmap.BitsPerPixel)
+	out := core.Decompress(bitmap.BitmapDataStream, int(bitmap.Width), int(bitmap.Height), bpp)
+	if bpp == 2 {
+		// The 16bpp RLE decoder writes each pixel high byte first, while RDP pixel data (and the
+		// uncompressed path) is little-endian; swap so every consumer reads RGB565 LE. Verified
+		// against a real 2008 R2 desktop: without this, blues render purple and icons turn to noise.
+		for i := 0; i+1 < len(out); i += 2 {
+			out[i], out[i+1] = out[i+1], out[i]
+		}
+	}
+	return out
+}
+func split(user string) (domain string, uname string) {
+	if strings.Index(user, "\\") != -1 {
+		t := strings.Split(user, "\\")
+		domain = t[0]
+		uname = t[len(t)-1]
+	} else if strings.Index(user, "/") != -1 {
+		t := strings.Split(user, "/")
+		domain = t[0]
+		uname = t[len(t)-1]
+	} else {
+		uname = user
+	}
+	return
+}
+func (c *RdpClient) dialAndSetup(ctx context.Context, host, user, pwd string) (string, string, error) {
+	dialer := &net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", host)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", "", NewRDPError(ErrKindTimeout, "dial timed out", err)
+		}
+		return "", "", NewRDPError(ErrKindNetwork, "dial failed", err)
+	}
+
+	domain, user := split(user)
+	sock := core.NewSocketLayer(conn)
+	if c.setting != nil {
+		if c.setting.TLSMinVersion != 0 {
+			sock.TLSMinVersion = c.setting.TLSMinVersion
+		}
+		sock.TLSVerify = c.setting.TLSVerify
+		sock.VerifyConnection = c.setting.VerifyConnection
+	}
+	c.tpkt = tpkt.New(sock, nla.NewNTLMv2(domain, user, pwd))
+	if c.setting != nil && c.setting.VerifyServer {
+		c.tpkt.VerifyServer = true
+	}
+	c.x224 = x224.New(c.tpkt)
+	return domain, user, nil
+}
+
+// Login connects to the RDP server and initiates authentication. The context
+// controls the overall timeout and cancellation for the entire operation
+// including TCP dial, TLS handshake, and NLA authentication.
+func (c *RdpClient) Login(ctx context.Context, host, user, pwd string, width, height int) error {
+	domain, user, err := c.dialAndSetup(ctx, host, user, pwd)
+	if err != nil {
+		return err
+	}
+
+	c.mcs = t125.NewMCSClient(c.x224)
+	c.sec = sec.NewClient(c.mcs)
+	c.pdu = pdu.NewClient(c.sec)
+	for _, p := range c.pending { // attach handlers registered before Login
+		c.pdu.On(p.event, p.f)
+	}
+	c.pending = nil
+
+	c.mcs.SetClientDesktop(uint16(width), uint16(height))
+
+	// Clipboard (text) on the "cliprdr" static virtual channel.
+	c.mcs.AddVirtualChannel(cliprdr.ChannelName, cliprdr.ChannelOptions)
+	c.sec.SetChannelSender(c.mcs)
+	c.clip.Send = func(b []byte) error { _, err := c.sec.SendToChannel(cliprdr.ChannelName, b); return err }
+	c.sec.On("channel", func(name string, data []byte) {
+		if name == cliprdr.ChannelName {
+			c.clip.Receive(data)
+		}
+	})
+
+	c.sec.SetUser(user)
+	c.sec.SetPwd(pwd)
+	c.sec.SetDomain(domain)
+
+	c.tpkt.SetFastPathListener(c.sec)
+	c.sec.SetFastPathListener(c.pdu)
+
+	if c.setting != nil && c.setting.RequestedProtocol != 0 {
+		c.x224.SetRequestedProtocol(c.setting.RequestedProtocol)
+	}
+	c.x224.AllowStandard = c.setting == nil || c.setting.AllowStandardSecurity
+
+	err = c.x224.Connect(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return NewRDPError(ErrKindTimeout, "connection timed out", err)
+		}
+		return NewRDPError(ErrKindProtocol, "x224 connect failed", err)
+	}
+	return nil
+}
+
+// LoginAuthOnly connects and performs NLA authentication only, without setting
+// up the full RDP session (MCS/SEC/PDU). This is significantly faster for
+// credential checking. Requires the server to support NLA (PROTOCOL_HYBRID).
+// Returns nil if authentication succeeds, or an error (check with errors.As
+// for *core.RDPError to get the Kind).
+func (c *RdpClient) LoginAuthOnly(ctx context.Context, host, user, pwd string) error {
+	_, _, err := c.dialAndSetup(ctx, host, user, pwd)
+	if err != nil {
+		return err
+	}
+
+	c.x224.SetRequestedProtocol(x224.PROTOCOL_HYBRID)
+
+	resultCh := make(chan error, 1)
+	c.x224.On("connect", func(proto uint32) {
+		resultCh <- nil
+	})
+	c.x224.On("error", func(e error) {
+		resultCh <- e
+	})
+
+	err = c.x224.Connect(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return NewRDPError(ErrKindTimeout, "connection timed out", err)
+		}
+		return NewRDPError(ErrKindProtocol, "x224 connect failed", err)
+	}
+
+	select {
+	case err := <-resultCh:
+		return err
+	case <-ctx.Done():
+		return NewRDPError(ErrKindTimeout, "auth timed out", ctx.Err())
+	}
+}
+func (c *RdpClient) On(event string, f interface{}) {
+	if c.pdu != nil {
+		c.pdu.On(event, f)
+		return
+	}
+	c.pending = append(c.pending, pendingOn{event, f}) // flushed when Login creates the pdu layer
+}
+func (c *RdpClient) KeyUp(sc int, name string) {
+	p := &pdu.ScancodeKeyEvent{}
+	p.KeyCode = uint16(sc)
+	p.KeyboardFlags |= pdu.KBDFLAGS_RELEASE
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
+}
+func (c *RdpClient) KeyDown(sc int, name string) {
+	p := &pdu.ScancodeKeyEvent{}
+	p.KeyCode = uint16(sc)
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
+}
+
+// KeyDownExt sends a key-press event for an extended-set scancode
+// (PS/2 Set 1 keys prefixed with 0xE0: Win, arrow keys, right Ctrl/Alt,
+// numpad Enter, etc.). It sets KBDFLAGS_EXTENDED on the input PDU.
+func (c *RdpClient) KeyDownExt(sc int, name string) {
+	p := &pdu.ScancodeKeyEvent{}
+	p.KeyCode = uint16(sc)
+	p.KeyboardFlags |= pdu.KBDFLAGS_EXTENDED
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
+}
+
+// KeyUpExt sends a key-release event for an extended-set scancode.
+func (c *RdpClient) KeyUpExt(sc int, name string) {
+	p := &pdu.ScancodeKeyEvent{}
+	p.KeyCode = uint16(sc)
+	p.KeyboardFlags |= pdu.KBDFLAGS_EXTENDED | pdu.KBDFLAGS_RELEASE
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
+}
+
+func (c *RdpClient) MouseMove(x, y int) {
+	p := &pdu.PointerEvent{}
+	p.PointerFlags |= pdu.PTRFLAGS_MOVE
+	p.XPos = uint16(x)
+	p.YPos = uint16(y)
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_MOUSE, []pdu.InputEventsInterface{p})
+}
+
+func (c *RdpClient) MouseWheel(scroll, x, y int) {
+	p := &pdu.PointerEvent{}
+	p.PointerFlags |= pdu.PTRFLAGS_WHEEL
+	p.XPos = uint16(x)
+	p.YPos = uint16(y)
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_MOUSE, []pdu.InputEventsInterface{p})
+}
+
+func (c *RdpClient) MouseUp(button int, x, y int) {
+	p := &pdu.PointerEvent{}
+
+	switch button {
+	case 0:
+		p.PointerFlags |= pdu.PTRFLAGS_BUTTON1
+	case 2:
+		p.PointerFlags |= pdu.PTRFLAGS_BUTTON2
+	case 1:
+		p.PointerFlags |= pdu.PTRFLAGS_BUTTON3
+	default:
+		p.PointerFlags |= pdu.PTRFLAGS_MOVE
+	}
+
+	p.XPos = uint16(x)
+	p.YPos = uint16(y)
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_MOUSE, []pdu.InputEventsInterface{p})
+}
+func (c *RdpClient) MouseDown(button int, x, y int) {
+	p := &pdu.PointerEvent{}
+
+	p.PointerFlags |= pdu.PTRFLAGS_DOWN
+
+	switch button {
+	case 0:
+		p.PointerFlags |= pdu.PTRFLAGS_BUTTON1
+	case 2:
+		p.PointerFlags |= pdu.PTRFLAGS_BUTTON2
+	case 1:
+		p.PointerFlags |= pdu.PTRFLAGS_BUTTON3
+	default:
+		p.PointerFlags |= pdu.PTRFLAGS_MOVE
+	}
+
+	p.XPos = uint16(x)
+	p.YPos = uint16(y)
+	c.pdu.SendInputEvents(pdu.INPUT_EVENT_MOUSE, []pdu.InputEventsInterface{p})
+}
+func (c *RdpClient) Close() {
+	if c != nil && c.tpkt != nil {
+		c.tpkt.Close()
+	}
+}
+
+// OnClipboard receives text copied on the remote desktop.
+func (c *RdpClient) OnClipboard(f func(string)) { c.clip.OnText = f }
+
+// SetClipboard offers local text to the remote desktop's clipboard.
+func (c *RdpClient) SetClipboard(s string) error { return c.clip.SetText(s) }

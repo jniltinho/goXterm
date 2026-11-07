@@ -173,12 +173,12 @@ document; `partial` = the test covers the rule but not every literal detail of t
 stated); `manual` = human receipt; `gap` = no test yet, closest evidence named. `cargo xtask scenarios`
 (run in CI) fails unless every scenario has exactly one row and every cited `file::test` exists.
 
-Totals: 141 scenarios, 141 mapped, 0 unmapped.
+Totals: 178 scenarios, 178 mapped, 0 unmapped.
 
 | Kind | Count |
 |---|---|
-| Automated (unit/integration and/or lab tests; some also cite a gate receipt) | 124 |
-| Partial: automated, with the uncovered detail stated (Find text, Drag-and-drop upload, Open with local application, Offline list, Audit entry, Filter, Overflow, FreeBSD server, SFTP-only account, Agent tries to toggle, Channel limit) | 11 |
+| Automated (unit/integration and/or lab tests; some also cite a gate receipt) | 158 |
+| Partial: automated, with the uncovered detail stated (Find text, Drag-and-drop upload, Open with local application, Offline list, Audit entry, Filter, Overflow, FreeBSD server, SFTP-only account, Agent tries to toggle, Channel limit, Closing the tab hangs up the session, Any login shell, Agents and MultiExec) | 14 |
 | Receipt or configuration only (Clean host build, Milestone push, Panic path rejected, Desktop session) | 4 |
 | Manual receipt (Windows target, M2) | 1 |
 | Gap: no test, closest evidence named (Jump host untouched) | 1 |
@@ -347,3 +347,24 @@ minute), Hidden tab pauses (fake peer under paused time).
 | remote-monitoring | Agent tries to toggle | `crates/core/src/command.rs::monitoring_ids_are_gui_only`, `crates/agent/src/mcp.rs::live_calls_carry_client_name_and_audit_unknown_tools`, `crates/engine/src/tests/agent.rs::matrix_per_entry_point` | partial: the ids are GUI-only and GUI-only MCP calls are rejected and audited, but no test sends `tab.monitoring.toggle` itself |
 | ssh-sessions | Opt-out sends no exec | `crates/engine/src/tests.rs::monitoring_follows_settings_and_only_ssh_terminals` (exec-stream opens counted), `crates/engine/tests/lab_monitor.rs::ssh_monitoring_bar_data_then_no_leftover_process` (session Off: no `rxt-mon` process) | auto + lab |
 | ssh-sessions | Channel limit | `crates/engine/tests/lab_monitor.rs::ssh_monitoring_refused_channel_is_unavailable_and_shell_works`, `crates/ui/src/tests.rs::monitoring_bar_takes_samples_closes_and_sftp_button_toggles` (unavailable reason, button disabled) | partial: the shell keeps working in the lab (`MaxSessions 2`); the SFTP panel is not exercised there |
+| wsl-sessions | Open the default distribution | `crates/platform/src/wsl.rs::default_distribution_has_no_flag`, `crates/engine/src/tests/wsl.rs::launch_passes_distribution_user_and_folder`, docs/gates/wsl.md (GUI smoke: real Alpine shell) | auto + receipt |
+| wsl-sessions | Closing the tab hangs up the session | `crates/platform-windows/src/conpty.rs::close_ends_the_process_tree` | partial: closing ends the ConPTY process tree (the foreground job); `nohup` survival inside the distribution is not asserted |
+| wsl-sessions | Named distribution, user, folder and startup commands | `crates/platform/src/wsl.rs::named_distribution_user_and_cd`, `crates/platform/src/wsl.rs::startup_commands_become_typed_lines`, `crates/engine/src/tests/wsl.rs::launch_passes_distribution_user_and_folder` | auto |
+| wsl-sessions | Any login shell | `crates/engine/src/tests/wsl.rs::startup_commands_typed_at_a_prompt`, `crates/platform/src/wsl.rs::named_distribution_user_and_cd` (nothing follows `--`, so the user's login shell starts) | partial: no fish shell is run; startup lines are typed into whatever prompt appears |
+| wsl-sessions | Older WSL without --cd | `crates/platform/src/wsl.rs::cd_fallback_without_cd_option`, docs/gates/wsl.md (`--cd` floor and typed `cd` fallback on build 20348) | auto + receipt |
+| wsl-sessions | Startup commands wait for a prompt | `crates/engine/src/tests/wsl.rs::startup_commands_typed_at_a_prompt` | auto |
+| wsl-sessions | Startup commands reach the Linux shell unchanged | `crates/platform/src/wsl.rs::startup_commands_become_typed_lines` | auto |
+| wsl-sessions | Not offered outside Windows | `crates/engine/src/tests/wsl.rs::refused_without_a_wsl_backend`, `crates/ui/src/tests.rs::snapshot_wsl_refused_outside_windows` | auto |
+| wsl-sessions | Distributions listed | `crates/platform/src/wsl.rs::parse_list_utf8_and_default_marker`, `crates/ui/src/tests.rs::snapshot_wsl_editor_states`, docs/gates/wsl.md (picker shows "Default (Alpine)") | auto + receipt |
+| wsl-sessions | WSL missing | `crates/ui/src/tests.rs::snapshot_wsl_editor_states`, docs/gates/wsl.md (not-installed detection) | auto + receipt |
+| wsl-sessions | No distribution | `crates/platform/src/wsl.rs::parse_list_no_distributions`, `crates/ui/src/tests.rs::snapshot_wsl_editor_states` | auto |
+| wsl-sessions | Localized and UTF-8 output | `crates/platform/src/wsl.rs::parse_list_utf16_bom_and_no_bom_and_localized_header` | auto |
+| wsl-sessions | Injection attempt refused | `crates/platform/src/wsl.rs::invalid_names_refused` | auto |
+| wsl-sessions | Control characters refused | `crates/platform/src/wsl.rs::control_characters_refused` | auto |
+| wsl-sessions | Valid unusual user names | `crates/platform/src/wsl.rs::valid_unusual_user_names` | auto |
+| wsl-sessions | Quick connect | `crates/core/src/quick_connect.rs::wsl_default_and_named` | auto |
+| wsl-sessions | Import a WSL bookmark | `crates/store/tests/moba_ini.rs::wsl_bookmarks_import_distribution_and_options` | auto |
+| wsl-sessions | Session log written | `crates/ui/src/tests.rs::wsl_tab_writes_session_log` | auto |
+| wsl-sessions | Stream capture never records WSL | `crates/engine/src/tests/wsl.rs::tab_is_left_out_of_stream_capture` | auto |
+| wsl-sessions | Agents and MultiExec | `crates/engine/src/tests/wsl.rs::multiexec_from_another_tab_does_not_reach_wsl` | partial: MultiExec never reaches the WSL tab; the agent denial follows the local-terminal rule and is not tested on a WSL tab itself |
+| wsl-sessions | Older reader meets a WSL session | `crates/store/src/db.rs::unknown_protocol_row_is_skipped_and_ssh_still_loads` | auto |
