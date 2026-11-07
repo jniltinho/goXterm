@@ -5,7 +5,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Events } from "@wailsio/runtime";
 import "@xterm/xterm/css/xterm.css";
 import { ref as vref } from "vue";
-import { Send, Resize, Disconnect, MonitorStart, MonitorStop, type Metrics } from "./api";
+import { Send, Resize, Disconnect, MonitorStart, MonitorStop, GetSettings, type Metrics } from "./api";
 
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
 // monitor shows the remote-monitoring bar (SSH only).
@@ -78,10 +78,15 @@ function b64(b64: string): Uint8Array {
 }
 
 onMounted(async () => {
+  const tp = { fontFamily: "DejaVu Sans Mono", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000 };
+  try { Object.assign(tp, (await GetSettings()).terminal); } catch { /* defaults */ }
+  const cursorStyle = tp.cursorShape === "block" ? "block" : tp.cursorShape === "underline" ? "underline" : "bar";
   term = new Terminal({
-    fontFamily: '"Cascadia Mono","DejaVu Sans Mono",monospace',
-    fontSize: 13,
-    cursorBlink: true,
+    fontFamily: `"${tp.fontFamily}","DejaVu Sans Mono",monospace`,
+    fontSize: tp.fontSize || 13,
+    cursorBlink: tp.cursorBlink,
+    cursorStyle,
+    scrollback: tp.scrollbackLines || 10000,
     theme: { background: "#0b0e11", foreground: "#d4d4d4", cursor: "#9ece6a", selectionBackground: "#2a3f52" },
   });
   fit = new FitAddon();

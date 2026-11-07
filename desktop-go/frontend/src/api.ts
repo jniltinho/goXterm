@@ -30,6 +30,21 @@ export interface Folder {
 export const Sessions = () => call<Session[]>("Sessions");
 export const Folders = () => call<Folder[]>("Folders");
 
+// Global settings (config.toml). GetSettings returns the full object; edit a copy and send it all
+// back so unedited fields round-trip.
+export interface TerminalPrefs {
+  fontFamily: string; fontSize: number; cursorShape: string; cursorBlink: boolean;
+  scheme: string; scrollbackLines: number; logRaw: boolean;
+}
+export interface Settings {
+  theme: string; logLevel: string; agentControl: boolean; copyOnSelect: boolean; rightClickPaste: boolean;
+  pasteGuard: boolean; confirmClose: boolean; sidebarOpen: boolean; sidebarWidth: number; sidebarPage: string;
+  uiScale: string; remoteMonitoring: boolean; remoteMonitoringInterval: number; notifications: boolean;
+  gpuBackend: string; firstRunThemeDone: boolean; terminal: TerminalPrefs;
+}
+export const GetSettings = () => call<Settings>("GetSettings");
+export const SaveSettings = (s: Settings) => call<void>("SaveSettings", s);
+
 // Store unlock — Locked() is true until the master password is entered (or the keyring/env unlocks it).
 export const Locked = () => call<boolean>("Locked");
 export const Unlock = (password: string) => call<void>("Unlock", password);

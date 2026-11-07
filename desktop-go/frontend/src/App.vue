@@ -16,6 +16,7 @@ import FileBrowser from "./FileBrowser.vue";
 import VncCanvas from "./VncView.vue";
 import RdpCanvas from "./RdpView.vue";
 import SessionEditor from "./SessionEditor.vue";
+import SettingsDialog from "./SettingsDialog.vue";
 
 const sessions = ref<Session[]>([]);
 const folders = ref<Folder[]>([]);
@@ -117,6 +118,7 @@ function openVnc(title: string, connect: () => Promise<VncView>) {
 }
 // Session editor (create/edit) and the tree context menu.
 const editorOpen = ref(false);
+const settingsOpen = ref(false);
 const editorSessionId = ref<number | null>(null);
 const ctx = ref<{ x: number; y: number; session: Session } | null>(null);
 
@@ -254,7 +256,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
       <span class="mx-1 h-5 w-px bg-black/10"></span>
       <input class="qc" placeholder="Quick connect — user@host[:port]" disabled />
       <span class="ml-auto flex items-center gap-1">
-        <img :src="icon('gear')" class="tbico" title="Settings" />
+        <img :src="icon('gear')" class="tbico" title="Settings" @click="settingsOpen = true" />
         <img :src="icon('help')" class="tbico" title="Help" />
       </span>
     </header>
@@ -355,6 +357,9 @@ const tabIcon = (t: Tab) => icon(t.icon);
       @saved="onEditorSaved"
       @close="editorOpen = false"
     />
+
+    <!-- global settings -->
+    <SettingsDialog v-if="settingsOpen" @saved="settingsOpen = false" @close="settingsOpen = false" />
 
     <!-- SSH host-key trust (trust-on-first-use) -->
     <div v-if="trustReq" class="modal-backdrop" style="z-index: 65">
