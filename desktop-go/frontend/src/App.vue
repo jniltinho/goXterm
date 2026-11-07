@@ -20,6 +20,8 @@ const STRIP_W = 34, INDENT = 16;
 const sideW = ref(240);
 const rootOpen = ref(true);
 const status = ref("Ready");
+// Behaviour switches from Settings (Rust defaults until loaded).
+const cfg = ref({ sftpAutoSwitch: true, remoteMonitoring: true, confirmClose: true });
 // Focus a field when its dialog appears (the autofocus attribute is ignored for inserted elements).
 const vFocus = { mounted: (el: HTMLElement) => setTimeout(() => el.focus()) };
 async function loadUI() {
@@ -27,12 +29,14 @@ async function loadUI() {
     const s = await GetSettings();
     ui.value = { toolbarCaptions: s.toolbarCaptions, showTabNumbers: s.showTabNumbers, showCloseButtons: s.showCloseButtons };
     sideW.value = Math.min(600, Math.max(160, s.sidebarWidth || 240));
+    cfg.value = { sftpAutoSwitch: s.sftpAutoSwitch, remoteMonitoring: s.remoteMonitoring, confirmClose: s.confirmClose };
     if (!layoutLoaded) { // the saved layout, once (Rust: sidebar_open, sidebar_page, sidebar_width)
       sidebarCollapsed.value = s.sidebarOpen === false;
       sidePage.value = s.sidebarPage === "sftp" ? "sftp" : "sessions";
       layoutLoaded = true;
     }
     document.documentElement.dataset.theme = s.theme || "system"; // Skin: theme.css picks the palette
+    window.dispatchEvent(new CustomEvent("rxt-settings", { detail: s })); // open terminals follow
   } catch { /* defaults */ }
 }
 
@@ -60,7 +64,7 @@ function onKey(e: KeyboardEvent) {
   const k = e.key.toLowerCase();
   if (mod && e.shiftKey && k === "n") { e.preventDefault(); newSession(); return; }
   if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); return; }
-  if (mod && e.shiftKey && k === "w") { e.preventDefault(); if (active.value) closeTab(active.value); return; }
+  if (mod && e.shiftKey && k === "w") { e.preventDefault(); if (active.value) void requestClose(active.value); return; }
   if (mod && e.key === ",") { e.preventDefault(); settingsOpen.value = true; return; }
   if (inEditable()) return;
   if (!selected.value) return;
@@ -205,7 +209,7 @@ function newTab(url: string) {
 // ssh: a real SSH shell — it gets remote monitoring (on by default) and the side SFTP browser.
 function openTerm(title: string, icon: string, connect: () => Promise<string>, ssh = false, url = "") {
   const id = newTab(url);
-  if (ssh) tabMon.value[id] = true;
+  if (ssh) tabMon.value[id] = cfg.value.remoteMonitoring; // Settings › SSH › Remote monitoring
   tabs.value = [...tabs.value, { id, title, kind: "ssh", icon, connect, ssh }];
   active.value = id;
 }
@@ -303,7 +307,7 @@ function onBackend(id: string, backend: string) {
   tabBackend.value[id] = backend;
   if (tabMulti.value[id]) void SelectMultiExec(backend, true); // a reconnect has a new backend id
   delete tabCwd.value[id];
-  if (id === active.value) sidePage.value = "sftp"; // MobaXterm opens the SFTP tab on connect
+  if (id === active.value && cfg.value.sftpAutoSwitch) sidePage.value = "sftp"; // Settings › SSH
 }
 function openFiles(title: string, icon: string, connect: () => Promise<RemoteSession>, url = "") {
   const id = newTab(url);
@@ -352,7 +356,7 @@ function importSessions() { /* TODO: MobaXterm .mxtsessions / rustXterm import *
 function editSession(s: Session) { editorSessionId.value = s.id; editorOpen.value = true; }
 async function onEditorSaved(_id: number) { editorOpen.value = false; await loadData(); }
 async function delSession(s: Session) {
-  if (!(await askConfirm("Delete session", `Delete session "${s.name}"? This cannot be undone.`, "Delete"))) return;
+  if (!(await askConfirm("Delete session", `Delete the saved session "${s.name}"? Open tabs stay open.`, "Delete"))) return;
   try { await DeleteSession(s.id); if (selected.value?.id === s.id) selected.value = null; await loadData(); }
   catch (e) { error.value = String(e); }
 }
@@ -404,6 +408,18 @@ function openRdp(title: string, connect: (w: number, h: number) => Promise<RdpVi
   active.value = id;
 }
 function openRdpFor(s: Session | null) { if (s) openRdp("RDP: " + s.name, (w, h) => RdpConnect(s.id, w, h), sessionUrl(s)); }
+// Close from the UI: a still-connected tab asks first (Settings › General › Confirm before closing).
+async function requestClose(id: string) {
+  const t = tabs.value.find((x) => x.id === id);
+  if (t && cfg.value.confirmClose && tabState.value[id] === "connected" &&
+      !(await askConfirm("Close tab", `"${t.title}" is still connected. Close it and disconnect?`, "Close"))) return;
+  closeTab(id);
+}
+async function requestExit() {
+  if (cfg.value.confirmClose && tabs.value.some((t) => tabState.value[t.id] === "connected") &&
+      !(await askConfirm("Exit", "Some tabs are still connected. Exit and disconnect them?", "Exit"))) return;
+  void Quit();
+}
 function closeTab(id: string) {
   for (const m of [tabState, tabUrl, tabMon, tabBackend, tabCwd, enterTick, tabMulti]) delete m.value[id];
   const i = tabs.value.findIndex((t) => t.id === id);
@@ -498,7 +514,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <button class="menu-i" @click="runMenu(() => newSession())"><img :src="icon('session-new')" class="menu-ico" /> New session</button>
           <button class="menu-i" @click="runMenu(openLocal)"><img :src="icon('terminal')" class="menu-ico" /> Local terminal</button>
           <div class="menu-sep"></div>
-          <button class="menu-i" @click="runMenu(() => Quit())"><img :src="icon('exit')" class="menu-ico" /> Exit</button>
+          <button class="menu-i" @click="runMenu(requestExit)"><img :src="icon('exit')" class="menu-ico" /> Exit</button>
         </div>
       </div>
       <div class="menu">
@@ -540,7 +556,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
         <img :src="icon(b.icon)" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">{{ b.label }}</span>
       </button>
       <span class="ml-auto"></span>
-      <button class="tbtn" title="Exit" @click="Quit()"><img :src="icon('exit')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Exit</span></button>
+      <button class="tbtn" title="Exit" @click="requestExit"><img :src="icon('exit')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Exit</span></button>
     </header>
 
     <!-- 28 px row: Quick connect over the sidebar column, then the tab strip -->
@@ -552,12 +568,12 @@ const tabIcon = (t: Tab) => icon(t.icon);
         <button class="tab-home" :class="!active ? 'sel' : ''" title="Home" @click="active = ''"><img :src="icon('house')" /></button>
         <template v-for="(t, i) in tabs" :key="t.id">
         <input v-if="multiexec && t.kind === 'ssh'" type="checkbox" class="me-check" :checked="!!tabMulti[t.id]" :title="'MultiExec ' + t.title" @change="selectMulti(t.id, ($event.target as HTMLInputElement).checked)" />
-        <button class="tab" :class="t.id === active ? 'sel' : ''" :title="tabUrl[t.id] || t.title" @click="active = t.id" @mousedown.middle.prevent="closeTab(t.id)">
+        <button class="tab" :class="t.id === active ? 'sel' : ''" :title="tabUrl[t.id] || t.title" @click="active = t.id" @mousedown.middle.prevent="requestClose(t.id)">
           <img :src="tabIcon(t)" class="tab-ico" />
           <span class="tab-dot" :class="tabState[t.id] ?? 'connecting'" :title="STATE_LABEL[tabState[t.id] ?? 'connecting']"></span>
           <span class="tab-t"><template v-if="ui.showTabNumbers">{{ i + 1 }}. </template>{{ t.title }}</span>
           <img v-if="multiexec && tabMulti[t.id]" :src="icon('multiexec')" class="tab-ico" title="MultiExec" />
-          <span v-if="ui.showCloseButtons" class="tab-x" title="Close" @click.stop="closeTab(t.id)">×</span>
+          <span v-if="ui.showCloseButtons" class="tab-x" title="Close" @click.stop="requestClose(t.id)">×</span>
         </button>
         </template>
         <button class="tab-new" title="New local terminal" @click="openLocal"></button>
@@ -647,13 +663,15 @@ const tabIcon = (t: Tab) => icon(t.icon);
               v-show="t.id === active"
               :connect="t.connect"
               :monitor="!!tabMon[t.id]"
-              @close="closeTab(t.id)"
+              :title="t.title"
+              @close="requestClose(t.id)"
+              @monitor-off="tabMon[t.id] = false"
               @duplicate="duplicateTab(t)"
               @state="(st) => (tabState[t.id] = st)"
               @backend="(b) => onBackend(t.id, b)"
               @cwd="(d) => (tabCwd[t.id] = d)"
               @enter="enterTick[t.id] = (enterTick[t.id] ?? 0) + 1"
-              class="absolute inset-0 p-1"
+              class="absolute inset-0"
             />
             <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
             <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />

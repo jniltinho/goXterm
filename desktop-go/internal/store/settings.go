@@ -30,6 +30,11 @@ type Settings struct {
 	Notifications            bool    `toml:"notifications" json:"notifications"`
 	GPUBackend               string  `toml:"gpu_backend" json:"gpuBackend"`
 	FirstRunThemeDone        bool    `toml:"first_run_theme_done" json:"firstRunThemeDone"`
+	SftpAutoSwitch           bool    `toml:"sftp_auto_switch" json:"sftpAutoSwitch"`       // show the SFTP browser after an SSH login
+	ShowSessionBanner        bool    `toml:"show_session_banner" json:"showSessionBanner"` // info box in SSH/Telnet terminals
+	DesktopRelease           string  `toml:"desktop_release" json:"desktopRelease"`        // keys releasing a remote desktop's keyboard
+	// Command id → shortcut text such as "Ctrl+Shift+N" (overrides the built-in bindings).
+	Shortcuts map[string]string `toml:"shortcuts" json:"shortcuts"`
 	// Toolbar/tabs appearance (nil = default on); shown under Settings → Display.
 	ToolbarCaptions  *bool         `toml:"toolbar_captions" json:"toolbarCaptions"`
 	ShowTabNumbers   *bool         `toml:"show_tab_numbers" json:"showTabNumbers"`
@@ -53,8 +58,22 @@ func LoadSettings() (Settings, error) {
 	return loadSettingsFrom(filepath.Join(ConfigDir(), settingsFile))
 }
 
+// DefaultSettings is the Rust Settings::default(); keys missing from config.toml keep these values.
+func DefaultSettings() Settings {
+	on := func() *bool { b := true; return &b }
+	return Settings{
+		Theme: "system", LogLevel: "info",
+		CopyOnSelect: true, RightClickPaste: true, PasteGuard: true, ConfirmClose: true,
+		SidebarOpen: on(), SidebarWidth: 240, SidebarPage: "sessions", UIScale: "auto",
+		RemoteMonitoring: true, RemoteMonitoringInterval: 2, Notifications: true, GPUBackend: "auto",
+		SftpAutoSwitch: true, ShowSessionBanner: true, DesktopRelease: "Ctrl+Alt",
+		ToolbarCaptions: on(), ShowTabNumbers: on(), ShowCloseButtons: on(),
+		Terminal: TerminalPrefs{FontSize: 13, CursorShape: "beam", CursorBlink: true, ScrollbackLines: 10000},
+	}
+}
+
 func loadSettingsFrom(path string) (Settings, error) {
-	var s Settings
+	s := DefaultSettings()
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return s, nil
@@ -62,6 +81,7 @@ func loadSettingsFrom(path string) (Settings, error) {
 	if err != nil {
 		return s, err
 	}
+	s.FirstRunThemeDone = true // missing in an existing file means an existing user (Rust)
 	_, err = toml.Decode(string(raw), &s)
 	return s, err
 }
@@ -97,6 +117,14 @@ func SaveSettings(s Settings) error {
 		}
 	}
 	m["first_run_theme_done"] = s.FirstRunThemeDone
+	m["sftp_auto_switch"] = s.SftpAutoSwitch
+	m["show_session_banner"] = s.ShowSessionBanner
+	if s.DesktopRelease != "" {
+		m["desktop_release"] = s.DesktopRelease
+	}
+	if len(s.Shortcuts) > 0 {
+		m["shortcuts"] = s.Shortcuts
+	}
 	term, _ := m["terminal"].(map[string]any)
 	if term == nil {
 		term = map[string]any{}
@@ -105,7 +133,11 @@ func SaveSettings(s Settings) error {
 	term["font_size"] = s.Terminal.FontSize
 	term["cursor_shape"] = s.Terminal.CursorShape
 	term["cursor_blink"] = s.Terminal.CursorBlink
-	term["scheme"] = s.Terminal.Scheme
+	if s.Terminal.Scheme == "" {
+		delete(term, "scheme") // absent = follow the UI theme (Rust None)
+	} else {
+		term["scheme"] = s.Terminal.Scheme
+	}
 	term["scrollback_lines"] = s.Terminal.ScrollbackLines
 	m["terminal"] = term
 

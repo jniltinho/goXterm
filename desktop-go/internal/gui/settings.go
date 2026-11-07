@@ -21,8 +21,9 @@ func (a *App) GetSettings() (store.Settings, error) {
 	if s.Terminal.ScrollbackLines == 0 {
 		s.Terminal.ScrollbackLines = 10000
 	}
-	if s.Terminal.Scheme == "" {
-		s.Terminal.Scheme = "xterm"
+	// "" follows the UI theme (Rust default). Earlier Go builds wrote their own scheme names.
+	if n, ok := legacyScheme[s.Terminal.Scheme]; ok {
+		s.Terminal.Scheme = n
 	}
 	if s.RemoteMonitoringInterval == 0 {
 		s.RemoteMonitoringInterval = 2
@@ -81,4 +82,10 @@ func (a *App) Diagnostics() Diag {
 		d.CertTrust, _ = st.CertTrustCount()
 	}
 	return d
+}
+
+// legacyScheme maps the scheme names of early Go builds to the Rust catalog names.
+var legacyScheme = map[string]string{
+	"dark": "rustxterm-dark", "light": "rustxterm-light",
+	"solarized-dark": "Solarized Dark", "solarized-light": "Solarized Light",
 }

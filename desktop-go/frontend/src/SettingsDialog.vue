@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SCHEMES } from "./schemes";
 import { ref, onMounted, watch } from "vue";
 import { GetSettings, SaveSettings, Diagnostics, type Settings, type Diag } from "./api";
 
@@ -86,7 +87,7 @@ async function save() {
           </div>
           <label class="row"><input type="checkbox" v-model="s.terminal.cursorBlink" /> Blinking cursor</label>
           <div class="field"><label>Color scheme</label>
-            <select v-model="s.terminal.scheme" class="in"><option>xterm</option><option>dark</option><option>light</option><option>solarized-dark</option><option>solarized-light</option></select>
+            <select v-model="s.terminal.scheme" class="in"><option value="">Follow UI theme</option><option v-for="n in Object.keys(SCHEMES)" :key="n" :value="n">{{ n }}</option></select>
           </div>
           <div class="field"><label>Scrollback lines</label><input type="number" min="0" max="1000000" v-model.number="s.terminal.scrollbackLines" class="in in-sm" /></div>
         </template>

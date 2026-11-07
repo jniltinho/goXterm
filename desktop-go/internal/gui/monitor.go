@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"rustxterm-go/internal/store"
 )
 
 // Remote monitoring (MobaXterm-style bar on SSH tabs): every few seconds a one-shot command reads
@@ -14,7 +16,14 @@ import (
 // the result is emitted as "monitor:<tabId>". It runs on an extra exec channel of the SSH session
 // (migrate-gui-to-go-wails — remote monitoring; Go-native, core separation).
 
-const monitorEvery = 2 * time.Second
+// monitorEvery is Settings › SSH › Refresh interval (1–30 s, Rust clamps the same way; default 2 s).
+func monitorEvery() time.Duration {
+	n := 2
+	if s, err := store.LoadSettings(); err == nil && s.RemoteMonitoringInterval > 0 {
+		n = min(30, max(1, s.RemoteMonitoringInterval))
+	}
+	return time.Duration(n) * time.Second
+}
 
 // monCmd prints one sample the parser understands (POSIX sh; works on Linux servers).
 const monCmd = `uname -n 2>/dev/null; uname -s 2>/dev/null; head -n1 /proc/stat 2>/dev/null; ` +
@@ -91,7 +100,7 @@ func (a *App) MonitorStop(tabID string) {
 }
 
 func (a *App) monitorLoop(tabID string, r cmdRunner, stop chan struct{}) {
-	t := time.NewTicker(monitorEvery)
+	t := time.NewTicker(monitorEvery())
 	defer t.Stop()
 	var prev sample
 	var prevAt time.Time

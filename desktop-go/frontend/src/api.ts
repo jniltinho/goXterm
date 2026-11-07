@@ -42,6 +42,7 @@ export interface Settings {
   uiScale: string; remoteMonitoring: boolean; remoteMonitoringInterval: number; notifications: boolean;
   gpuBackend: string; firstRunThemeDone: boolean;
   toolbarCaptions: boolean; showTabNumbers: boolean; showCloseButtons: boolean;
+  sftpAutoSwitch: boolean; showSessionBanner: boolean; desktopRelease: string; shortcuts: Record<string, string> | null;
   terminal: TerminalPrefs;
 }
 // Native open-file dialog to pick an SSH private key; returns "" when cancelled.

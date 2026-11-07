@@ -31,7 +31,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 	s.CopyOnSelect = true
 	s.RemoteMonitoring = true
 	s.RemoteMonitoringInterval = 3
-	if s.SidebarOpen != nil || s.SidebarWidth != 240 {
+	if s.SidebarOpen == nil || !*s.SidebarOpen || s.SidebarWidth != 240 {
 		t.Fatalf("sidebar defaults: open %v width %v", s.SidebarOpen, s.SidebarWidth)
 	}
 	closed := false
@@ -56,5 +56,22 @@ func TestSettingsRoundTrip(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(cfgDir, settingsFile))
 	if !strings.Contains(string(raw), "keyring_hint") {
 		t.Fatalf("existing key dropped:\n%s", raw)
+	}
+}
+
+// Keys missing from config.toml take the Rust defaults (on for the toggles the Rust app enables).
+func TestSettingsDefaults(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	os.MkdirAll(filepath.Join(dir, appDir), 0o755)
+	os.WriteFile(filepath.Join(dir, appDir, settingsFile), []byte("theme = \"dark\"\ncopy_on_select = false\n"), 0o644)
+	s, err := LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.CopyOnSelect || !s.RightClickPaste || !s.PasteGuard || !s.ConfirmClose || !s.SftpAutoSwitch ||
+		!s.ShowSessionBanner || !s.RemoteMonitoring || !s.Terminal.CursorBlink || !s.FirstRunThemeDone ||
+		s.SidebarOpen == nil || !*s.SidebarOpen || s.DesktopRelease != "Ctrl+Alt" {
+		t.Fatalf("defaults not applied: %+v", s)
 	}
 }

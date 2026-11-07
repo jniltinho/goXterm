@@ -8,19 +8,21 @@ import "@xterm/xterm/css/xterm.css";
 import { ref as vref } from "vue";
 import { Send, Resize, Disconnect, MonitorStart, MonitorStop, GetSettings, TermAttach, SaveTerminalOutput, ClipboardText, SetClipboardText, type Attach, type Metrics } from "./api";
 import { renderBanner } from "./banner";
+import { askConfirm } from "./ask";
+import { schemeName, schemeIsDark, xtermTheme } from "./schemes";
 
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
 // monitor shows the remote-monitoring bar (SSH only).
-const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean }>();
+const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean; title?: string }>();
 // backend: the backend tabId once connected (the side SFTP browser uses it); enter: the user pressed
 // Return (debounced, for "Follow terminal folder"); cwd: the shell reported its folder (OSC 7).
 const emit = defineEmits<{
-  close: []; duplicate: []; state: ["connecting" | "connected" | "stopped"]; backend: [string]; enter: []; cwd: [string];
+  close: []; duplicate: []; "monitor-off": []; state: ["connecting" | "connected" | "stopped"]; backend: [string]; enter: []; cwd: [string];
 }>();
 
 // Context menu (Rust terminal_menu, MobaXterm-like): right click, or Ctrl+right click when right click
 // pastes (Settings › General › Paste with right click).
-const prefs = { rightClickPaste: false, copyOnSelect: false };
+const prefs = { rightClickPaste: true, copyOnSelect: true, pasteGuard: true, banner: true };
 const cmenu = vref<{ x: number; y: number; sel: boolean; live: boolean } | null>(null);
 function onContext(e: MouseEvent) {
   e.preventDefault();
@@ -33,7 +35,14 @@ function onContext(e: MouseEvent) {
 }
 function menuRun(f: () => void) { cmenu.value = null; f(); term.focus(); }
 const copy = () => { const s = term.getSelection(); if (s) void SetClipboardText(s); };
-async function paste() { const s = await ClipboardText(); if (s && !stopped) term.paste(s); }
+async function paste() {
+  const s = await ClipboardText();
+  if (!s || stopped) return;
+  const lines = s.replace(/\r?\n$/, "").split(/\r?\n/).length;
+  if (prefs.pasteGuard && lines > 1 &&
+      !(await askConfirm("Paste multiple lines", `Paste ${lines} lines into "${props.title ?? "terminal"}"?\n\n${s.slice(0, 600)}`, "Paste"))) return;
+  term.paste(s);
+}
 let enterTimer: ReturnType<typeof setTimeout> | undefined;
 const mi = (name: string) => `./icons/${name}.png`; // runtime path (public/), not a bundled import
 
@@ -41,20 +50,33 @@ const metrics = vref<Metrics | null>(null);
 const cpuHistory = vref<number[]>([]);
 let offMon: (() => void) | undefined;
 // warning/danger colouring and a tiny CPU sparkline for the monitoring bar.
-function lvl(pct: number, warn: number, danger: number) { return pct >= danger ? "danger" : pct >= warn ? "warn" : ""; }
+// Monitoring bar formats and thresholds: Rust monitor_bar.rs (rate in bits/s, 80 % warning, 95 % danger).
+function lvl(pct: number) { return pct >= 95 ? "danger" : pct >= 80 ? "warn" : ""; }
+const HISTORY = 60, SPARK_W = 48, SPARK_H = 14;
 function sparkPath(h: number[]): string {
-  if (h.length < 2) return "";
-  const w = 38, ht = 11, n = h.length;
+  const step = SPARK_W / (HISTORY - 1), start = HISTORY - h.length;
   return h.map((v, i) =>
-    `${i === 0 ? "M" : "L"}${((i / (n - 1)) * w).toFixed(1)},${(ht - (Math.max(0, Math.min(100, v)) / 100) * ht).toFixed(1)}`,
+    `${i === 0 ? "M" : "L"}${((start + i) * step).toFixed(1)},${(SPARK_H - 1 - (Math.max(0, Math.min(100, v)) / 100) * (SPARK_H - 2)).toFixed(1)}`,
   ).join(" ");
 }
-const fmtRate = (b: number) => (b >= 1048576 ? (b / 1048576).toFixed(1) + " MB/s" : b >= 1024 ? (b / 1024).toFixed(0) + " kB/s" : b + " B/s");
-const fmtSize = (kib: number) => (kib >= 1048576 ? (kib / 1048576).toFixed(1) + " GiB" : (kib / 1024).toFixed(0) + " MiB");
+function fmtRate(bytesPerSec: number) {
+  const b = bytesPerSec * 8; // the Go collector reports bytes/s; the bar shows bits/s like Rust
+  return b >= 1e9 ? (b / 1e9).toFixed(2) + " Gb/s" : b >= 1e6 ? (b / 1e6).toFixed(2) + " Mb/s" : b >= 1e3 ? (b / 1e3).toFixed(1) + " kb/s" : Math.round(b) + " b/s";
+}
+function fmtMem(bytes: number) {
+  const gib = bytes / 2 ** 30;
+  return gib >= 1 ? gib.toFixed(2) + " GiB" : (bytes / 2 ** 20).toFixed(0) + " MiB";
+}
 function fmtUptime(s: number) {
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return d > 0 ? `${d} d ${h} h` : h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
+// No sample for two intervals: values turn muted (stale), as in Rust.
+const lastSample = vref(0);
+const now = vref(Date.now());
+let staleTimer: ReturnType<typeof setInterval> | undefined;
+const stale = () => !!lastSample.value && now.value - lastSample.value > 2 * monInterval * 1000 + 500;
+let monInterval = 2;
 
 const el = ref<HTMLDivElement | null>(null);
 let term: Terminal;
@@ -154,7 +176,7 @@ async function attach() {
   let a: Attach | null = null;
   try { a = await TermAttach(tabId); } catch { /* older backend: no banner, nothing buffered */ }
   term.write("\x1b[1A\r\x1b[2K");
-  if (a?.banner) term.write(renderBanner(a.banner, term.cols, dark));
+  if (a?.banner && prefs.banner) term.write(renderBanner(a.banner, term.cols, dark));
   if (a?.early) term.write(b64(a.early));
   attached = true;
   emit("state", "connected");
@@ -179,7 +201,8 @@ function startMon() {
   offMon = Events.On("monitor:" + tabId, (ev: { data: unknown }) => {
     const m = ev.data as Metrics;
     metrics.value = m;
-    if (m.cpu >= 0) cpuHistory.value = [...cpuHistory.value, m.cpu].slice(-24);
+    lastSample.value = Date.now();
+    if (m.cpu >= 0) cpuHistory.value = [...cpuHistory.value, m.cpu].slice(-HISTORY);
   });
   void MonitorStart(tabId);
 }
@@ -217,25 +240,37 @@ function b64(b64: string): Uint8Array {
   return u;
 }
 
-// Terminal color schemes (xterm.js theme) selectable in Settings.
-const SCHEMES: Record<string, Record<string, string>> = {
-  xterm: { background: "#0b0e11", foreground: "#d4d4d4", cursor: "#9ece6a", selectionBackground: "#2a3f52" },
-  dark: { background: "#1e1e1e", foreground: "#d4d4d4", cursor: "#ffffff", selectionBackground: "#264f78" },
-  light: { background: "#ffffff", foreground: "#1e1e1e", cursor: "#000000", selectionBackground: "#add6ff" },
-  "solarized-dark": { background: "#002b36", foreground: "#839496", cursor: "#93a1a1", selectionBackground: "#073642" },
-  "solarized-light": { background: "#fdf6e3", foreground: "#657b83", cursor: "#586e75", selectionBackground: "#eee8d5" },
-};
+// Colour scheme: the configured one, or the UI theme's (follows a live Skin or OS change).
+let schemeSetting = "";
+function applyScheme() {
+  if (!term) return; // settings arrived before the terminal was created
+  const name = schemeName(schemeSetting);
+  dark = schemeIsDark(name);
+  term.options.theme = xtermTheme(name);
+  if (el.value) el.value.style.background = term.options.theme.background ?? "";
+}
+function onSettings(e: Event) {
+  schemeSetting = (e as CustomEvent<{ terminal?: { scheme?: string } }>).detail?.terminal?.scheme ?? schemeSetting;
+  applyScheme();
+}
+const osScheme = matchMedia("(prefers-color-scheme: dark)");
+window.addEventListener("rxt-settings", onSettings);
+osScheme.addEventListener("change", applyScheme);
 
 onMounted(async () => {
-  const tp = { fontFamily: "DejaVu Sans Mono", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000, scheme: "xterm" };
+  const tp = { fontFamily: "DejaVu Sans Mono", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000, scheme: "" };
   try {
     const s = await GetSettings();
     Object.assign(tp, s.terminal);
     prefs.rightClickPaste = s.rightClickPaste;
     prefs.copyOnSelect = s.copyOnSelect;
+    monInterval = Math.min(30, Math.max(1, s.remoteMonitoringInterval || 2));
+    prefs.pasteGuard = s.pasteGuard;
+    prefs.banner = s.showSessionBanner !== false;
   } catch { /* defaults */ }
   const cursorStyle = tp.cursorShape === "block" ? "block" : tp.cursorShape === "underline" ? "underline" : "bar";
-  dark = !/light/.test(tp.scheme);
+  schemeSetting = tp.scheme;
+  dark = schemeIsDark(schemeName(schemeSetting));
   baseFont = tp.fontSize || 13;
   term = new Terminal({
     fontFamily: `"${tp.fontFamily}","DejaVu Sans Mono",monospace`,
@@ -243,7 +278,7 @@ onMounted(async () => {
     cursorBlink: tp.cursorBlink,
     cursorStyle,
     scrollback: tp.scrollbackLines || 10000,
-    theme: SCHEMES[tp.scheme] || SCHEMES.xterm,
+    theme: xtermTheme(schemeName(schemeSetting)),
     allowProposedApi: true, // search-match decorations
   });
   fit = new FitAddon();
@@ -263,6 +298,8 @@ onMounted(async () => {
     return true;
   });
   term.open(el.value!);
+  el.value!.style.background = term.options.theme?.background ?? "";
+  staleTimer = setInterval(() => (now.value = Date.now()), 1000);
   term.onSelectionChange(() => { if (prefs.copyOnSelect && term.hasSelection()) copy(); });
   // OSC 7 (file://host/path): the shell's folder, for the SFTP browser's "Follow terminal folder".
   term.parser.registerOscHandler(7, (data) => {
@@ -320,6 +357,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   ro?.disconnect();
+  clearInterval(staleTimer);
+  window.removeEventListener("rxt-settings", onSettings);
+  osScheme.removeEventListener("change", applyScheme);
   clearTimeout(enterTimer);
   offOut?.();
   offClose?.();
@@ -363,29 +403,32 @@ onBeforeUnmount(() => {
       <button class="find-b" title="Close (Esc)" @click="closeFind">✕</button>
     </div>
     <div ref="el" class="term-area"></div>
-    <div v-if="monitor && metrics" class="mon">
-      <span class="seg mon-host" :title="metrics.os"><img :src="mi('servers')" class="mi" />{{ metrics.host || "—" }}</span>
-      <span class="seg" :class="lvl(metrics.cpu, 70, 90)" v-if="metrics.cpu >= 0" title="CPU">
-        <img :src="mi('chip')" class="mi" />{{ metrics.cpu.toFixed(0) }}%
-        <svg v-if="cpuHistory.length > 1" class="spark" viewBox="0 0 38 11" preserveAspectRatio="none"><path :d="sparkPath(cpuHistory)" /></svg>
-      </span>
-      <span class="seg" :class="lvl((metrics.memUsed / metrics.memTotal) * 100, 80, 95)" v-if="metrics.memTotal" title="Memory"><img :src="mi('ram')" class="mi" />{{ fmtSize(metrics.memUsed / 1024) }} / {{ fmtSize(metrics.memTotal / 1024) }}</span>
-      <span class="seg" title="Network up"><img :src="mi('upload')" class="mi" />{{ fmtRate(metrics.netUp) }}</span>
-      <span class="seg" title="Network down"><img :src="mi('download')" class="mi" />{{ fmtRate(metrics.netDown) }}</span>
-      <span class="seg" v-if="metrics.uptime" title="Uptime"><img :src="mi('monitor-clock')" class="mi" />{{ fmtUptime(metrics.uptime) }}</span>
-      <span class="seg" :class="lvl(d.usedPct, 80, 90)" v-for="d in (metrics.disks || []).slice(0, 4)" :key="d.mount" :title="`${d.mount}: ${fmtSize(d.usedKiB)} / ${fmtSize(d.sizeKiB)}`"><img :src="mi('hard-disk')" class="mi" />{{ d.mount }} {{ d.usedPct }}%</span>
+    <div v-if="monitor && metrics" class="mon" :class="stale() ? 'stale' : ''">
+      <div class="mon-chips">
+        <span class="seg" :title="'Host: ' + (metrics.host || '') + (metrics.os ? '\nOS: ' + metrics.os : '')"><img :src="mi('server-tower')" class="mi" />{{ metrics.host || "—" }}</span>
+        <span class="seg" :class="metrics.cpu >= 0 ? lvl(metrics.cpu) : ''" :title="metrics.cpu >= 0 ? `CPU usage ${metrics.cpu.toFixed(0)} %` : 'CPU usage (needs two samples)'">
+          <img :src="mi('chip')" class="mi" />{{ metrics.cpu >= 0 ? metrics.cpu.toFixed(0) + " %" : "…" }}
+          <svg class="spark" :width="SPARK_W" :height="SPARK_H"><path v-if="cpuHistory.length > 1" :d="sparkPath(cpuHistory)" /></svg>
+        </span>
+        <span v-if="metrics.memTotal" class="seg" :class="lvl((metrics.memUsed / metrics.memTotal) * 100)" :title="`Memory: ${metrics.memUsed} of ${metrics.memTotal} bytes used`"><img :src="mi('ram')" class="mi" />{{ fmtMem(metrics.memUsed) }} / {{ fmtMem(metrics.memTotal) }}</span>
+        <span class="seg" title="Upload"><img :src="mi('upload')" class="mi" />{{ fmtRate(metrics.netUp) }}</span>
+        <span class="seg" title="Download"><img :src="mi('download')" class="mi" />{{ fmtRate(metrics.netDown) }}</span>
+        <span v-if="metrics.uptime" class="seg" :title="'Up for ' + fmtUptime(metrics.uptime)"><img :src="mi('monitor-clock')" class="mi" />{{ fmtUptime(metrics.uptime) }}</span>
+        <span v-for="d in metrics.disks || []" :key="d.mount" class="seg" :class="lvl(d.usedPct)" :title="`${d.mount}: ${fmtMem(d.usedKiB * 1024)} of ${fmtMem(d.sizeKiB * 1024)} used`"><img :src="mi('hard-disk')" class="mi" />{{ d.mount }}: {{ d.usedPct }} %</span>
+      </div>
+      <button class="mon-close" title="Close remote monitoring" @click="emit('monitor-off')"><img :src="mi('close')" /></button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .term-wrap { position: relative; display: flex; flex-direction: column; height: 100%; width: 100%; }
-.findbar { position: absolute; top: 6px; right: 18px; z-index: 5; display: flex; gap: 2px; padding: 3px; background: #1b2129; border: 1px solid #3a4654; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
-.find-in { width: 220px; height: 24px; padding: 0 8px; font-size: 12px; color: #e6edf3; background: #0b0e11; border: 1px solid #3a4654; outline: none; }
-.find-in:focus { border-color: #6aa0da; }
-.find-b { width: 24px; height: 24px; font-size: 11px; color: #cbd5e1; background: #222a33; border: 1px solid #3a4654; cursor: pointer; }
-.find-b:hover { border-color: #6aa0da; }
-.term-area { flex: 1; min-height: 0; }
+.findbar { position: absolute; top: 6px; right: 18px; z-index: 5; display: flex; gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--border); }
+.find-in { width: 220px; height: 22px; padding: 0 6px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }
+.find-in:focus { border-color: var(--focus); }
+.find-b { width: 22px; height: 22px; font-size: 11px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
+.find-b:hover { background: var(--hover); }
+.term-area { flex: 1; min-height: 0; padding: 2px 4px; } /* background = the scheme's (set in code) */
 .cm-mask { position: fixed; inset: 0; z-index: 80; }
 .cm { position: fixed; min-width: 210px; padding: 2px; background: var(--panel); border: 1px solid var(--border); font-family: "Noto Sans", sans-serif; }
 .cm-i { display: flex; align-items: center; gap: 6px; width: 100%; height: 22px; padding: 0 6px; font-size: 12px; color: var(--text); background: transparent; border: none; text-align: left; cursor: pointer; }
@@ -395,15 +438,20 @@ onBeforeUnmount(() => {
 .cm-i:disabled { color: var(--text-disabled); cursor: default; }
 .cm-i:disabled img { opacity: .45; }
 .cm-sep { height: 1px; margin: 3px 0; background: var(--border-subtle); }
-.mon { display: flex; align-items: center; height: 22px; padding: 0 2px; background: #11161c; border-top: 1px solid #2a3340; font-size: 11px; color: #9fb0c0; overflow: hidden; white-space: nowrap; }
-.seg { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; height: 13px; border-right: 1px solid #2a3340; }
-.seg:last-child { border-right: none; }
-.mi { width: 14px; height: 14px; flex: none; }
-.mon-host { color: #cbd5e1; font-weight: 600; }
-.seg.warn { color: #e0b341; }
-.seg.danger { color: #e05561; }
-.spark { width: 38px; height: 11px; margin-left: 2px; }
-.spark path { fill: none; stroke: #6aa0da; stroke-width: 1; vector-effect: non-scaling-stroke; }
-.seg.warn .spark path { stroke: #e0b341; }
-.seg.danger .spark path { stroke: #e05561; }
+/* Remote monitoring bar (Rust monitor_bar.rs): 26 px, panel fill with a top rule, chips with a
+   16 px icon and 11 px text divided by thin rules, a 48x14 CPU sparkline and a close button. */
+.mon { display: flex; align-items: center; height: 26px; flex: none; background: var(--panel); border-top: 1px solid var(--border); color: var(--text); font-family: "Noto Sans", sans-serif; font-size: 11px; white-space: nowrap; }
+.mon-chips { flex: 1; min-width: 0; display: flex; align-items: center; overflow-x: auto; scrollbar-width: none; padding-left: 2px; }
+.seg { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; height: 23px; flex: none; position: relative; margin-right: 3px; }
+.seg + .seg::before { content: ""; position: absolute; left: -2px; top: 3px; bottom: 2px; border-left: 1px solid var(--border-subtle); }
+.mi { width: 16px; height: 16px; flex: none; }
+.seg.warn { color: var(--warning); }
+.seg.danger { color: var(--danger); }
+.mon.stale .seg { color: var(--text-muted); }
+.spark { flex: none; background: var(--surface); outline: 1px solid var(--border-subtle); outline-offset: -1px; }
+.spark path { fill: none; stroke: var(--accent); stroke-width: 1; }
+.mon.stale .spark path { stroke: var(--text-muted); }
+.mon-close { width: 24px; height: 24px; flex: none; margin-right: 1px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; }
+.mon-close:hover { background: var(--hover); }
+.mon-close img { width: 16px; height: 16px; }
 </style>
