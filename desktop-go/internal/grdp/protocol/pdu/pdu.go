@@ -204,9 +204,13 @@ func (c *Client) sendConfirmActivePDU() {
 	orderCapa := c.clientCapabilities[CAPSTYPE_ORDER].(*OrderCapability)
 	orderCapa.OrderFlags = NEGOTIATEORDERSUPPORT | ZEROBOUNDSDELTASSUPPORT | COLORINDEXSUPPORT | ORDERFLAGS_EXTRA_FLAGS
 	orderCapa.OrderSupportExFlags |= ORDERFLAGS_EX_ALTSEC_FRAME_MARKER_SUPPORT
-	orderCapa.OrderSupport[TS_NEG_DSTBLT_INDEX] = 1
-	orderCapa.OrderSupport[TS_NEG_PATBLT_INDEX] = 1
-	orderCapa.OrderSupport[TS_NEG_SCRBLT_INDEX] = 1
+	// No drawing orders are advertised: the client only renders bitmap updates, so a server told we
+	// support DstBlt/PatBlt/ScrBlt/FastGlyph would erase, scroll and draw text with orders we drop,
+	// leaving stale regions (e.g. the 2008 logon "Standard" branding and menu remnants). With an empty
+	// orderSupport array the server sends everything as bitmaps.
+	//orderCapa.OrderSupport[TS_NEG_DSTBLT_INDEX] = 1
+	//orderCapa.OrderSupport[TS_NEG_PATBLT_INDEX] = 1
+	//orderCapa.OrderSupport[TS_NEG_SCRBLT_INDEX] = 1
 	//orderCapa.OrderSupport[TS_NEG_LINETO_INDEX] = 1
 	//orderCapa.OrderSupport[TS_NEG_MEMBLT_INDEX] = 1
 	//orderCapa.OrderSupport[TS_NEG_MEM3BLT_INDEX] = 1
@@ -219,7 +223,7 @@ func (c *Client) sendConfirmActivePDU() {
 	orderCapa.OrderSupport[TS_NEG_POLYGON_CB_INDEX] = 1
 	orderCapa.OrderSupport[TS_NEG_ELLIPSE_SC_INDEX] = 1
 	orderCapa.OrderSupport[TS_NEG_ELLIPSE_CB_INDEX] = 1*/
-	orderCapa.OrderSupport[TS_NEG_FAST_GLYPH_INDEX] = 1
+	//orderCapa.OrderSupport[TS_NEG_FAST_GLYPH_INDEX] = 1
 
 	inputCapa := c.clientCapabilities[CAPSTYPE_INPUT].(*InputCapability)
 	inputCapa.Flags = INPUT_FLAG_SCANCODES | INPUT_FLAG_MOUSEX | INPUT_FLAG_UNICODE
