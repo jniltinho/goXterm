@@ -32,3 +32,15 @@ func (s *Store) SavedCredentialCount() (int, error) {
 	err := s.db.QueryRow(`SELECT count(*) FROM credentials`).Scan(&n)
 	return n, err
 }
+
+// SetCredential saves (or replaces) a session's secret in the encrypted store, in the Rust layout
+// (raw UTF-8 bytes, one row per session and kind).
+func (s *Store) SetCredential(sessionID int64, kind string, secret []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.db.Exec(`INSERT OR REPLACE INTO credentials(session_id, kind, secret) VALUES(?,?,?)`,
+		sessionID, kind, secret); err != nil {
+		return err
+	}
+	return s.writeBack()
+}

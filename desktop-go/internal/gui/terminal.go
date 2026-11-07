@@ -53,7 +53,7 @@ func (a *App) Connect(sessionID int64) (string, error) {
 		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
 		KeepaliveSecs: int(asInt64(sshOpt["keepalive_secs"])),
-	})
+	}, sessionID)
 }
 
 // HasDemo reports whether a demo SSH target is configured (RXT_DEMO_SSH), used to auto-open a lab
@@ -68,7 +68,7 @@ func (a *App) ConnectDemo() (string, error) {
 		return "", errors.New("no demo target")
 	}
 	user, pass, host, port := parseTarget(v)
-	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: pass})
+	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: pass}, 0)
 }
 
 // parseTarget parses `user[:password]@host[:port]` (port defaults to 22).
@@ -123,7 +123,7 @@ func (a *App) QuickConnect(host string, port int, user, password string) (string
 	if port == 0 {
 		port = 22
 	}
-	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: password})
+	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: password}, 0)
 }
 
 // newStreamTab allocates a tabId and the output/close callbacks shared by every byte-stream terminal
@@ -181,9 +181,11 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 	return tabID, onData, onClose
 }
 
-func (a *App) dial(cfg sshconn.Config) (string, error) {
+// dial opens an SSH shell tab; sessionID > 0 (a saved session) offers "Save password" at the prompt.
+func (a *App) dial(cfg sshconn.Config, sessionID int64) (string, error) {
 	tabID, onData, onClose := a.newStreamTab()
-	cfg.AskPassword = a.askPassword(cfg.Host, cfg.User)
+	ask, saver := a.askSaving(cfg.Host, cfg.User, sessionID)
+	cfg.AskPassword = ask
 	cfg.AskPassphrase = a.askPassphrase
 	trust := a.sshHostKeyCallback(cfg.Host, cfg.Port)
 	var keyAlgo, keyFP string // recorded for the session banner
@@ -201,6 +203,9 @@ func (a *App) dial(cfg sshconn.Config) (string, error) {
 	if err != nil {
 		a.dropEarly(tabID)
 		return "", err
+	}
+	if err := saver.commit(); err != nil { // logged in: keep the password the user chose to save
+		onData([]byte("\x1b[90m[rustxterm] password not saved: " + err.Error() + "\x1b[0m\r\n"))
 	}
 	a.setBanner(tabID, a.sshBanner(cfg.User, cfg.Host, cfg.Port, cfg.KeepaliveSecs, sess.ServerVersion(), keyAlgo, keyFP))
 	a.mu.Lock()

@@ -362,16 +362,18 @@ function respondTrust(decision: "once" | "save" | "reject") {
 }
 
 // Interactive SSH password prompt (sessions with no saved credential); also queued.
-type PassReq = { reqId: string; host: string; user: string; prompt?: string };
+type PassReq = { reqId: string; host: string; user: string; prompt?: string; canSave?: boolean };
 const passQ = ref<PassReq[]>([]);
 const passReq = computed(() => passQ.value[0] ?? null);
 const passValue = ref("");
+const passSave = ref(false); // Rust "Save password": stored in the encrypted store after the login works
 function respondPassword(ok: boolean) {
   const r = passQ.value[0];
   if (!r) return;
-  void SshPasswordRespond(r.reqId, ok ? passValue.value : "", ok);
+  void SshPasswordRespond(r.reqId, ok ? passValue.value : "", ok, ok && !!r.canSave && passSave.value);
   passQ.value = passQ.value.slice(1);
   passValue.value = "";
+  passSave.value = false;
 }
 
 // New session (in a folder when started from the tree).
@@ -891,6 +893,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <p class="dialog-sub" v-else>Enter the password for <b>{{ (passReq.user || "user") + "@" + passReq.host }}</b>.</p>
           <label class="dialog-label">Password</label>
           <input type="password" class="dialog-input" v-model="passValue" @keyup.enter="respondPassword(true)" v-focus />
+          <label v-if="passReq.canSave" class="dialog-check"><input v-model="passSave" type="checkbox" /> Save password</label>
           <div class="dialog-actions">
             <button class="dbtn primary" @click="respondPassword(true)"><img :src="icon('ok')" class="dbtn-ico" /> OK</button>
             <button class="dbtn" @click="respondPassword(false)"><img :src="icon('cancel')" class="dbtn-ico" /> Cancel</button>
@@ -937,7 +940,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tab, .tab-home, .tab-new { height: 26px; flex: none; display: flex; align-items: center; background: var(--tab-inactive); border: 1px solid var(--border); cursor: pointer; color: var(--text); font-size: 12px; position: relative; }
 .tab:hover, .tab-home:hover, .tab-new:hover { background: var(--hover); }
 .tab.sel, .tab-home.sel { background: var(--tab-active); border-bottom-color: transparent; height: 27px; margin-bottom: -1px; } /* joins the work area */
-.tab.sel::before, .tab-home.sel::before { content: ""; position: absolute; left: -1px; right: -1px; top: -1px; height: 2px; background: var(--accent); }
+.tab.sel::before, .tab-home.sel::before { content: ""; position: absolute; left: -1px; right: -1px; top: -1px; height: 2px; background: var(--tab-top); } /* no line in Light/Dark; the XP skin keeps its orange top */
 .tab-home { width: 36px; justify-content: center; }
 .tab-home img { width: 16px; height: 16px; }
 .tab-new { width: 26px; justify-content: center; }

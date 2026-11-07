@@ -339,3 +339,34 @@ func TestSaveSessionBadFolderIsRoot(t *testing.T) {
 		}
 	}
 }
+
+func TestSetCredentialReplaces(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "lab-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir, "lab-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := s.SaveSession(`{"id":0,"name":"a","protocol":"ssh","host":"sshd","user":"alice"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pw := range []string{"first-pass", "lab-alice-pass"} {
+		if err := s.SetCredential(id, CredPassword, []byte(pw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	if s, err = Open(dir, "lab-master"); err != nil { // survives the write-back
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if b, ok, err := s.Credential(id, CredPassword); err != nil || !ok || string(b) != "lab-alice-pass" {
+		t.Fatalf("credential ok=%v err=%v", ok, err)
+	}
+	if n, _ := s.SavedCredentialCount(); n != 1 {
+		t.Fatalf("%d rows", n)
+	}
+}

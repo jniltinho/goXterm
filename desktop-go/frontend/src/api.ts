@@ -106,8 +106,8 @@ export const MoveSession = (id: number, folder: number | null) => call<void>("Mo
 // SSH host-key trust (TOFU): the backend emits "ssh:trust" for an unknown key; answer once/save/reject.
 export const SshTrustRespond = (reqId: string, decision: string) => call<void>("SshTrustRespond", reqId, decision);
 // Interactive SSH password: the backend emits "ssh:password" when it needs one; answer or cancel.
-export const SshPasswordRespond = (reqId: string, password: string, ok: boolean) =>
-  call<void>("SshPasswordRespond", reqId, password, ok);
+export const SshPasswordRespond = (reqId: string, password: string, ok: boolean, save = false) =>
+  call<void>("SshPasswordRespond", reqId, password, ok, save);
 
 // Terminal (SSH) — output streams as Wails events "term:out:<tabId>" (base64) and "term:close:<tabId>".
 export const Connect = (id: number) => call<string>("Connect", id);
@@ -177,6 +177,7 @@ export const RemoteDisconnect = (tabId: string) => call<void>("RemoteDisconnect"
 export const TermFiles = (termId: string) => call<RemoteSession>("TermFiles", termId);
 export const TermCwd = (termId: string) => call<string>("TermCwd", termId);
 export const RemoteMkdir = (tabId: string, dir: string) => call<void>("RemoteMkdir", tabId, dir);
+export const RemoteNewFile = (tabId: string, path: string) => call<void>("RemoteNewFile", tabId, path);
 export const RemoteRemove = (tabId: string, path: string) => call<void>("RemoteRemove", tabId, path);
 export const RemoteRename = (tabId: string, from: string, to: string) => call<void>("RemoteRename", tabId, from, to);
 export const RemoteDownloadAs = (tabId: string, remote: string) => call<string>("RemoteDownloadAs", tabId, remote);

@@ -555,8 +555,8 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
                   <p class="muted">Typed into the shell once it is ready, like keyboard input. Not saved as credentials.</p>
                 </template>
               </div>
-              <!-- 48 px protocol icon in a 64×64 tile, vertically centered on the right -->
-              <div class="big"><img :src="icon(proto.icon)" /></div>
+              <!-- 48 px session icon in a 64×64 tile on the right; a click opens the icon picker -->
+              <button class="big" title="Choose icon…" @click="page = 'bookmark'; iconPicker = true"><img :src="icon(sessionIcon)" /></button>
             </div>
           </template>
         </div>
@@ -608,7 +608,8 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
 .tab.on { background: var(--panel); border-bottom-color: var(--panel); box-shadow: inset 0 2px 0 var(--tab-top); }
 .panel { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: center; margin-top: -1px; padding: 12px; background: var(--panel); border: 1px solid var(--border); }
 .page { flex: 1; align-self: stretch; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
-.big { flex: none; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: var(--input); border: 1px solid var(--border); }
+.big { flex: none; width: 64px; height: 64px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--input); border: 1px solid var(--border); cursor: pointer; }
+.big:hover { border-color: var(--outline); background: var(--hover); }
 .big img { width: 48px; height: 48px; }
 
 .grid { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 12px; justify-items: start; }

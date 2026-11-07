@@ -42,14 +42,16 @@ func (a *App) SftpConnect(sessionID int64) (*SftpSession, error) {
 		port = 22
 	}
 	sshOpt := subMap(m, "ssh")
+	ask, saver := a.askSaving(host, user, sessionID)
 	c, err := sftpconn.Connect(sshconn.Config{
 		Host: host, Port: port, User: user, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
-		AskPassword: a.askPassword(host, user), HostKey: a.sshHostKeyCallback(host, port),
+		AskPassword: ask, HostKey: a.sshHostKeyCallback(host, port),
 	})
 	if err != nil {
 		return nil, err
 	}
+	_ = saver.commit() // a failed save only means the next login asks again
 	return a.registerRemote(c, "s")
 }
 
@@ -247,4 +249,21 @@ func (a *App) LocalList(dir string) ([]fsentry.Entry, error) {
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+// RemoteNewFile creates an empty file (the SFTP panel's "Create new file"), over SFTP or FTP alike.
+func (a *App) RemoteNewFile(tabID, remote string) error {
+	c := a.remoteClient(tabID)
+	if c == nil {
+		return errors.New("the file session has closed")
+	}
+	f, err := os.CreateTemp("", "rxt-empty-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	f.Close()
+	defer os.Remove(name)
+	_, err = c.Upload(name, remote)
+	return err
 }
