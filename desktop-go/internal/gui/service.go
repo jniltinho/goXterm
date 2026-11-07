@@ -20,6 +20,7 @@ type App struct {
 	emit     func(name string, data any)   // set by gui.Run; emits Wails events to the SPA
 	pickFile func() (string, error)         // set by gui.Run; native open-file dialog (SSH key picker)
 	quit     func()                        // set by gui.Run; quits the app (Terminal → Exit menu)
+	savePath func(name string) (string, error) // set by gui.Run; native save-file dialog
 	version  string                        // set by gui.Run, shown in Settings → Diagnostics
 
 	mu     sync.Mutex
@@ -32,6 +33,7 @@ type App struct {
 	pass   map[string]chan passAns     // reqId → pending interactive password entry
 	mon    map[string]chan struct{}    // tabId → stop channel for its remote-monitoring loop
 	tun    map[string]*tunRun          // via+name → running port-forwarding tunnel
+	early  map[string]*earlyTab        // tabId → output/banner held until the SPA attaches
 	ctl    *control.Listener           // agent control socket listener (nil when agent control is off)
 }
 

@@ -4,6 +4,7 @@
 package localconn
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -19,6 +20,9 @@ type Session struct {
 	mu     sync.Mutex
 	closed bool
 }
+
+// DefaultShell is the shell Start runs when none is given (shown in the local terminal's banner).
+func DefaultShell() string { return defaultShell() }
 
 // defaultShell picks the user's shell, falling back per OS.
 func defaultShell() string {
@@ -68,7 +72,11 @@ func (s *Session) read(onData func([]byte), onClose func(error)) {
 			s.markClosed()
 			_ = s.cmd.Wait()
 			if onClose != nil {
-				onClose(nil)
+				var reason error // "exited with status N", shown in the stopped notice (Rust parity)
+				if ps := s.cmd.ProcessState; ps != nil {
+					reason = fmt.Errorf("exited with status %d", ps.ExitCode())
+				}
+				onClose(reason)
 			}
 			return
 		}

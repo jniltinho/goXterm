@@ -4,8 +4,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
+
+	"golang.org/x/crypto/ssh"
 
 	"rustxterm-go/internal/sshconn"
 	"rustxterm-go/internal/store"
@@ -49,6 +52,7 @@ func (a *App) Connect(sessionID int64) (string, error) {
 	return a.dial(sshconn.Config{
 		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
+		KeepaliveSecs: int(asInt64(sshOpt["keepalive_secs"])),
 	})
 }
 
@@ -123,7 +127,8 @@ func (a *App) QuickConnect(host string, port int, user, password string) (string
 }
 
 // newStreamTab allocates a tabId and the output/close callbacks shared by every byte-stream terminal
-// (SSH/Telnet/Serial): output is emitted base64 as "term:out:<tabId>", and "term:close:<tabId>" once.
+// (SSH/Telnet/Serial/Local). Until the SPA attaches (TermAttach) output and the close reason are
+// buffered; after that output is emitted base64 as "term:out:<tabId>", and "term:close:<tabId>" once.
 func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 	a.mu.Lock()
 	a.seq++
@@ -131,21 +136,39 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 	if a.term == nil {
 		a.term = map[string]termStream{}
 	}
+	if a.early == nil {
+		a.early = map[string]*earlyTab{}
+	}
+	a.early[tabID] = &earlyTab{}
 	a.mu.Unlock()
 	onData := func(b []byte) {
+		a.mu.Lock()
+		if e := a.early[tabID]; e != nil {
+			if len(e.buf) < earlyCap {
+				e.buf = append(e.buf, b...)
+			}
+			a.mu.Unlock()
+			return
+		}
+		a.mu.Unlock()
 		if a.emit != nil {
 			a.emit("term:out:"+tabID, base64.StdEncoding.EncodeToString(b))
 		}
 	}
 	onClose := func(err error) {
 		a.MonitorStop(tabID)
-		a.mu.Lock()
-		delete(a.term, tabID)
-		a.mu.Unlock()
 		msg := ""
 		if err != nil {
 			msg = err.Error()
 		}
+		a.mu.Lock()
+		delete(a.term, tabID)
+		if e := a.early[tabID]; e != nil {
+			e.closed, e.closeMsg = true, msg
+			a.mu.Unlock()
+			return
+		}
+		a.mu.Unlock()
 		if a.emit != nil {
 			a.emit("term:close:"+tabID, msg)
 		}
@@ -157,7 +180,12 @@ func (a *App) dial(cfg sshconn.Config) (string, error) {
 	tabID, onData, onClose := a.newStreamTab()
 	cfg.AskPassword = a.askPassword(cfg.Host, cfg.User)
 	cfg.AskPassphrase = a.askPassphrase
-	cfg.HostKey = a.sshHostKeyCallback(cfg.Host, cfg.Port)
+	trust := a.sshHostKeyCallback(cfg.Host, cfg.Port)
+	var keyAlgo, keyFP string // recorded for the session banner
+	cfg.HostKey = func(h string, r net.Addr, k ssh.PublicKey) error {
+		keyAlgo, keyFP = k.Type(), ssh.FingerprintSHA256(k)
+		return trust(h, r, k)
+	}
 	// Surface auth diagnostics as dim lines in the terminal so the user can see whether the key/agent
 	// was used before any password prompt.
 	cfg.Log = func(s string) { onData([]byte("\x1b[90m[rustxterm] " + s + "\x1b[0m\r\n")) }
@@ -166,8 +194,10 @@ func (a *App) dial(cfg sshconn.Config) (string, error) {
 	}
 	sess, err := sshconn.Connect(cfg, onData, onClose)
 	if err != nil {
+		a.dropEarly(tabID)
 		return "", err
 	}
+	a.setBanner(tabID, a.sshBanner(cfg.User, cfg.Host, cfg.Port, cfg.KeepaliveSecs, sess.ServerVersion(), keyAlgo, keyFP))
 	a.mu.Lock()
 	a.term[tabID] = sess
 	a.mu.Unlock()

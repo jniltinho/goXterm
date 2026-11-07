@@ -57,6 +57,7 @@ func (a *App) serialDial(cfg serialconn.Config) (string, error) {
 	tabID, onData, onClose := a.newStreamTab()
 	sess, err := serialconn.Connect(cfg, onData, onClose)
 	if err != nil {
+		a.dropEarly(tabID)
 		return "", err
 	}
 	a.mu.Lock()

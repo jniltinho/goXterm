@@ -70,6 +70,13 @@ func Run(version string, safeGPU bool) error {
 		return d.PromptForSingleSelection()
 	}
 	svc.quit = app.Quit
+	svc.savePath = func(name string) (string, error) {
+		d := app.Dialog.SaveFile().CanCreateDirectories(true).SetFilename(name)
+		if home, err := os.UserHomeDir(); err == nil {
+			d.SetDirectory(home)
+		}
+		return d.PromptForSingleSelection()
+	}
 	// Agent control channel (CLI/MCP), off unless the agent_control setting is on; removed on shutdown.
 	svc.startControl(app.Logger)
 	app.OnShutdown(svc.stopControl)

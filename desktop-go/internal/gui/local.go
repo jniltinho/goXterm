@@ -6,10 +6,13 @@ import "rustxterm-go/internal/localconn"
 // like SSH, so the same Terminal.vue renders it (the "+" / Local terminal tab).
 func (a *App) LocalShell() (string, error) {
 	tabID, onData, onClose := a.newStreamTab()
-	sess, err := localconn.Start("", 80, 24, onData, onClose)
+	shell := localconn.DefaultShell()
+	sess, err := localconn.Start(shell, 80, 24, onData, onClose)
 	if err != nil {
+		a.dropEarly(tabID)
 		return "", err
 	}
+	a.setBanner(tabID, a.localBanner(shell))
 	a.mu.Lock()
 	a.term[tabID] = sess
 	a.mu.Unlock()

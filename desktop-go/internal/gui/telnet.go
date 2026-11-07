@@ -49,8 +49,10 @@ func (a *App) telnetDial(host string, port int) (string, error) {
 	tabID, onData, onClose := a.newStreamTab()
 	sess, err := telnetconn.Connect(telnetconn.Config{Host: host, Port: port}, onData, onClose)
 	if err != nil {
+		a.dropEarly(tabID)
 		return "", err
 	}
+	a.setBanner(tabID, a.telnetBanner(host, port))
 	a.mu.Lock()
 	a.term[tabID] = sess
 	a.mu.Unlock()

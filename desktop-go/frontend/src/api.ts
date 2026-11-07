@@ -80,6 +80,14 @@ export const Connect = (id: number) => call<string>("Connect", id);
 export const QuickConnect = (host: string, port: number, user: string, password: string) =>
   call<string>("QuickConnect", host, port, user, password);
 export const Send = (tabId: string, data: string) => call<void>("Send", tabId, data);
+// Session banner (info box drawn when a terminal tab connects) and the output that arrived before the
+// tab was listening. Call right after subscribing to term:out/term:close.
+export interface BannerLine { kind: "head" | "check" | "muted"; text: string; target?: string; on?: boolean; note?: string }
+export interface Banner { title: string; hint: string; lines: BannerLine[] }
+export interface Attach { banner: Banner | null; early: string; closed: boolean; closeMsg: string }
+export const TermAttach = (tabId: string) => call<Attach>("TermAttach", tabId);
+// Save a terminal's text through a native save dialog; resolves to the path ("" when cancelled).
+export const SaveTerminalOutput = (suggested: string, text: string) => call<string>("SaveTerminalOutput", suggested, text);
 // Remote monitoring (SSH only): metrics stream as "monitor:<tabId>" events once started.
 export const MonitorStart = (tabId: string) => call<void>("MonitorStart", tabId);
 export const MonitorStop = (tabId: string) => call<void>("MonitorStop", tabId);

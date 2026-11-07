@@ -34,6 +34,7 @@ type Config struct {
 	UseAgent      bool   // also try the ssh-agent at $SSH_AUTH_SOCK
 	HostKey       ssh.HostKeyCallback
 	Cols, Rows    int
+	KeepaliveSecs int // send keepalive@openssh.com every N seconds; 0 = off
 	// Log, when set, receives one-line auth diagnostics (agent availability, key load result) so the
 	// user can see why a password is being asked instead of the key being used.
 	Log func(string)
@@ -232,10 +233,48 @@ func Connect(cfg Config, onData func([]byte), onClose func(error)) (*Session, er
 		err := s.sess.Wait()
 		s.markClosed()
 		if onClose != nil {
-			onClose(err)
+			onClose(exitReason(err))
 		}
 	}()
+	if cfg.KeepaliveSecs > 0 {
+		go s.keepalive(time.Duration(cfg.KeepaliveSecs) * time.Second)
+	}
 	return s, nil
+}
+
+// keepalive sends an OpenSSH keepalive request every interval until the session closes, so idle
+// connections through NAT/firewalls are not dropped (the session's "Keepalive (s)" setting).
+func (s *Session) keepalive(every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for range t.C {
+		s.mu.Lock()
+		closed := s.closed
+		s.mu.Unlock()
+		if closed {
+			return
+		}
+		if _, _, err := s.client.SendRequest("keepalive@openssh.com", true, nil); err != nil {
+			return
+		}
+	}
+}
+
+// ExitStatus is how a remote or local shell ended; its text is the reason in the "Session stopped"
+// notice ("exited with status 0"), matching the Rust app.
+type ExitStatus int
+
+func (e ExitStatus) Error() string { return fmt.Sprintf("exited with status %d", int(e)) }
+
+func exitReason(err error) error {
+	var ee *ssh.ExitError
+	switch {
+	case err == nil:
+		return ExitStatus(0)
+	case errors.As(err, &ee):
+		return ExitStatus(ee.ExitStatus())
+	}
+	return err
 }
 
 // Write sends input to the shell.
@@ -248,6 +287,9 @@ func (s *Session) Write(p []byte) error {
 	_, err := s.stdin.Write(p)
 	return err
 }
+
+// ServerVersion is the server's SSH identification string (e.g. "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3").
+func (s *Session) ServerVersion() string { return string(s.client.ServerVersion()) }
 
 // Resize changes the remote terminal size.
 func (s *Session) Resize(cols, rows int) error {
