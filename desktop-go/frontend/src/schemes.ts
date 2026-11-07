@@ -54,3 +54,8 @@ export function schemeIsDark(name: string): boolean {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(bg.slice(i, i + 2), 16));
   return 0.299 * r + 0.587 * g + 0.114 * b < 128;
 }
+
+// Bundled faces: Rust theme::MONO_FONTS (the first is the default), then the extra high-quality ones.
+export const MONO_FONTS = ["Cascadia Mono", "JetBrains Mono", "Hack", "DejaVu Sans Mono", "Inconsolata", "IBM Plex Mono",
+  "IBM Plex Mono Text", "Source Code Pro", "Fira Mono", "Ubuntu Mono", "Terminus",
+  "Fira Code", "Roboto Mono", "Noto Sans Mono", "Geist Mono", "Red Hat Mono"];

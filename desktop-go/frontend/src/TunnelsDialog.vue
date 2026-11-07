@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { askConfirm } from "./ask";
+import Dropdown, { type Option } from "./Dropdown.vue";
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import {
@@ -73,6 +74,10 @@ async function toggle(t: Tunnel) {
 async function startAll() { try { await TunnelStartAll(); } catch (e) { err.value = String(e); } await refresh(); }
 async function stopAll() { try { await TunnelStopAll(); } catch (e) { err.value = String(e); } await refresh(); }
 
+const KINDS: Option<string>[] = [["local", "Local"], ["remote", "Remote"], ["dynamic", "Dynamic (SOCKS5)"]];
+const gwOptions = computed<Option<number>[]>(() => gateways.value.length
+  ? gateways.value.map((g): Option<number> => [g.id, `${g.name} (${g.user}@${g.host})`])
+  : [[0, "— no SSH session saved —"]]);
 const gwName = (id: number) => gateways.value.find((s) => s.id === id)?.name ?? `#${id}`;
 const arrow = (t: Tunnel) =>
   t.kind === "dynamic" ? `SOCKS5 :${t.bind_port}`
@@ -91,15 +96,10 @@ const arrow = (t: Tunnel) =>
         <div v-if="editing" class="form">
           <div class="field"><label>Name</label><input v-model="editing.name" class="in" placeholder="my-db-tunnel" /></div>
           <div class="field"><label>Type</label>
-            <select v-model="editing.kind" class="in in-sm">
-              <option value="local">Local</option><option value="remote">Remote</option><option value="dynamic">Dynamic (SOCKS5)</option>
-            </select>
+            <Dropdown v-model="editing.kind" :options="KINDS" :width="160" />
           </div>
           <div class="field"><label>Via (SSH gateway)</label>
-            <select v-model.number="editing.via" class="in">
-              <option v-if="!gateways.length" :value="0">— no SSH session saved —</option>
-              <option v-for="g in gateways" :key="g.id" :value="g.id">{{ g.name }} ({{ g.user }}@{{ g.host }})</option>
-            </select>
+            <Dropdown v-model="editing.via" :options="gwOptions" :width="320" />
           </div>
           <div class="field"><label>Listen</label>
             <input v-model="editing.bind_addr" class="in in-sm" style="width:120px" /> :

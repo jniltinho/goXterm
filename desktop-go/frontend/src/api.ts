@@ -77,6 +77,11 @@ export const ChangeMasterPassword = (next: string) => call<void>("ChangeMasterPa
 export const SaveSession = (js: string) => call<number>("SaveSession", js);
 export const DeleteSession = (id: number) => call<void>("DeleteSession", id);
 export const SessionJSON = (id: number) => call<string>("SessionJSON", id);
+// Agent policy of a saved session (editor Agent settings tab) and the saved user names (user picker).
+export interface Policy { policy: string; content_read: boolean }
+export const SessionPolicy = (id: number) => call<Policy>("SessionPolicy", id);
+export const SetSessionPolicy = (id: number, p: Policy) => call<void>("SetSessionPolicy", id, p);
+export const KnownUsers = () => call<string[] | null>("KnownUsers");
 export const DuplicateSession = (id: number) => call<number>("DuplicateSession", id);
 export const RenameSession = (id: number, name: string) => call<void>("RenameSession", id, name);
 export const SaveFolder = (id: number, name: string, parent: number | null) => call<number>("SaveFolder", id, name, parent);

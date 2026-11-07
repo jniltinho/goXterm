@@ -279,3 +279,40 @@ func TestTOMLRoundTripAndRules(t *testing.T) {
 		t.Fatalf("credential kept: %s", js)
 	}
 }
+
+func TestPolicyAndKnownUsers(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "lab-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir, "lab-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	id, err := s.SaveSession(`{"id":0,"name":"a","protocol":"ssh","host":"sshd","user":"alice"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveSession(`{"id":0,"name":"b","protocol":"ssh","host":"sshd","user":"Bob"}`); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := s.Policy(id); err != nil || p != (Policy{Policy: "deny"}) {
+		t.Fatalf("default policy %+v %v", p, err)
+	}
+	if err := s.SetPolicy(id, Policy{Policy: "ask", ContentRead: true}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.Policy(id); p != (Policy{Policy: "ask", ContentRead: true}) {
+		t.Fatalf("policy %+v", p)
+	}
+	if err := s.SetPolicy(id, Policy{Policy: "root"}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.Policy(id); p.Policy != "deny" {
+		t.Fatalf("unknown policy not denied: %+v", p)
+	}
+	if u, err := s.KnownUsers(); err != nil || len(u) != 2 || u[0] != "alice" || u[1] != "Bob" {
+		t.Fatalf("users %v %v", u, err)
+	}
+}

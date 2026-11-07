@@ -6,8 +6,9 @@ import {
   GetSettings, SaveSettings, Diagnostics, GetStoreState, SetStoreKeyring, ChangeMasterPassword, SystemMonoFonts,
   type Settings, type Diag,
 } from "./api";
-import { SCHEMES } from "./schemes";
+import { SCHEMES, MONO_FONTS } from "./schemes";
 import { COMMANDS, DEFAULT_SHORTCUTS, shortcutValid } from "./commands";
+import Dropdown, { type Option } from "./Dropdown.vue";
 
 const emit = defineEmits<{ saved: []; close: []; import: []; unlock: []; "import-toml": []; "export-toml": [] }>();
 const icon = (n: string) => `./icons/${n}.png`;
@@ -22,10 +23,6 @@ let lastTab: Tab = "general"; // the Rust window reopens on the last tab (app li
 const tab = ref<Tab>((window as unknown as { __rxtSettingsTab?: Tab }).__rxtSettingsTab ?? lastTab);
 watch(tab, (t) => { lastTab = t; (window as unknown as { __rxtSettingsTab?: Tab }).__rxtSettingsTab = t; });
 
-// Bundled faces: Rust theme::MONO_FONTS (the first is the default), then the extra high-quality ones.
-const MONO_FONTS = ["Cascadia Mono", "JetBrains Mono", "Hack", "DejaVu Sans Mono", "Inconsolata", "IBM Plex Mono",
-  "IBM Plex Mono Text", "Source Code Pro", "Fira Mono", "Ubuntu Mono", "Terminus",
-  "Fira Code", "Roboto Mono", "Noto Sans Mono", "Geist Mono", "Red Hat Mono"];
 // Installed monospace faces: fontconfig on Linux, plus the usual macOS/Windows ones when present.
 const PROBE = ["Consolas", "Cascadia Code", "Lucida Console", "Courier New", "Menlo", "Monaco", "SF Mono",
   "Andale Mono", "Liberation Mono", "Noto Mono", "Droid Sans Mono", "Iosevka", "Victor Mono", "Hasklig", "Meslo LG S"];
@@ -36,7 +33,7 @@ function present(face: string): boolean { // the face changes the text width aga
   const w = (f: string) => { c.font = `16px ${f}`; return c.measureText("mmmmmmmmmmlli10OO").width; };
   return w(`"${face}", monospace`) !== w("monospace") || w(`"${face}", serif`) !== w("serif");
 }
-const GPU = [["auto", "Automatic"], ["gl", "OpenGL"], ["dx12", "DirectX 12"], ["vulkan", "Vulkan"], ["cpu", "Software (CPU)"]];
+const GPU: Option<string>[] = [["auto", "Automatic"], ["gl", "OpenGL"], ["dx12", "DirectX 12"], ["vulkan", "Vulkan"], ["cpu", "Software (CPU)"]];
 const LEVELS: [string, string, string][] = [
   ["off", "Off", "No log file is written."], ["error", "Error", "Warnings and errors only."],
   ["info", "Info", "Connections, disconnections and errors."],
@@ -44,6 +41,7 @@ const LEVELS: [string, string, string][] = [
   ["trace", "Trace", "Full debug plus the protocol details of the chosen protocols."],
 ];
 
+const LEVEL_OPTIONS = LEVELS.map(([v, l]): Option<string> => [v, l]);
 const s = ref<Settings | null>(null);
 const diag = ref<Diag | null>(null);
 const store = ref({ unlocked: false, keyring: false });
@@ -55,6 +53,15 @@ const fontNames = computed(() => {
   const all = [...MONO_FONTS, ...installed.value];
   return cur && cur !== "monospace" && !all.includes(cur) ? [...installed.value, cur] : installed.value;
 });
+// Rust font_combo: a flat list, the default first; installed faces follow the bundled ones.
+const fontOptions = computed<Option<string>[]>(() => [
+  ["", "Default (Cascadia Mono)"],
+  ...MONO_FONTS.map((f): Option<string> => [f, f]),
+  ...fontNames.value.map((f, i): Option<string> => [f, f, { sep: i === 0 }]),
+]);
+const CURSORS: Option<string>[] = [["block", "Block"], ["underline", "Underline"], ["beam", "Beam"]];
+const SKINS: Option<string>[] = [["light", "Light"], ["dark", "Dark"], ["system", "System"]];
+const SCALES: Option<string>[] = [["auto", "Auto"], ["100", "100%"], ["125", "125%"], ["150", "150%"], ["200", "200%"]];
 const fontValue = computed({
   get: () => (!s.value?.terminal.fontFamily || s.value.terminal.fontFamily === "monospace" ? "" : s.value.terminal.fontFamily),
   set: (v: string) => { if (s.value) s.value.terminal.fontFamily = v || "monospace"; },
@@ -110,7 +117,7 @@ async function toggleKeyring(on: boolean) {
   try { store.value = await GetStoreState(); } catch { /* keep */ }
 }
 
-function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !schemeOpen.value && !pwOpen.value) emit("close"); }
+function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !document.querySelector(".dd-pop") && !schemeOpen.value && !pwOpen.value) emit("close"); }
 onMounted(async () => {
   window.addEventListener("keydown", onKey);
   window.addEventListener("mousedown", closeScheme);
@@ -164,15 +171,11 @@ watch(tab, async (t) => {
             <section class="grp"><div class="grp-h">Font and cursor</div><div class="grp-b">
               <div class="grid">
                 <label>Font family</label>
-                <select v-model="fontValue" class="in w150">
-                  <option value="">Default (Cascadia Mono)</option>
-                  <optgroup label="Bundled"><option v-for="f in MONO_FONTS" :key="f" :value="f" :style="{ fontFamily: `'${f}'` }">{{ f }}</option></optgroup>
-                  <optgroup v-if="fontNames.length" label="Installed"><option v-for="f in fontNames" :key="'i' + f" :value="f">{{ f }}</option></optgroup>
-                </select>
+                <Dropdown v-model="fontValue" :options="fontOptions" :width="170" />
                 <label>Font size</label>
                 <input v-model.number="s.terminal.fontSize" type="number" min="6" max="48" step="0.5" class="in w60" />
                 <label>Cursor</label>
-                <select v-model="s.terminal.cursorShape" class="in w110"><option value="block">Block</option><option value="underline">Underline</option><option value="beam">Beam</option></select>
+                <Dropdown v-model="s.terminal.cursorShape" :options="CURSORS" :width="116" />
                 <span></span>
                 <label class="chk"><input v-model="s.terminal.cursorBlink" type="checkbox" /> Blinking cursor</label>
                 <label>Color scheme</label>
@@ -213,7 +216,7 @@ watch(tab, async (t) => {
           <!-- Display -->
           <template v-else-if="tab === 'display'">
             <section class="grp"><div class="grp-h">Appearance</div><div class="grp-b">
-              <div class="line"><label>Skin</label><select v-model="s.theme" class="in w90"><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select></div>
+              <div class="line"><label>Skin</label><Dropdown v-model="s.theme" :options="SKINS" :width="90" /></div>
             </div></section>
             <section class="grp"><div class="grp-h">Toolbar and tabs</div><div class="grp-b">
               <label class="chk"><input v-model="s.toolbarCaptions" type="checkbox" /> Toolbar captions</label>
@@ -221,11 +224,11 @@ watch(tab, async (t) => {
               <label class="chk"><input v-model="s.showCloseButtons" type="checkbox" /> Show close buttons</label>
             </div></section>
             <section class="grp"><div class="grp-h">Graphics</div><div class="grp-b">
-              <div class="line"><label>Rendering backend</label><select v-model="s.gpuBackend" class="in w125"><option v-for="[v, l] in GPU" :key="v" :value="v">{{ l }}</option></select></div>
+              <div class="line"><label>Rendering backend</label><Dropdown v-model="s.gpuBackend" :options="GPU" :width="130" /></div>
               <p class="small">Applies at the next start. After a driver crash rustXterm picks a safer one.</p>
             </div></section>
             <section class="grp"><div class="grp-h">Interface size</div><div class="grp-b">
-              <div class="line"><label>Interface size</label><select v-model="s.uiScale" class="in w90"><option value="auto">Auto</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option><option value="200">200%</option></select></div>
+              <div class="line"><label>Interface size</label><Dropdown v-model="s.uiScale" :options="SCALES" :width="90" /></div>
             </div></section>
           </template>
 
@@ -273,7 +276,7 @@ watch(tab, async (t) => {
           <!-- Diagnostics -->
           <template v-else>
             <section class="grp"><div class="grp-h">Diagnostic log</div><div class="grp-b">
-              <div class="line"><label>Level</label><select v-model="s.logLevel" class="in w90"><option v-for="[v, l] in LEVELS" :key="v" :value="v">{{ l }}</option></select>
+              <div class="line"><label>Level</label><Dropdown v-model="s.logLevel" :options="LEVEL_OPTIONS" :width="90" />
                 <span class="muted">{{ LEVELS.find((x) => x[0] === s!.logLevel)?.[2] }}</span></div>
             </div></section>
             <section class="grp"><div class="grp-h">Store</div><div class="grp-b">

@@ -2,6 +2,8 @@ package gui
 
 import (
 	"encoding/json"
+
+	"rustxterm-go/internal/store"
 )
 
 // SaveSession inserts or updates a session from its JSON document (the Rust session shape) and
@@ -134,4 +136,34 @@ func stripPassword(js string) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// SessionPolicy returns a saved session's agent policy (the editor's Agent settings tab).
+func (a *App) SessionPolicy(id int64) (store.Policy, error) {
+	st, err := openStore()
+	if err != nil {
+		return store.Policy{}, err
+	}
+	defer st.Close()
+	return st.Policy(id)
+}
+
+// SetSessionPolicy saves a session's agent policy; only the editor changes it, never an agent.
+func (a *App) SetSessionPolicy(id int64, p store.Policy) error {
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	return st.SetPolicy(id, p)
+}
+
+// KnownUsers lists the user names of the saved sessions (the picker next to Username).
+func (a *App) KnownUsers() ([]string, error) {
+	st, err := openStore()
+	if err != nil {
+		return nil, err
+	}
+	defer st.Close()
+	return st.KnownUsers()
 }
