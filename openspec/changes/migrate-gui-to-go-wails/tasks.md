@@ -57,7 +57,7 @@
 
 ## 9. RDP
 
-- [x] 9.1 Implement the RDP client chosen in spike 0.2 decoding to a `<canvas>` and verify a `dockur/windows` session renders and accepts input with authentication (incl. NLA), certificate verification, clipboard, resize and connecting/error overlays at parity; the cutover (13.5) stays blocked until this is met — DONE: renders to canvas with input; NLA verified on Windows Server 2022 (dockur) and SSL on real 2008 R2 (both username forms); TLS-cert TOFU trust. Clipboard: CLIPRDR text both ways (grdp protocol/cliprdr, "cliprdr" channel in GCC/MCS, native clipboard), verified against the lab xrdp; NLA over TLS 1.0 for 2008 is not reachable in pure Go (crypto/tls CBC split), so those servers use the SSL path (see design.md)
+- [x] 9.1 Implement the RDP client chosen in spike 0.2 decoding to a `<canvas>` and verify a `dockur/windows` session renders and accepts input with authentication (incl. NLA), certificate verification, clipboard, resize and connecting/error overlays at parity; the cutover (13.5) stays blocked until this is met — DONE: renders to canvas with input; NLA verified on Windows Server 2022 (dockur) and SSL on real 2008 R2 (both username forms); TLS-cert TOFU trust. Clipboard: CLIPRDR text both ways (grdp protocol/cliprdr, "cliprdr" channel in GCC/MCS, native clipboard), verified against the lab xrdp; NLA over TLS 1.0 for 2008 is not reachable in pure Go (crypto/tls CBC split), so those servers use the SSL path (see design.md); real Windows Server 2008 R2 user-validated end to end (no errors, 2026-11-07)
 
 ## 10. Serial, Telnet, local shell
 

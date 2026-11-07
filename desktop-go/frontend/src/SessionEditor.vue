@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, computed } from "vue";
-import { SaveSession, SessionJSON, PickKeyFile, type Folder } from "./api";
+import { SaveSession, SessionJSON, PickKeyFile, WslAvailable, WslDistributions, type Folder, type WslDistribution } from "./api";
 
 const props = defineProps<{ sessionId: number | null; folders: Folder[] }>();
 const emit = defineEmits<{ saved: [id: number]; close: [] }>();
@@ -19,12 +19,34 @@ const PROTOCOLS = [
   { id: "rdp", label: "RDP", icon: "rdp", port: 3389 },
   { id: "vnc", label: "VNC", icon: "vnc", port: 5900 },
   { id: "serial", label: "Serial", icon: "plug", port: 0 },
+  { id: "wsl", label: "WSL", icon: "tux", port: 0 }, // offered only where WSL runs (Windows), as in Rust
 ];
+
+// WSL: offered when available (or when editing a saved WSL session); the distribution list for the picker.
+const wslAvailable = ref(false);
+const wslDistros = ref<WslDistribution[] | null>(null);
+const wslNote = ref("Listing WSL distributions...");
+async function refreshWsl() {
+  wslNote.value = "Listing WSL distributions...";
+  try {
+    wslDistros.value = await WslDistributions();
+    if (!wslDistros.value?.length) { wslDistros.value = null; wslNote.value = "No WSL distribution is installed"; }
+  } catch (e) {
+    wslDistros.value = null;
+    wslNote.value = String(e).includes("only available") ? "WSL is not installed (run: wsl --install)" : `Could not query WSL: ${e}`;
+  }
+}
+const wslDefault = computed(() => {
+  const d = wslDistros.value?.find((x) => x.default)?.name;
+  return d ? `Default (${d})` : "Default";
+});
+const shownProtocols = computed(() => PROTOCOLS.filter((p) => p.id !== "wsl" || wslAvailable.value || form.protocol === "wsl"));
 
 type Form = {
   id: number; name: string; protocol: string; host: string; port: number; user: string; folder: number | null;
   ssh: Record<string, unknown>; rdp: Record<string, unknown>; vnc: Record<string, unknown>;
   ftp: Record<string, unknown>; telnet: Record<string, unknown>; serial: { port: string; line: Record<string, unknown> };
+  wsl: { distribution: string; user: string; start_folder: string; startup_commands: string };
 };
 
 function defaults(): Form {
@@ -38,6 +60,7 @@ function defaults(): Form {
     ftp: { tls: "implicit", passive: true, ascii: false },
     telnet: { raw: false, auto_login: false },
     serial: { port: "", line: { baud: 115200, data_bits: "8", parity: "none", stop_bits: "1", flow: "none" } },
+    wsl: { distribution: "", user: "", start_folder: "", startup_commands: "" },
   };
 }
 
@@ -49,9 +72,12 @@ const saving = ref(false);
 const loaded = ref(props.sessionId === null);
 
 const isSerial = computed(() => form.protocol === "serial");
-const isNet = computed(() => !isSerial.value);
+const isWsl = computed(() => form.protocol === "wsl");
+const isNet = computed(() => !isSerial.value && !isWsl.value);
 
 onMounted(async () => {
+  try { wslAvailable.value = await WslAvailable(); } catch { /* older backend */ }
+  if (wslAvailable.value) void refreshWsl();
   if (props.sessionId === null) return;
   try {
     const js = await SessionJSON(props.sessionId);
@@ -64,6 +90,10 @@ onMounted(async () => {
     });
     for (const k of ["ssh", "rdp", "vnc", "ftp", "telnet"] as const) {
       if (m[k]) Object.assign(form[k], m[k]);
+    }
+    if (m.wsl) {
+      const w = m.wsl as Record<string, string | null>;
+      for (const k of ["distribution", "user", "start_folder", "startup_commands"] as const) form.wsl[k] = w[k] ?? "";
     }
     if (m.serial) {
       const s = m.serial as { port?: string; line?: Record<string, unknown> };
@@ -89,7 +119,16 @@ function build(): Record<string, unknown> {
   out.name = form.name || (form.user ? `${form.user}@${form.host}` : form.host) || form.serial.port;
   out.protocol = form.protocol;
   out.folder = form.folder;
-  if (isSerial.value) {
+  if (isWsl.value) {
+    // Rust WslOptions: unset fields are null (default distribution/user/folder).
+    const v = (s: string) => (s.trim() ? s.trim() : null);
+    out.host = form.wsl.distribution;
+    out.port = 0;
+    out.user = form.wsl.user;
+    out.wsl = { ...(raw.value.wsl as object), distribution: v(form.wsl.distribution), user: v(form.wsl.user),
+      start_folder: v(form.wsl.start_folder), startup_commands: form.wsl.startup_commands.trim() ? form.wsl.startup_commands : null };
+    if (!form.name) out.name = "WSL: " + (form.wsl.distribution || "Default");
+  } else if (isSerial.value) {
     out.host = form.serial.port;
     out.port = 0;
     out.serial = { ...(raw.value.serial as object), port: form.serial.port, line: { ...form.serial.line } };
@@ -131,7 +170,7 @@ const icon = (name: string) => `./icons/${name}.png`;
         <!-- protocol selector -->
         <div class="proto-row">
           <button
-            v-for="p in PROTOCOLS"
+            v-for="p in shownProtocols"
             :key="p.id"
             class="proto"
             :class="form.protocol === p.id ? 'proto-on' : ''"
@@ -153,6 +192,19 @@ const icon = (name: string) => `./icons/${name}.png`;
             <input v-model="form.user" class="in" />
             <label>Port</label>
             <input v-model.number="form.port" type="number" class="in in-port" />
+          </div>
+          <div v-else-if="isWsl" class="grid-basic">
+            <label>Distribution</label>
+            <span class="wsl-dist">
+              <select v-if="wslDistros" v-model="form.wsl.distribution" class="in">
+                <option value="">{{ wslDefault }}</option>
+                <option v-for="d in wslDistros" :key="d.name" :value="d.name">{{ d.name }}</option>
+              </select>
+              <input v-else :value="wslNote" class="in" disabled />
+              <button type="button" class="browse" title="Refresh distributions" @click="refreshWsl"><img :src="icon('refresh')" class="wsl-ref" /></button>
+            </span>
+            <label>Username</label>
+            <input v-model="form.wsl.user" class="in" placeholder="(default user)" />
           </div>
           <div v-else class="grid-basic">
             <label>Device</label>
@@ -207,6 +259,13 @@ const icon = (name: string) => `./icons/${name}.png`;
               </div>
               <label class="row"><input type="checkbox" v-model="form.ftp.passive" /> Passive mode</label>
               <label class="row"><input type="checkbox" v-model="form.ftp.ascii" /> ASCII transfers</label>
+            </div>
+
+            <div v-else-if="form.protocol === 'wsl'" class="adv">
+              <div class="field"><label>Startup folder</label><input v-model="form.wsl.start_folder" class="in" placeholder="~ or /srv/app" /></div>
+              <label>Execute the following commands at startup:</label>
+              <textarea v-model="form.wsl.startup_commands" class="in wsl-cmds" rows="4" spellcheck="false"></textarea>
+              <p class="wsl-note">Typed into the shell once it is ready, like keyboard input. Not saved as credentials.</p>
             </div>
 
             <div v-else-if="form.protocol === 'telnet'" class="adv">
@@ -299,4 +358,8 @@ const icon = (name: string) => `./icons/${name}.png`;
 .dbtn.primary:hover { background: linear-gradient(var(--k-64b074), var(--k-459657)); }
 .dbtn.primary:disabled { opacity: .55; cursor: default; }
 :deep(*) { border-radius: 0 !important; }
+.wsl-dist { display: flex; gap: 4px; align-items: center; }
+.wsl-ref { width: 16px; height: 16px; }
+.wsl-cmds { height: auto; min-height: 76px; padding: 4px; font-family: "DejaVu Sans Mono", monospace; resize: vertical; }
+.wsl-note { font-size: 11px; color: var(--text-muted); margin: 2px 0 0; }
 </style>

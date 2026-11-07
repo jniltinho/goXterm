@@ -9,7 +9,7 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { SetMultiExec, SelectMultiExec } from "./api";
+import { SetMultiExec, SelectMultiExec, WslConnect } from "./api";
 import { SaveSettings } from "./api";
 import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
 
@@ -392,6 +392,7 @@ function openSession(s: Session) {
   switch (s.protocol) {
     case "telnet": openTerm(s.name, "terminal", () => TelnetConnect(s.id), false, sessionUrl(s)); break;
     case "serial": openTerm(s.name, "plug", () => SerialConnect(s.id), false, "serial://" + s.host); break;
+    case "wsl": openTerm(s.name, "tux", () => WslConnect(s.id), false, `wsl://${s.user ? s.user + "@" : ""}${s.host || "Default"}`); break;
     case "rdp": openRdpFor(s); break;
     case "vnc": openVncFor(s); break;
     case "sftp": openSftpFor(s); break;
@@ -463,7 +464,7 @@ const rows = computed<Row[]>(() => {
 
 const protoIcon: Record<string, string> = {
   ssh: "ssh", sftp: "sftp", ftp: "ftp", ftps: "ftps", rdp: "rdp", vnc: "vnc",
-  telnet: "terminal", serial: "plug", wsl: "cmd", local: "terminal",
+  telnet: "terminal", serial: "plug", wsl: "tux", local: "terminal",
 };
 const icon = (name: string) => `./icons/${name}.png`;
 const sessionIcon = (s: Session) => icon(s.icon || protoIcon[s.protocol] || "session");

@@ -117,6 +117,11 @@ export const TelnetQuickConnect = (host: string, port: number) => call<string>("
 export const HasTelnetDemo = () => call<boolean>("HasTelnetDemo");
 export const ConnectTelnetDemo = () => call<string>("ConnectTelnetDemo");
 export const LocalShell = () => call<string>("LocalShell");
+// WSL (Windows only): saved WSL sessions run wsl.exe on a ConPTY; the editor lists distributions.
+export interface WslDistribution { name: string; default: boolean; version: number }
+export const WslAvailable = () => call<boolean>("WslAvailable");
+export const WslDistributions = () => call<WslDistribution[]>("WslDistributions");
+export const WslConnect = (id: number) => call<string>("WslConnect", id);
 export const SerialConnect = (id: number) => call<string>("SerialConnect", id);
 export const SerialOpen = (device: string, baud: number) => call<string>("SerialOpen", device, baud);
 export const SerialPorts = () => call<string[]>("SerialPorts");
