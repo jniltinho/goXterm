@@ -2,7 +2,7 @@
 import { ref, watch, computed } from "vue";
 import {
   TermFiles, TermCwd, RemoteList, RemoteMkdir, RemoteRemove, RemoteRename, RemoteDownloadAs, RemoteUploadPick,
-  RemoteNewFile, SetClipboardText, type Entry,
+  RemoteNewFile, RemoteSetASCII, SetClipboardText, type Entry,
 } from "./api";
 import { askText, askConfirm } from "./ask";
 
@@ -25,13 +25,64 @@ const paths = new Map<string, string>(); // termId → last folder, kept when sw
 
 const join = (dir: string, name: string) => (dir.endsWith("/") ? dir + name : dir + "/" + name);
 const parent = (dir: string) => (dir === "/" ? "/" : dir.replace(/\/[^/]*\/?$/, "") || "/");
-const kb = (n: number) => (n / 1024).toFixed(2).replace(/\.?0+$/, "");
-const when = (t: number) => (t ? new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ") : "");
+const kb = (n: number) => (n / 1024).toFixed(2); // Rust "{:.2}" KB
+const pad = (n: number) => String(n).padStart(2, "0");
+const when = (t: number) => {
+  if (!t) return "";
+  const d = new Date(t * 1000); // local time, like the Rust listing
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+// Rust sftp_panel::file_icon: catalog file-type icon by extension; shell dotfiles get the script icon.
+const SCRIPT_DOTFILES = [".bashrc", ".bash_profile", ".bash_logout", ".bash_history", ".profile", ".zshrc", ".zprofile"];
+const EXT_ICONS: [string, string[]][] = [
+  ["ft-executable", ["sh", "bash", "zsh", "ksh", "csh", "fish"]],
+  ["ft-text", ["txt", "log", "md", "conf", "cfg", "ini", "csv", "json", "yaml", "yml", "toml", "xml"]],
+  ["ft-c", ["c"]], ["ft-c-header", ["h", "hpp", "hh"]], ["ft-cpp", ["cpp", "cc", "cxx"]], ["ft-csharp", ["cs"]],
+  ["ft-java", ["java", "jar", "class"]], ["ft-javascript", ["js", "mjs", "cjs", "ts"]], ["ft-php", ["php"]],
+  ["ft-perl", ["pl", "pm"]], ["ft-python", ["py", "pyw"]], ["ft-tex", ["tex"]], ["ft-r", ["r"]],
+  ["ft-fortran", ["f", "f77", "f90", "f95", "for"]], ["ft-rpm", ["rpm"]], ["ft-deb", ["deb"]], ["ft-apk", ["apk"]],
+  ["ft-archive", ["zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "zst"]],
+  ["ft-disk-image", ["iso", "img", "qcow2", "vmdk", "vdi"]], ["ft-binary", ["bin", "o", "so", "a", "exe", "dll"]],
+  ["ft-locked", ["pem", "key", "crt", "gpg", "asc", "kdbx"]], ["image", ["png", "jpg", "jpeg", "gif", "bmp", "svg", "webp"]],
+];
+function fileIcon(name: string): string {
+  const lower = name.toLowerCase();
+  if (SCRIPT_DOTFILES.includes(lower)) return "ft-executable";
+  const dot = lower.lastIndexOf(".");
+  const ext = dot > 0 ? lower.slice(dot + 1) : "";
+  return EXT_ICONS.find(([, exts]) => exts.includes(ext))?.[0] ?? "ft-file";
+}
+const entryIcon = (e: Entry) => (e.dir ? "folder" : e.link ? "symlink" : fileIcon(e.name));
+
+// Rust COLUMNS after the name: (key, title); click a header to sort, again to reverse.
+type SortKey = "name" | "size" | "modTime" | "owner" | "group" | "mode";
+const COLUMNS: [SortKey, string][] = [["size", "Size (KB)"], ["modTime", "Last modified"], ["owner", "Owner"], ["group", "Group"], ["mode", "Access"]];
+const HEADERS: [SortKey, string][] = [["name", "Name"], ...COLUMNS];
+const sortKey = ref<SortKey>("name");
+const sortDesc = ref(false);
+function sortBy(k: SortKey) { if (sortKey.value === k) sortDesc.value = !sortDesc.value; else { sortKey.value = k; sortDesc.value = false; } }
+const cell = (e: Entry, k: SortKey) => (k === "size" ? (e.dir ? "" : kb(e.size)) : k === "modTime" ? when(e.modTime) : (e[k] ?? ""));
+
+// ASCII mode (Rust toolbar "A"): text transfers convert line ends.
+const ascii = ref(false);
+watch(ascii, (on) => { if (props.termId) void RemoteSetASCII(props.termId, on); });
+
+// Recent folders of the path combo.
+const history = ref<string[]>([]);
+const histOpen = ref(false);
+const withSlash = (p: string) => (p.endsWith("/") ? p : p + "/");
 const showHidden = ref(true); // Rust "Show hidden (dot) files", on by default
-const sorted = computed(() =>
-  entries.value.filter((e) => showHidden.value || !e.name.startsWith("."))
-    .sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1)),
-);
+const sorted = computed(() => {
+  const k = sortKey.value, dir = sortDesc.value ? -1 : 1;
+  const cmp = (a: Entry, b: Entry) => {
+    const x = a[k] ?? "", y = b[k] ?? "";
+    const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+    return (c || a.name.localeCompare(b.name)) * dir;
+  };
+  return entries.value.filter((e) => showHidden.value || !e.name.startsWith("."))
+    .sort((a, b) => (a.dir === b.dir ? cmp(a, b) : a.dir ? -1 : 1)); // folders first, like Rust
+});
 const selEntry = computed(() => entries.value.find((e) => e.name === sel.value));
 
 async function list(dir: string) {
@@ -39,7 +90,9 @@ async function list(dir: string) {
   busy.value = true;
   try {
     entries.value = (await RemoteList(props.termId, dir)) ?? [];
-    path.value = pathInput.value = dir;
+    path.value = dir;
+    pathInput.value = withSlash(dir);
+    history.value = [dir, ...history.value.filter((h) => h !== dir)].slice(0, 15);
     paths.set(props.termId, dir);
     sel.value = "";
     err.value = "";
@@ -136,28 +189,41 @@ function listKey(ev: KeyboardEvent) {
         <button class="sp-tb" title="Create new directory" @click="mkdir"><img :src="icon('new-folder')" /></button>
         <button class="sp-tb" title="Create new file" @click="newFile"><img :src="icon('file')" /></button>
         <button class="sp-tb" title="Delete selected files" :disabled="!sel" @click="remove"><img :src="icon('cancel')" /></button>
+        <button class="sp-tb" :class="ascii ? 'on' : ''" title="ASCII mode" @click="ascii = !ascii"><img :src="icon('font')" /></button>
         <button class="sp-tb" :class="showHidden ? 'on' : ''" title="Show hidden (dot) files" @click="showHidden = !showHidden"><img :src="icon('layout-sidebar')" /></button>
       </div>
-      <input v-model="pathInput" class="sp-path" spellcheck="false" @keydown.enter="list(pathInput)" />
-      <div class="sp-scroll min-h-0 flex-1"><div class="sp-cols"><span class="c-name">Name</span><span class="c-size">Size (KB)</span><span class="c-time">Last modified</span></div>
-      <div class="sp-list" :class="busy ? 'busy' : ''" tabindex="0" @keydown="listKey">
-        <div class="sp-row" @dblclick="list(parent(path))"><img :src="icon('ft-folder-up')" class="sp-ico" /><span class="c-name">..</span></div>
-        <div
-          v-for="e in sorted"
-          :key="e.name"
-          class="sp-row"
-          :class="sel === e.name ? 'sel' : ''"
-          :title="e.name"
-          @click="sel = e.name"
-          @dblclick="open(e)"
-          @contextmenu.prevent="rowMenu($event, e)"
-        >
-          <img :src="icon(e.dir ? 'ft-folder' : 'ft-file')" class="sp-ico" />
-          <span class="c-name truncate">{{ e.name }}</span>
-          <span class="c-size">{{ e.dir ? "" : kb(e.size) }}</span>
-          <span class="c-time">{{ when(e.modTime) }}</span>
+      <div class="sp-pathrow">
+        <input v-model="pathInput" class="sp-path" spellcheck="false" aria-label="Path" @keydown.enter="list(pathInput.replace(/(.)\/$/, '$1'))" />
+        <button class="sp-hist" title="Recent folders" @click="histOpen = !histOpen"></button>
+        <div v-if="histOpen" class="sp-menu-bg" @mousedown="histOpen = false"></div>
+        <div v-if="histOpen" class="sp-histpop">
+          <span v-if="!history.length" class="muted">No recent folders</span>
+          <button v-for="h in history" :key="h" @click="histOpen = false; list(h)">{{ withSlash(h) }}</button>
         </div>
       </div>
+      <!-- Rust listing: Name + COLUMNS, 20 px header (click to sort), 18 px rows, scrolls sideways -->
+      <div class="sp-scroll min-h-0 flex-1">
+        <div class="sp-cols">
+          <button v-for="[k, t] in HEADERS" :key="k" :class="'h-' + k" @click="sortBy(k)">
+            <img v-if="sortKey === k" :src="icon(sortDesc ? 'ft-sort-desc' : 'ft-sort-asc')" />{{ t }}
+          </button>
+        </div>
+        <div class="sp-list" :class="busy ? 'busy' : ''" tabindex="0" @keydown="listKey">
+          <div class="sp-row" @dblclick="list(parent(path))"><span class="c-name"><img :src="icon('ft-folder-up')" class="sp-ico" />..</span></div>
+          <div
+            v-for="e in sorted"
+            :key="e.name"
+            class="sp-row"
+            :class="sel === e.name ? 'sel' : ''"
+            :title="e.name"
+            @click="sel = e.name"
+            @dblclick="open(e)"
+            @contextmenu.prevent="rowMenu($event, e)"
+          >
+            <span class="c-name"><img :src="icon(entryIcon(e))" class="sp-ico" /><span class="truncate">{{ e.name }}</span></span>
+            <span v-for="[k] in COLUMNS" :key="k" :class="'c-' + k">{{ cell(e, k) }}</span>
+          </div>
+        </div>
       </div>
       <div v-if="err" class="sp-err">{{ err }}</div>
     </template>
@@ -197,17 +263,32 @@ function listKey(ev: KeyboardEvent) {
 .sp-menu button:disabled { color: var(--text-disabled); }
 .sp-menu img { width: 16px; height: 16px; }
 .sp-menu i { font-style: normal; color: var(--text-muted); }
-.sp-path { margin: 4px; height: 24px; padding: 0 6px; font-size: 12px; background: var(--k-ffffff); border: 1px solid var(--k-a9b4c0); outline: none; }
-.sp-path:focus { border-color: var(--k-6aa0da); }
-.sp-cols, .sp-row { display: grid; grid-template-columns: 18px minmax(110px, 1fr) 58px 100px; align-items: center; gap: 4px; padding: 0 6px; min-width: 310px; }
-.sp-cols { grid-template-columns: minmax(132px, 1fr) 58px 100px; height: 22px; font-size: 11.5px; color: var(--k-4a5a68); background: var(--k-eef1f4); border-top: 1px solid var(--k-d6dde4); border-bottom: 1px solid var(--k-d6dde4); }
-.sp-cols .c-name { padding-left: 22px; }
-.sp-row { height: 21px; font-size: 12px; color: var(--k-1e2a36); cursor: default; user-select: none; }
-.sp-row:hover { background: var(--k-e3ebf3); }
-.sp-row.sel { background: var(--k-cfe0f6); }
-.sp-ico { width: 16px; height: 16px; }
-.c-size { text-align: right; color: var(--k-4a5a68); }
-.c-time { color: var(--k-6b7a8a); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+.sp-pathrow { position: relative; display: flex; margin: 3px 4px; }
+.sp-path { flex: 1; min-width: 0; height: 22px; padding: 0 4px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }
+.sp-path:focus { border-color: var(--focus); }
+.sp-hist { position: relative; width: 20px; height: 22px; padding: 0; background: var(--input); border: 1px solid var(--border); border-left: none; cursor: pointer; }
+.sp-hist:hover { background: var(--hover); }
+.sp-hist::after { content: ""; position: absolute; left: 6px; top: 7px; width: 5px; height: 5px; border-right: 1px solid var(--text); border-bottom: 1px solid var(--text); transform: rotate(45deg); }
+.sp-histpop { position: absolute; top: 23px; left: 0; right: 0; z-index: 91; padding: 2px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
+.sp-histpop button { display: block; width: 100%; height: 22px; padding: 0 6px; font-size: 12px; text-align: left; color: var(--text); background: transparent; border: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-histpop button:hover { background: var(--hover); }
+.sp-histpop .muted { display: block; padding: 3px 6px; color: var(--text-muted); }
+/* Rust COLUMNS: name ≥ 140 px, then 64 / 112 / 72 / 72 / 84 */
+.sp-cols, .sp-row { display: grid; grid-template-columns: minmax(140px, 1fr) 64px 112px 72px 72px 84px; align-items: center; min-width: 544px; }
+.sp-cols { height: 20px; background: var(--panel); border-bottom: 1px solid var(--border-subtle); }
+.sp-cols button { display: flex; align-items: center; gap: 2px; height: 20px; padding: 0 4px; font-size: 12px; color: var(--text); background: transparent; border: none; border-right: 1px solid var(--border-subtle); text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; }
+.sp-cols button:hover { background: var(--hover); }
+.sp-cols img { width: 12px; height: 12px; }
+.sp-row { height: 18px; font-size: 12px; color: var(--text); cursor: default; user-select: none; }
+.sp-row > span { padding: 0 4px; white-space: nowrap; overflow: hidden; }
+.sp-row:hover { background: var(--hover); }
+.sp-row.sel .c-name { background: var(--selection); color: var(--selection-text); }
+.c-name { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.sp-ico { width: 16px; height: 16px; flex: none; }
+.c-size { text-align: right; }
+.c-modTime, .c-owner, .c-group, .c-mode { color: var(--text-muted); }
+.c-mode { font-family: "DejaVu Sans Mono", monospace; font-size: 11px; }
+.sp-list { outline: none; }
 .sp-list.busy { opacity: .6; }
 .sp-scroll { overflow: auto; }
 .sp-scroll .sp-cols { position: sticky; top: 0; z-index: 1; }

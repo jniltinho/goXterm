@@ -3,7 +3,9 @@ package gui
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -235,8 +237,14 @@ func (a *App) RemoteDownloadAs(tabID, remote string) (string, error) {
 	if err != nil || local == "" {
 		return "", err
 	}
-	_, err = c.Download(remote, local)
-	return local, err
+	if _, err = c.Download(remote, local); err != nil || !a.asciiOn(tabID) {
+		return local, err
+	}
+	b, err := os.ReadFile(local) // ASCII mode: the local platform's line ends
+	if err != nil {
+		return local, err
+	}
+	return local, os.WriteFile(local, asciiText(b, runtime.GOOS == "windows"), 0o644)
 }
 
 // RemoteUploadPick uploads a file chosen in a native open dialog into remoteDir; it returns the

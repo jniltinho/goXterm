@@ -76,7 +76,7 @@ func (c *Client) List(dir string) ([]fsentry.Entry, error) {
 			continue
 		}
 		out = append(out, fsentry.Entry{
-			Name: e.Name, Dir: e.Type == ftp.EntryTypeFolder,
+			Name: e.Name, Dir: e.Type == ftp.EntryTypeFolder, Link: e.Type == ftp.EntryTypeLink,
 			Size: int64(e.Size), ModTime: e.Time.Unix(),
 		})
 	}

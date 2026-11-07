@@ -59,3 +59,12 @@ func TestElapsedSecs(t *testing.T) {
 		t.Error(`elapsedSecs("x") must fail`)
 	}
 }
+
+func TestASCIIText(t *testing.T) {
+	if got := string(asciiText([]byte("a\r\nb\nc"), false)); got != "a\nb\nc" {
+		t.Fatalf("to LF: %q", got)
+	}
+	if got := string(asciiText([]byte("a\r\nb\nc"), true)); got != "a\r\nb\r\nc" {
+		t.Fatalf("to CR LF: %q", got)
+	}
+}

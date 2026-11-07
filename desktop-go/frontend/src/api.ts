@@ -156,7 +156,7 @@ export const HasSerialDemo = () => call<boolean>("HasSerialDemo");
 export const ConnectSerialDemo = () => call<string>("ConnectSerialDemo");
 
 // File transfer — a dual pane of the local filesystem and a remote SFTP or FTP/FTPS session.
-export interface Entry { name: string; dir: boolean; size: number; mode: string; modTime: number }
+export interface Entry { name: string; dir: boolean; size: number; mode: string; modTime: number; owner?: string; group?: string; link?: boolean }
 export interface RemoteSession { tabId: string; home: string }
 // open a remote session (SFTP over a saved SSH session, or FTP/FTPS):
 export const SftpConnect = (id: number) => call<RemoteSession>("SftpConnect", id);
@@ -178,6 +178,7 @@ export const TermFiles = (termId: string) => call<RemoteSession>("TermFiles", te
 export const TermCwd = (termId: string) => call<string>("TermCwd", termId);
 export const RemoteMkdir = (tabId: string, dir: string) => call<void>("RemoteMkdir", tabId, dir);
 export const RemoteNewFile = (tabId: string, path: string) => call<void>("RemoteNewFile", tabId, path);
+export const RemoteSetASCII = (tabId: string, on: boolean) => call<void>("RemoteSetASCII", tabId, on);
 export const RemoteRemove = (tabId: string, path: string) => call<void>("RemoteRemove", tabId, path);
 export const RemoteRename = (tabId: string, from: string, to: string) => call<void>("RemoteRename", tabId, from, to);
 export const RemoteDownloadAs = (tabId: string, remote: string) => call<string>("RemoteDownloadAs", tabId, remote);

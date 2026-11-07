@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -193,7 +194,57 @@ func (a *App) RemoteUpload(tabID, local, remoteDir string) (int64, error) {
 	if c == nil {
 		return 0, errors.New("the file session has closed")
 	}
-	return c.Upload(local, strings.TrimRight(remoteDir, "/")+"/"+filepath.Base(local))
+	remote := strings.TrimRight(remoteDir, "/") + "/" + filepath.Base(local)
+	if !a.asciiOn(tabID) {
+		return c.Upload(local, remote)
+	}
+	b, err := os.ReadFile(local)
+	if err != nil {
+		return 0, err
+	}
+	tmp, err := os.CreateTemp("", "rxt-ascii-*")
+	if err != nil {
+		return 0, err
+	}
+	defer os.Remove(tmp.Name())
+	_, err = tmp.Write(asciiText(b, false))
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return 0, err
+	}
+	return c.Upload(tmp.Name(), remote)
+}
+
+// RemoteSetASCII turns the SFTP panel's "ASCII mode" on or off for a file session: uploads send LF
+// line ends, downloads get the local platform's (CR LF on Windows).
+func (a *App) RemoteSetASCII(tabID string, on bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ascii == nil {
+		a.ascii = map[string]bool{}
+	}
+	if on {
+		a.ascii[tabID] = true
+	} else {
+		delete(a.ascii, tabID)
+	}
+}
+
+func (a *App) asciiOn(tabID string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.ascii[tabID]
+}
+
+// asciiText converts text line ends to LF, or to CR LF when crlf is set (ASCII transfer mode).
+func asciiText(b []byte, crlf bool) []byte {
+	lf := bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+	if !crlf {
+		return lf
+	}
+	return bytes.ReplaceAll(lf, []byte("\n"), []byte("\r\n"))
 }
 
 // RemoteDisconnect closes a remote file session.
@@ -238,8 +289,8 @@ func (a *App) LocalList(dir string) ([]fsentry.Entry, error) {
 			continue
 		}
 		out = append(out, fsentry.Entry{
-			Name: fi.Name(), Dir: fi.IsDir(), Size: fi.Size(),
-			Mode: fi.Mode().String(), ModTime: fi.ModTime().Unix(),
+			Name: fi.Name(), Dir: fi.IsDir(), Size: fi.Size(), Link: fi.Mode()&os.ModeSymlink != 0,
+			Mode: fsentry.LsMode(fi.Mode()), ModTime: fi.ModTime().Unix(),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

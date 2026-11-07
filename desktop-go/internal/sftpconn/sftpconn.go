@@ -3,9 +3,13 @@
 package sftpconn
 
 import (
+	"bufio"
 	"io"
 	"os"
 	"sort"
+	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -18,6 +22,48 @@ import (
 type Client struct {
 	ssh  interface{ Close() error }
 	sftp *sftp.Client
+
+	idsOnce sync.Once
+	users   map[uint32]string // uid → name, from the server's /etc/passwd
+	groups  map[uint32]string // gid → name, from /etc/group
+}
+
+// readIDs maps the server's uids and gids to names from /etc/passwd and /etc/group (read once over
+// SFTP; a server without them, e.g. Windows OpenSSH, shows the numbers).
+func (c *Client) readIDs() {
+	c.idsOnce.Do(func() {
+		c.users, c.groups = c.idFile("/etc/passwd"), c.idFile("/etc/group")
+	})
+}
+
+func (c *Client) idFile(p string) map[uint32]string {
+	m := map[uint32]string{}
+	f, err := c.sftp.Open(p)
+	if err != nil {
+		return m
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(io.LimitReader(f, 4<<20))
+	for sc.Scan() {
+		// name:x:id:… — the third field is the uid (passwd) or gid (group)
+		parts := strings.SplitN(sc.Text(), ":", 4)
+		if len(parts) < 3 {
+			continue
+		}
+		if id, err := strconv.ParseUint(parts[2], 10, 32); err == nil {
+			if _, dup := m[uint32(id)]; !dup {
+				m[uint32(id)] = parts[0]
+			}
+		}
+	}
+	return m
+}
+
+func idName(names map[uint32]string, id uint32) string {
+	if n, ok := names[id]; ok {
+		return n
+	}
+	return strconv.FormatUint(uint64(id), 10)
 }
 
 // Connect opens an SFTP session to host:port as user.
@@ -56,12 +102,17 @@ func (c *Client) List(dir string) ([]fsentry.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.readIDs()
 	out := make([]fsentry.Entry, 0, len(infos))
 	for _, fi := range infos {
-		out = append(out, fsentry.Entry{
-			Name: fi.Name(), Dir: fi.IsDir(), Size: fi.Size(),
-			Mode: fi.Mode().String(), ModTime: fi.ModTime().Unix(),
-		})
+		e := fsentry.Entry{
+			Name: fi.Name(), Dir: fi.IsDir(), Size: fi.Size(), Link: fi.Mode()&os.ModeSymlink != 0,
+			Mode: fsentry.LsMode(fi.Mode()), ModTime: fi.ModTime().Unix(),
+		}
+		if st, ok := fi.Sys().(*sftp.FileStat); ok {
+			e.Owner, e.Group = idName(c.users, st.UID), idName(c.groups, st.GID)
+		}
+		out = append(out, e)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Dir != out[j].Dir {

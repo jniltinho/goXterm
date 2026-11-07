@@ -29,6 +29,7 @@ type App struct {
 	mu     sync.Mutex
 	seq    int
 	term   map[string]termStream       // tabId → live terminal (SSH, Telnet or Serial)
+	ascii  map[string]bool             // file tabs in the SFTP panel's ASCII mode
 	remote map[string]remoteFS         // tabId → live SFTP/FTP file session
 	vnc    map[string]*vncconn.Session // tabId → live VNC session
 	rdp    map[string]*rdpconn.Session // tabId → live RDP session
