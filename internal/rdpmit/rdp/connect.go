@@ -54,7 +54,7 @@ func (c *Client) Connect() error {
 
 	phaseStart = time.Now()
 	if err = c.connectionFinalization(); err != nil {
-		return fmt.Errorf("connection finalizatioin: %w", err)
+		return fmt.Errorf("connection finalization: %w", err)
 	}
 	timings["finalization"] = time.Since(phaseStart)
 
@@ -108,7 +108,7 @@ func (c *Client) connectionInitiation() error {
 		// Provide helpful error messages
 		switch failureCode {
 		case pdu.NegotiationFailureCodeHybridRequired:
-			return fmt.Errorf("server requires Network Level Authentication (NLA/CredSSP). Enable NLA in config or set USE_NLA=true environment variable")
+			return fmt.Errorf("server requires Network Level Authentication (NLA): turn off \"Allow legacy TLS 1.0/1.1\" in the session's RDP options")
 		case pdu.NegotiationFailureCodeSSLRequired:
 			return fmt.Errorf("server requires SSL/TLS but negotiation failed")
 		case pdu.NegotiationFailureCodeSSLWithUserAuthRequired:
@@ -159,6 +159,9 @@ func (c *Client) connectionInitiation() error {
 
 func (c *Client) basicSettingsExchange() error {
 	clientUserDataSet := pdu.NewClientUserDataSet(uint32(c.selectedProtocol), c.desktopWidth, c.desktopHeight, c.colorDepth, c.channels)
+	if c.keyboardLayoutSet { // rustxterm
+		clientUserDataSet.ClientCoreData.KeyboardLayout = c.keyboardLayout
+	}
 	for i, name := range c.channels { // rustxterm: per-channel options (CHANNEL_DEF.options)
 		clientUserDataSet.ClientNetworkData.ChannelDefArray[i].Options = c.channelOptions[name]
 	}

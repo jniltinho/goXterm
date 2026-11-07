@@ -19,6 +19,11 @@ func (c *Client) capabilitiesExchange() error {
 	c.serverCapabilitySets = resp.CapabilitySets
 
 	req := pdu.NewClientConfirmActive(resp.ShareID, c.userID, c.desktopWidth, c.desktopHeight, false)
+	for _, cs := range req.CapabilitySets { // rustxterm: same layout as the core data
+		if cs.InputCapabilitySet != nil && c.keyboardLayoutSet {
+			cs.InputCapabilitySet.KeyboardLayout = c.keyboardLayout
+		}
+	}
 
 	if c.enableRFX {
 		// Set MultifragmentUpdate MaxRequestSize large enough for RFX tiles

@@ -59,6 +59,10 @@ type Client struct {
 	// NLA configuration
 	useNLA bool
 
+	// rustxterm: keyboard layout sent in the core data and input capabilities (SetKeyboardLayout)
+	keyboardLayout    uint32
+	keyboardLayoutSet bool
+
 	// RemoteFX-Image support
 	enableRFX bool
 
@@ -157,6 +161,12 @@ func NewClientWithDialContext(
 func (c *Client) SetTLSConfig(skipValidation bool, serverName string) {
 	c.skipTLSValidation = skipValidation
 	c.tlsServerName = serverName
+}
+
+// SetKeyboardLayout sets the keyboard layout (a Windows input locale id such as 0x0416; 0 lets the
+// server use its default). Without it upstream's US layout (0x0409) is sent.
+func (c *Client) SetKeyboardLayout(layout uint32) {
+	c.keyboardLayout, c.keyboardLayoutSet = layout, true
 }
 
 // SetUseNLA enables or disables Network Level Authentication

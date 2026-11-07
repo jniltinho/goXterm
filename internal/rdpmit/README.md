@@ -43,4 +43,8 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   dependency) for NTLMv2, MIC and sealing. The server's `pubKeyAuth` is now mandatory (upstream sent
   the credentials when it was missing) and a CredSSP `errorCode` is reported as a readable error
   (wrong password, expired password, locked or disabled account).
+- `rdp/client.go`, `rdp/connect.go`, `rdp/capabilities_exchange.go`: `SetKeyboardLayout` sends the
+  session's keyboard layout (0 = server default) in the core data and input capabilities (upstream
+  always sent US). The NLA-required negotiation error names the app's option instead of an
+  environment variable.
 - `rdp/security_test.go` (new): tests for the changes above.

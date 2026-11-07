@@ -61,8 +61,9 @@ func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	view, err := a.rdpDial(rdpconn.Config{
 		Host: asString(m["host"]), Port: port, User: user, Password: password,
 		Width: w, Height: h, Protocol: proto, LegacyTLS: legacy,
-		VerifyTLS: a.tlsVerifier(asString(m["host"]), port),
-	})
+		KeyboardLayout: uint32(asInt64(rdp["keyboard_layout"])), // #nosec G115 -- a locale id from the editor list
+		VerifyTLS:      a.tlsVerifier(asString(m["host"]), port),
+	}, clipboardOn(rdp))
 	if err == nil && saver != nil {
 		a.mu.Lock()
 		if a.rdpSave == nil {
@@ -119,10 +120,16 @@ func (a *App) ConnectRdpDemo(tabW, tabH int) (*RdpView, error) {
 	return a.rdpDial(rdpconn.Config{
 		Host: host, Port: port, User: user, Password: pass, Width: w, Height: h,
 		Protocol: proto, LegacyTLS: proto != rdpconn.NLA, // ssl/std demos target old servers
-	})
+	}, true)
 }
 
-func (a *App) rdpDial(cfg rdpconn.Config) (*RdpView, error) {
+// clipboardOn reads "Share clipboard text" (default on, as in the Rust app).
+func clipboardOn(opts map[string]any) bool {
+	v, set := opts["clipboard"]
+	return !set || asBool(v)
+}
+
+func (a *App) rdpDial(cfg rdpconn.Config, clipboard bool) (*RdpView, error) {
 	if cfg.Width == 0 {
 		cfg.Width, cfg.Height = 1280, 800
 	}
@@ -155,9 +162,11 @@ func (a *App) rdpDial(cfg rdpconn.Config) (*RdpView, error) {
 			a.emit("rdp:close:"+tabID, msg)
 		}
 	}
-	cfg.OnClipboard = func(text string) { // copied on the remote desktop → the local clipboard
-		if a.clip != nil {
-			a.clip.SetText(text)
+	if clipboard {
+		cfg.OnClipboard = func(text string) { // copied on the remote desktop → the local clipboard
+			if a.clip != nil {
+				a.clip.SetText(text)
+			}
 		}
 	}
 	sess, w, h, err := rdpconn.Connect(cfg, onFrame, onReady, onClose)
