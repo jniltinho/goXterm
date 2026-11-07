@@ -2,4 +2,11 @@
 @import "./light.css";
 @import "./dark.css";
 @import "./xp.css";
+@import "./macos.css";
+@import "./macos-retro.css";
 @import "./legacy.css";
+
+/* Shape tokens: controls and windows follow the skin (0 = square; the macOS skins round them). */
+button, input:not([type="checkbox"]):not([type="radio"]), textarea { border-radius: var(--ctl-radius); }
+.ed, .st, .dialog, .ask, .fd, .im, .dd-pop, .sp-menu, .sp-histpop { border-radius: var(--win-radius); }
+.ed, .st, .dialog, .ask, .fd, .im { overflow: hidden; }

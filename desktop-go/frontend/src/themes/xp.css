@@ -40,5 +40,7 @@
   --title-fg: #ffffff;
   --title-weight: 700;
   --tile-on: #c1d2ee;
+  --ctl-radius: 0;
+  --win-radius: 0;
   --tile-line: #316ac5;
 }

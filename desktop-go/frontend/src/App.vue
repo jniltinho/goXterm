@@ -1043,5 +1043,5 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .ctx-item.on { background: var(--pressed); }
 .ctx-arrow { margin-left: auto; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 4px solid var(--text); }
 .ctx-colors { position: absolute; left: 100%; top: -3px; min-width: 120px; }
-.app :deep(*), .app { border-radius: 0 !important; }
+.app :deep(*:not(button, input, textarea, .ed, .st, .dialog, .ask, .fd, .im)), .app { border-radius: 0 !important; } /* controls and windows take the skin radius */
 </style>

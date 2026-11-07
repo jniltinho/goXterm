@@ -174,6 +174,6 @@ const arrow = (t: Tunnel) =>
 .dbtn:disabled { color: var(--text-disabled); cursor: default; }
 .dbtn.primary { background: var(--panel); color: var(--text); }
 .bi { width: 16px; height: 16px; }
-:deep(*) { border-radius: 0 !important; }
+:deep(*:not(button, input, textarea)) { border-radius: 0 !important; }
 .dot { border-radius: 50% !important; }
 </style>

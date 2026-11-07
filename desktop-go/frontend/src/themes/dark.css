@@ -39,5 +39,7 @@
   --title-fg: var(--text);
   --title-weight: 400;
   --tile-on: var(--selection);
+  --ctl-radius: 0;
+  --win-radius: 0;
   --tile-line: var(--border);
 }
