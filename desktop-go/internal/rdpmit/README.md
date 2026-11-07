@@ -37,4 +37,10 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   3 bits); upstream's order turned a key release into a second key press.
 - `rdp/static_channels.go` (new): `SetTLSClientConfig`, `AddStaticChannel`, `SendStaticChannel`;
   `rdp/get_update.go` hands chunks of registered static channels (e.g. `cliprdr`) to their handler.
+- `auth/ntlm.go` and `auth/md4.go` removed: their NTLM code follows the GPL-3.0 grdp NTLM too
+  closely (same API and structure), so `rdp/nla.go` uses
+  [github.com/bodgit/ntlmssp](https://github.com/bodgit/ntlmssp) (BSD-3-Clause, a Go module
+  dependency) for NTLMv2, MIC and sealing. The server's `pubKeyAuth` is now mandatory (upstream sent
+  the credentials when it was missing) and a CredSSP `errorCode` is reported as a readable error
+  (wrong password, expired password, locked or disabled account).
 - `rdp/security_test.go` (new): tests for the changes above.

@@ -32,7 +32,7 @@ is the themed `Dropdown.vue` (no native GTK popup).
 | SSH terminal (password, keyboard-interactive, agent, keys, host-key TOFU, Save password) | `sshconn` TestLabEcho; lab QA (trust dialog, saved password reused) | ✓ |
 | SFTP browser (Rust columns, owner/group, sort, file-type icons, ASCII mode, row menu, follow folder) | `sftpconn` TestLabSFTP; lab QA | ✓ |
 | FTP / FTPS explicit and implicit (certificate trust, password prompt) | `ftpconn` TestLabFTPSExplicit/Implicit; `tlstrust` tests; lab QA | ✓ |
-| RDP (pure Go grdp: NLA, TLS, legacy SSL/standard only when allowed, certificate trust, clipboard, release key) | `rdpconn` TestLabRDP; lab xrdp; Windows Server 2022 (NLA) and 2008 R2 (SSL) | ✓ |
+| RDP (pure Go, MIT go-rdp + BSD ntlmssp: NLA, TLS, legacy TLS 1.0 opt-in, standard RDP security refused, certificate trust, clipboard, release key) | `rdpconn` TestLabRDP / RejectedCertificate / NLAOffer / Clipboard (lab xrdp); TestRealRDP on Windows 11 (NLA, SSL, wrong password reported) | ✓ |
 | VNC (password prompt, view-only, SSH gateway, hidden-tab pause, hostile sizes, clipboard) | `vncconn` TestLabVNC + fake-server tests; lab QA through the lab sshd | ✓ |
 | Telnet | `telnetconn` TestTelnetNegotiation | ✓ |
 | Serial | `serialconn` TestModeMapping, TestSerialLoopback | ✓ |

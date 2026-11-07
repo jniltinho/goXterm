@@ -9,6 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"unicode/utf16"
+
+	"github.com/bodgit/ntlmssp"
+
 	"rustxterm-go/internal/rdpmit/auth"
 	"rustxterm-go/internal/rdpmit/logging"
 )
@@ -58,8 +62,12 @@ func (c *Client) StartNLA() error {
 	domain, user := c.parseDomainUser()
 	logging.Debug("NLA: Authenticating user")
 
-	// Create NTLMv2 context
-	ntlmCtx := auth.NewNTLMv2(domain, user, c.password)
+	// rustxterm: NTLMv2 from github.com/bodgit/ntlmssp (BSD-3-Clause) instead of upstream's auth/ntlm.go,
+	// whose code follows the GPL grdp NTLM too closely.
+	ntlmCtx, err := ntlmssp.NewClient(ntlmssp.SetDomain(domain), ntlmssp.SetUserInfo(user, c.password))
+	if err != nil {
+		return fmt.Errorf("NLA: %w", err)
+	}
 
 	// Generate client nonce (32 bytes) - required for version 5+
 	clientNonce := make([]byte, 32)
@@ -68,7 +76,10 @@ func (c *Client) StartNLA() error {
 	}
 
 	// Step 1: Send NTLM Negotiate message with client nonce
-	negoMsg := ntlmCtx.GetNegotiateMessage()
+	negoMsg, err := ntlmCtx.Authenticate(nil, nil)
+	if err != nil {
+		return fmt.Errorf("NLA: negotiate message: %w", err)
+	}
 	tsReq := auth.EncodeTSRequestWithNonce([][]byte{negoMsg}, nil, nil, clientNonce)
 
 	if _, err := c.conn.Write(tsReq); err != nil {
@@ -100,9 +111,13 @@ func (c *Client) StartNLA() error {
 	}
 
 	// Step 3: Process challenge and get authenticate message
-	authMsg, ntlmSec := ntlmCtx.GetAuthenticateMessage(tsResp.NegoTokens[0].Data)
-	if authMsg == nil || ntlmSec == nil {
-		return fmt.Errorf("NLA: failed to generate authenticate message")
+	authMsg, err := ntlmCtx.Authenticate(tsResp.NegoTokens[0].Data, nil)
+	if err != nil {
+		return fmt.Errorf("NLA: authenticate message: %w", err)
+	}
+	ntlmSec := ntlmCtx.SecuritySession()
+	if ntlmSec == nil {
+		return fmt.Errorf("NLA: server did not negotiate NTLM sealing")
 	}
 
 	// Get the server's public key from the TLS connection
@@ -124,7 +139,10 @@ func (c *Client) StartNLA() error {
 		logging.Debug("NLA: Using version %d raw pubKey", tsResp.Version)
 	}
 
-	encryptedPubKey := ntlmSec.GssEncrypt(pubKeyData)
+	encryptedPubKey, err := gssWrap(ntlmSec, pubKeyData)
+	if err != nil {
+		return fmt.Errorf("NLA: seal pubKeyAuth: %w", err)
+	}
 	logging.Debug("NLA: Encrypted pubKeyAuth len=%d", len(encryptedPubKey))
 
 	// Send authenticate message with encrypted public key and optional client nonce.
@@ -151,11 +169,19 @@ func (c *Client) StartNLA() error {
 		return fmt.Errorf("NLA: failed to decode public key response: %w", err)
 	}
 
+	// rustxterm: the server's pubKeyAuth is mandatory (MS-CSSP 3.1.5); without it the TLS channel is
+	// not bound to the NTLM session, so never send credentials. A logon failure arrives as errorCode.
+	if tsResp.ErrorCode != 0 {
+		return nlaError(tsResp.ErrorCode)
+	}
+	if len(tsResp.PubKeyAuth) == 0 {
+		return fmt.Errorf("NLA: server sent no pubKeyAuth")
+	}
 	// Verify server's pubKeyAuth (for version 5+, this is a hash; for earlier versions, pubKey+1)
-	if len(tsResp.PubKeyAuth) > 0 {
-		decryptedPubKeyAuth := ntlmSec.GssDecrypt(tsResp.PubKeyAuth)
-		if decryptedPubKeyAuth == nil {
-			return fmt.Errorf("NLA: failed to decrypt server pubKeyAuth")
+	{
+		decryptedPubKeyAuth, err := gssUnwrap(ntlmSec, tsResp.PubKeyAuth)
+		if err != nil {
+			return fmt.Errorf("NLA: failed to decrypt server pubKeyAuth: %w", err)
 		}
 		logging.Debug("NLA: Decrypted server pubKeyAuth (%d bytes)", len(decryptedPubKeyAuth))
 
@@ -169,9 +195,11 @@ func (c *Client) StartNLA() error {
 
 	// Step 5: Send credentials
 	// Per MS-CSSP, TSPasswordCreds MUST be UTF-16LE encoded
-	domainBytes, userBytes, passBytes := ntlmCtx.GetCredSSPCredentials()
-	credentials := auth.EncodeCredentials(domainBytes, userBytes, passBytes)
-	encryptedCreds := ntlmSec.GssEncrypt(credentials)
+	credentials := auth.EncodeCredentials(utf16le(domain), utf16le(user), utf16le(c.password))
+	encryptedCreds, err := gssWrap(ntlmSec, credentials)
+	if err != nil {
+		return fmt.Errorf("NLA: seal credentials: %w", err)
+	}
 	logging.Debug("NLA: Sending encrypted credentials")
 
 	tsReq = auth.EncodeTSRequestWithVersion(negotiatedVersion, nil, encryptedCreds, nil, nil)
@@ -225,6 +253,48 @@ func (c *Client) StartNLA() error {
 	}
 
 	return nil
+}
+
+// nlaError names the common CredSSP errorCode values (NTSTATUS, or an HRESULT wrapping one).
+func nlaError(code uint32) error {
+	switch code & 0xC00FFFFF {
+	case 0xC000006D, 0xC000006A, 0xC0000064: // STATUS_LOGON_FAILURE, WRONG_PASSWORD, NO_SUCH_USER
+		return fmt.Errorf("NLA: wrong user name or password (0x%08X)", code)
+	case 0xC0000071, 0xC0000224: // STATUS_PASSWORD_EXPIRED, PASSWORD_MUST_CHANGE
+		return fmt.Errorf("NLA: the password has expired and must be changed (0x%08X)", code)
+	case 0xC0000234: // STATUS_ACCOUNT_LOCKED_OUT
+		return fmt.Errorf("NLA: the account is locked (0x%08X)", code)
+	case 0xC0000072: // STATUS_ACCOUNT_DISABLED
+		return fmt.Errorf("NLA: the account is disabled (0x%08X)", code)
+	}
+	return fmt.Errorf("NLA: server returned error code 0x%08X", code)
+}
+
+// gssWrap seals b as a CredSSP token: the 16-byte NTLM signature followed by the sealed data.
+func gssWrap(s *ntlmssp.SecuritySession, b []byte) ([]byte, error) {
+	sealed, sig, err := s.Wrap(b)
+	if err != nil {
+		return nil, err
+	}
+	return append(sig, sealed...), nil
+}
+
+// gssUnwrap opens a token made by gssWrap and checks its signature.
+func gssUnwrap(s *ntlmssp.SecuritySession, tok []byte) ([]byte, error) {
+	if len(tok) < 16 {
+		return nil, fmt.Errorf("token too short (%d bytes)", len(tok))
+	}
+	return s.Unwrap(tok[16:], tok[:16])
+}
+
+// utf16le encodes s as UTF-16LE (MS-CSSP TSPasswordCreds are always UTF-16LE).
+func utf16le(s string) []byte {
+	u := utf16.Encode([]rune(s))
+	b := make([]byte, 2*len(u))
+	for i, r := range u {
+		b[2*i], b[2*i+1] = byte(r), byte(r>>8)
+	}
+	return b
 }
 
 // startTLSForNLA establishes TLS connection for NLA.

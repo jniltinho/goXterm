@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 
 	"rustxterm-go/internal/rdpmit/protocol/pdu"
@@ -75,5 +76,20 @@ func TestInputEventHeader(t *testing.T) {
 	// FASTPATH_INPUT_EVENT_MOUSE (1) is 0x20 in the event header.
 	if b := pdu.NewMouseEvent(pdu.PTRFlagsMove, 1, 2).Serialize(); b[0] != 0x20 {
 		t.Fatalf("mouse header = %#x", b[0])
+	}
+}
+
+func TestNLAErrorAndCredentialEncoding(t *testing.T) {
+	// NTSTATUS and its HRESULT_FROM_NT form (FACILITY_NT_BIT) both read as a logon failure.
+	for _, code := range []uint32{0xC000006D, 0xD000006D} {
+		if err := nlaError(code); !strings.Contains(err.Error(), "wrong user name or password") {
+			t.Fatalf("nlaError(%#x) = %v", code, err)
+		}
+	}
+	if err := nlaError(0xC0000001); !strings.Contains(err.Error(), "0xC0000001") {
+		t.Fatalf("unknown code: %v", err)
+	}
+	if got := utf16le("añ€"); !bytes.Equal(got, []byte{'a', 0, 0xF1, 0, 0xAC, 0x20}) {
+		t.Fatalf("utf16le = % x", got)
 	}
 }
