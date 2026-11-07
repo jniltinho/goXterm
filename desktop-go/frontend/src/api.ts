@@ -53,6 +53,10 @@ export const Unlock = (password: string) => call<void>("Unlock", password);
 export const SaveSession = (js: string) => call<number>("SaveSession", js);
 export const DeleteSession = (id: number) => call<void>("DeleteSession", id);
 export const SessionJSON = (id: number) => call<string>("SessionJSON", id);
+export const DuplicateSession = (id: number) => call<number>("DuplicateSession", id);
+export const RenameSession = (id: number, name: string) => call<void>("RenameSession", id, name);
+export const SaveFolder = (id: number, name: string, parent: number | null) => call<number>("SaveFolder", id, name, parent);
+export const DeleteFolder = (id: number) => call<void>("DeleteFolder", id);
 
 // SSH host-key trust (TOFU): the backend emits "ssh:trust" for an unknown key; answer once/save/reject.
 export const SshTrustRespond = (reqId: string, decision: string) => call<void>("SshTrustRespond", reqId, decision);

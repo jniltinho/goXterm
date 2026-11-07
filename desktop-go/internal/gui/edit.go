@@ -31,6 +31,58 @@ func (a *App) DeleteSession(id int64) error {
 	return st.DeleteSession(id)
 }
 
+// DuplicateSession copies a session (new id, name + " (copy)") and returns the new id.
+func (a *App) DuplicateSession(id int64) (int64, error) {
+	m, _, err := sessionRawByID(id)
+	if err != nil {
+		return 0, err
+	}
+	m["id"] = int64(0)
+	m["name"] = asString(m["name"]) + " (copy)"
+	delete(m, "password")
+	b, err := json.Marshal(m)
+	if err != nil {
+		return 0, err
+	}
+	return a.SaveSession(string(b))
+}
+
+// RenameSession changes a session's name, keeping all other fields.
+func (a *App) RenameSession(id int64, name string) error {
+	m, _, err := sessionRawByID(id)
+	if err != nil {
+		return err
+	}
+	m["name"] = name
+	delete(m, "password")
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	_, err = a.SaveSession(string(b))
+	return err
+}
+
+// SaveFolder inserts or updates a tree folder (id 0 = new) and returns its id.
+func (a *App) SaveFolder(id int64, name string, parent *int64) (int64, error) {
+	st, err := openStore()
+	if err != nil {
+		return 0, err
+	}
+	defer st.Close()
+	return st.SaveFolder(id, name, parent)
+}
+
+// DeleteFolder removes a folder; its sessions and subfolders fall back to the root.
+func (a *App) DeleteFolder(id int64) error {
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	return st.DeleteFolder(id)
+}
+
 // SessionJSON returns the stored JSON for a session so the editor can load every field (including
 // per-protocol options), with the transient "password" marker removed.
 func (a *App) SessionJSON(id int64) (string, error) {

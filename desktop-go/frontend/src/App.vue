@@ -9,7 +9,7 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { DeleteSession, SshTrustRespond, SshPasswordRespond } from "./api";
+import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond } from "./api";
 import { Events } from "@wailsio/runtime";
 import TerminalView from "./Terminal.vue";
 import FileBrowser from "./FileBrowser.vue";
@@ -120,7 +120,7 @@ function openVnc(title: string, connect: () => Promise<VncView>) {
 const editorOpen = ref(false);
 const settingsOpen = ref(false);
 const editorSessionId = ref<number | null>(null);
-const ctx = ref<{ x: number; y: number; session: Session } | null>(null);
+const ctx = ref<{ x: number; y: number; session?: Session; folder?: Folder } | null>(null);
 
 // SSH host-key trust prompt (TOFU): the backend emits "ssh:trust" for an unknown key and blocks.
 // Prompts queue so concurrent connections (e.g. the SSH terminal and its SFTP pane) each get one.
@@ -156,7 +156,30 @@ async function delSession(s: Session) {
   try { await DeleteSession(s.id); if (selected.value?.id === s.id) selected.value = null; await loadData(); }
   catch (e) { error.value = String(e); }
 }
+async function dupSession(s: Session) {
+  try { await DuplicateSession(s.id); await loadData(); } catch (e) { error.value = String(e); }
+}
+async function renameSession(s: Session) {
+  const name = prompt("Rename session:", s.name);
+  if (name === null || !name.trim() || name === s.name) return;
+  try { await RenameSession(s.id, name.trim()); await loadData(); } catch (e) { error.value = String(e); }
+}
+async function newFolder(parent: number | null) {
+  const name = prompt("New folder name:");
+  if (!name || !name.trim()) return;
+  try { await SaveFolder(0, name.trim(), parent); await loadData(); } catch (e) { error.value = String(e); }
+}
+async function renameFolder(f: Folder) {
+  const name = prompt("Rename folder:", f.name);
+  if (name === null || !name.trim() || name === f.name) return;
+  try { await SaveFolder(f.id, name.trim(), f.parent); await loadData(); } catch (e) { error.value = String(e); }
+}
+async function delFolder(f: Folder) {
+  if (!confirm(`Delete folder "${f.name}"? Its sessions and subfolders move to the root.`)) return;
+  try { await DeleteFolder(f.id); await loadData(); } catch (e) { error.value = String(e); }
+}
 function openCtx(e: MouseEvent, s: Session) { selected.value = s; ctx.value = { x: e.clientX, y: e.clientY, session: s }; }
+function openFolderCtx(e: MouseEvent, f: Folder) { ctx.value = { x: e.clientX, y: e.clientY, folder: f }; }
 function closeCtx() { ctx.value = null; }
 
 // openSession opens a session in the tab its protocol needs (double-click / Enter).
@@ -247,7 +270,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
       </div>
     </div>
     <header class="toolbar flex items-center gap-1 px-1.5 py-1">
-      <img :src="icon('session-new')" class="tbico" title="New session" />
+      <img :src="icon('session-new')" class="tbico" title="New session" @click="newSession()" />
       <img :src="icon('ssh')" class="tbico" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true)" :class="selected ? '' : 'off'" />
       <img :src="icon('sftp')" class="tbico" title="Open SFTP file browser" @click="openSftpFor(selected)" :class="selected ? '' : 'off'" />
       <img :src="icon('ftp')" class="tbico" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)" :class="selected ? '' : 'off'" />
@@ -265,7 +288,10 @@ const tabIcon = (t: Tab) => icon(t.icon);
       <aside class="sidebar flex w-64 shrink-0 flex-col">
         <div class="side-head flex items-center justify-between px-2 py-1">
           <span class="flex items-center gap-1.5"><img :src="icon('session')" class="h-3.5 w-3.5" /> Sessions</span>
-          <span v-if="!loading && !error" class="count">{{ sessions.length }}</span>
+          <span class="flex items-center gap-1.5">
+            <img v-if="!locked" :src="icon('folder')" class="h-3.5 w-3.5 cursor-pointer opacity-70 hover:opacity-100" title="New folder" @click="newFolder(null)" />
+            <span v-if="!loading && !error" class="count">{{ sessions.length }}</span>
+          </span>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto">
           <div v-if="locked" class="locked-note">
@@ -276,7 +302,12 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <div v-else-if="error" class="m-2 border border-amber-400 bg-amber-50 p-2 text-xs text-amber-800">{{ error }}</div>
           <template v-else>
             <div v-for="(row, i) in rows" :key="i">
-              <div v-if="row.kind === 'folder'" class="treerow folder" :style="{ paddingLeft: 6 + row.depth * 14 + 'px' }">
+              <div
+                v-if="row.kind === 'folder'"
+                class="treerow folder"
+                :style="{ paddingLeft: 6 + row.depth * 14 + 'px' }"
+                @contextmenu.prevent="openFolderCtx($event, row.folder)"
+              >
                 <img :src="folderIcon(row.folder)" class="ico" />
                 <span class="truncate">{{ row.folder.name }}</span>
               </div>
@@ -341,11 +372,22 @@ const tabIcon = (t: Tab) => icon(t.icon);
     <!-- tree context menu -->
     <div v-if="ctx" class="ctx-mask" @click="closeCtx" @contextmenu.prevent="closeCtx">
       <div class="ctx" :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }" @click.stop>
-        <button class="ctx-item" @click="openSession(ctx!.session); closeCtx()"><img :src="icon('ssh')" class="ctx-ico" /> Connect</button>
-        <button class="ctx-item" @click="editSession(ctx!.session); closeCtx()"><img :src="icon('gear')" class="ctx-ico" /> Edit session</button>
-        <button class="ctx-item danger" @click="delSession(ctx!.session); closeCtx()"><span class="ctx-ico ctx-del">✕</span> Delete session</button>
-        <div class="ctx-sep"></div>
-        <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
+        <template v-if="ctx.session">
+          <button class="ctx-item" @click="openSession(ctx!.session!); closeCtx()"><img :src="icon('ssh')" class="ctx-ico" /> Connect</button>
+          <button class="ctx-item" @click="editSession(ctx!.session!); closeCtx()"><img :src="icon('gear')" class="ctx-ico" /> Edit session</button>
+          <button class="ctx-item" @click="dupSession(ctx!.session!); closeCtx()"><img :src="icon('session')" class="ctx-ico" /> Duplicate session</button>
+          <button class="ctx-item" @click="renameSession(ctx!.session!); closeCtx()"><span class="ctx-ico">✎</span> Rename session</button>
+          <button class="ctx-item danger" @click="delSession(ctx!.session!); closeCtx()"><span class="ctx-ico ctx-del">✕</span> Delete session</button>
+          <div class="ctx-sep"></div>
+          <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
+        </template>
+        <template v-else-if="ctx.folder">
+          <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session here</button>
+          <button class="ctx-item" @click="newFolder(ctx!.folder!.id); closeCtx()"><img :src="icon('folder')" class="ctx-ico" /> New folder here</button>
+          <div class="ctx-sep"></div>
+          <button class="ctx-item" @click="renameFolder(ctx!.folder!); closeCtx()"><span class="ctx-ico">✎</span> Rename folder</button>
+          <button class="ctx-item danger" @click="delFolder(ctx!.folder!); closeCtx()"><span class="ctx-ico ctx-del">✕</span> Delete folder</button>
+        </template>
       </div>
     </div>
 

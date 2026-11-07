@@ -102,6 +102,45 @@ func (s *Store) DeleteSession(id int64) error {
 	return s.writeBack()
 }
 
+// SaveFolder inserts or updates a tree folder (id 0 = new) and returns its id.
+func (s *Store) SaveFolder(id int64, name string, parent *int64) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var p any
+	if parent != nil {
+		p = *parent
+	}
+	if id == 0 {
+		res, err := s.db.Exec(`INSERT INTO folders(name, parent) VALUES(?,?)`, name, p)
+		if err != nil {
+			return 0, err
+		}
+		id, _ = res.LastInsertId()
+	} else {
+		_, err := s.db.Exec(
+			`INSERT INTO folders(id, name, parent) VALUES(?,?,?)
+			 ON CONFLICT(id) DO UPDATE SET name=excluded.name, parent=excluded.parent`, id, name, p)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if err := s.writeBack(); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// DeleteFolder removes a folder; its sessions and subfolders fall back to the root (ON DELETE SET
+// NULL), rather than being deleted.
+func (s *Store) DeleteFolder(id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.db.Exec(`DELETE FROM folders WHERE id=?`, id); err != nil {
+		return err
+	}
+	return s.writeBack()
+}
+
 // SaveSSHTrust records an accepted SSH host key (trust-on-first-use "accept and save"), matching the
 // Rust ssh_trust table (host lowercased, key base64). A duplicate is ignored.
 func (s *Store) SaveSSHTrust(host string, port int, algorithm, keyB64 string) error {

@@ -33,13 +33,19 @@ type SftpSession struct {
 
 // SftpConnect opens an SFTP session for a saved SSH session.
 func (a *App) SftpConnect(sessionID int64) (*SftpSession, error) {
-	sv, password, err := a.sessionForFiles(sessionID)
+	m, password, err := sessionRawByID(sessionID)
 	if err != nil {
 		return nil, err
 	}
+	host, port, user := asString(m["host"]), int(asInt64(m["port"])), asString(m["user"])
+	if port == 0 {
+		port = 22
+	}
+	sshOpt := subMap(m, "ssh")
 	c, err := sftpconn.Connect(sshconn.Config{
-		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
-		AskPassword: a.askPassword(sv.Host, sv.User), HostKey: a.sshHostKeyCallback(sv.Host, sv.Port),
+		Host: host, Port: port, User: user, Password: password,
+		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
+		AskPassword: a.askPassword(host, user), HostKey: a.sshHostKeyCallback(host, port),
 	})
 	if err != nil {
 		return nil, err
