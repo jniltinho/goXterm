@@ -4,7 +4,17 @@ import { GetSettings, SaveSettings, Diagnostics, type Settings, type Diag } from
 
 const emit = defineEmits<{ saved: []; close: [] }>();
 
-const tab = ref<"general" | "terminal" | "ssh" | "display" | "diagnostics">("general");
+const tab = ref<"general" | "terminal" | "ssh" | "display" | "shortcuts" | "security" | "agent" | "diagnostics">("general");
+
+// Keyboard shortcuts / gestures reference (read-only for now).
+const shortcuts = [
+  ["Double-click a session", "Open in its protocol"],
+  ["Enter (session selected)", "Open the selected session"],
+  ["Right-click a session/folder", "Context menu (connect, edit, rename, delete)"],
+  ["Right-click toolbar New", "Create a session"],
+  ["Ctrl+Shift+C / Ctrl+Shift+V", "Copy / paste in the terminal"],
+  ["In a stopped tab: Return / R", "Close the tab / restart the session"],
+];
 const s = ref<Settings | null>(null);
 const diag = ref<Diag | null>(null);
 const error = ref("");
@@ -44,6 +54,9 @@ async function save() {
         <button class="st-tab" :class="tab === 'terminal' ? 'on' : ''" @click="tab = 'terminal'">Terminal</button>
         <button class="st-tab" :class="tab === 'ssh' ? 'on' : ''" @click="tab = 'ssh'">SSH</button>
         <button class="st-tab" :class="tab === 'display' ? 'on' : ''" @click="tab = 'display'">Display</button>
+        <button class="st-tab" :class="tab === 'shortcuts' ? 'on' : ''" @click="tab = 'shortcuts'">Shortcuts</button>
+        <button class="st-tab" :class="tab === 'security' ? 'on' : ''" @click="tab = 'security'">Security</button>
+        <button class="st-tab" :class="tab === 'agent' ? 'on' : ''" @click="tab = 'agent'">Agent</button>
         <button class="st-tab" :class="tab === 'diagnostics' ? 'on' : ''" @click="tab = 'diagnostics'">Diagnostics</button>
       </div>
       <div class="st-body">
@@ -88,6 +101,23 @@ async function save() {
           <p class="st-note">Theme and scale are saved for the native shell; the terminal theme is on the Terminal tab.</p>
         </template>
 
+        <template v-else-if="tab === 'shortcuts'">
+          <div class="sc">
+            <div class="sc-row" v-for="[k, v] in shortcuts" :key="k"><span class="sc-key">{{ k }}</span><span class="sc-act">{{ v }}</span></div>
+          </div>
+          <p class="st-note">Customizable key bindings are a follow-up; these are the current gestures.</p>
+        </template>
+
+        <template v-else-if="tab === 'security'">
+          <label class="row"><input type="checkbox" v-model="s.pasteGuard" /> Confirm multi-line paste (paste guard)</label>
+          <p class="st-note">SSH host keys and TLS certificates are trusted on first use, per connection (prompted when unknown); the accepted counts are on the Diagnostics tab. Credentials are kept in the encrypted store and never written to config.</p>
+        </template>
+
+        <template v-else-if="tab === 'agent'">
+          <label class="row"><input type="checkbox" v-model="s.agentControl" /> Allow AI agents / the CLI to drive sessions over the local control channel</label>
+          <p class="st-note">Per-session agent policy (Deny / Ask / Allow, and whether the agent may read content) is set in each session's editor under “Agent settings”.</p>
+        </template>
+
         <template v-else-if="tab === 'diagnostics'">
           <div v-if="diag" class="diag">
             <div class="diag-row"><span>Version</span><b>{{ diag.version || "dev" }}</b></div>
@@ -125,6 +155,10 @@ async function save() {
 .in-sm { width: 90px; }
 .st-err { color: #c0392b; font-size: 12px; }
 .st-note { font-size: 12px; color: #7a8794; margin-top: 4px; }
+.sc { display: flex; flex-direction: column; gap: 1px; }
+.sc-row { display: flex; justify-content: space-between; gap: 16px; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid #e3e9ee; }
+.sc-key { color: #1e3a5a; font-weight: 600; }
+.sc-act { color: #4a5a68; text-align: right; }
 .diag { display: flex; flex-direction: column; gap: 2px; }
 .diag-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #e3e9ee; }
 .diag-row span { color: #4a5a68; }

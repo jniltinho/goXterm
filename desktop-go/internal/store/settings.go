@@ -71,6 +71,7 @@ func SaveSettings(s Settings) error {
 		_, _ = toml.Decode(string(raw), &m)
 	}
 	m["theme"] = s.Theme
+	m["agent_control"] = s.AgentControl
 	m["copy_on_select"] = s.CopyOnSelect
 	m["right_click_paste"] = s.RightClickPaste
 	m["paste_guard"] = s.PasteGuard
