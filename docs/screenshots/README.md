@@ -12,6 +12,7 @@ app are in [`archive/rust/docs/screenshots/`](../../archive/rust/docs/screenshot
 |---|---|
 | Unlock with the master password (Dark) | <a href="unlock_dark.png"><img src="unlock_dark.png" width="560" alt="Unlock with the master password (dark skin)"></a> |
 | Home tab with recent sessions (Light) | <a href="home_light.png"><img src="home_light.png" width="560" alt="Home tab with recent sessions (light skin)"></a> |
+| Session tree with colored folders and the session menu (Light) | <a href="session_tree_menu_light.png"><img src="session_tree_menu_light.png" width="560" alt="Session tree with colored folders and the session menu (light skin)"></a> |
 | Session tree with colored folders and the session menu (Dark) | <a href="session_tree_menu_dark.png"><img src="session_tree_menu_dark.png" width="560" alt="Session tree with colored folders and the session menu (dark skin)"></a> |
 
 ## Session editor
@@ -38,6 +39,7 @@ app are in [`archive/rust/docs/screenshots/`](../../archive/rust/docs/screenshot
 
 | Screen | Image |
 |---|---|
+| SSH terminal with the SFTP browser and the monitoring bar (Light) | <a href="ssh_sftp_monitor_light.png"><img src="ssh_sftp_monitor_light.png" width="560" alt="SSH terminal with the SFTP browser and the monitoring bar (light skin)"></a> |
 | SSH terminal with the SFTP browser and the monitoring bar (Dark) | <a href="ssh_sftp_monitor_dark.png"><img src="ssh_sftp_monitor_dark.png" width="560" alt="SSH terminal with the SFTP browser and the monitoring bar (dark skin)"></a> |
 | RDP tab (lab xrdp) (Dark) | <a href="rdp_dark.png"><img src="rdp_dark.png" width="560" alt="RDP tab (lab xrdp) (dark skin)"></a> |
 | VNC tab (lab TigerVNC) (Light) | <a href="vnc_light.png"><img src="vnc_light.png" width="560" alt="VNC tab (lab TigerVNC) (light skin)"></a> |
