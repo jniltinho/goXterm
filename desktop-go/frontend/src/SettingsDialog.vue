@@ -9,6 +9,7 @@ import {
 import { SCHEMES, MONO_FONTS } from "./schemes";
 import { COMMANDS, DEFAULT_SHORTCUTS, shortcutValid } from "./commands";
 import Dropdown, { type Option } from "./Dropdown.vue";
+import TabBar from "./TabBar.vue";
 import { SKINS } from "./themes";
 
 const emit = defineEmits<{ saved: []; close: []; import: []; unlock: []; "import-toml": []; "export-toml": [] }>();
@@ -147,12 +148,8 @@ watch(tab, async (t) => {
     <div v-if="s" class="st" role="dialog" aria-label="Settings">
       <div class="st-title"><span>Settings</span><button class="st-x" title="Close" @click="emit('close')"></button></div>
       <div class="st-main">
-        <div class="st-tabs">
-          <button v-for="[id, label, ic] in TABS" :key="id" class="st-tab" :class="tab === id ? 'on' : ''" @click="tab = id">
-            <img :src="icon(ic)" />{{ label }}
-          </button>
-        </div>
-        <div class="st-page">
+        <TabBar v-model="tab" :tabs="TABS" />
+        <div class="st-page tab-page">
           <!-- General -->
           <template v-if="tab === 'general'">
             <section class="grp"><div class="grp-h">Tabs</div><div class="grp-b">
@@ -328,12 +325,7 @@ watch(tab, async (t) => {
 .st-x::before, .st-x::after { content: ""; position: absolute; left: 4px; right: 4px; top: 9px; height: 1.2px; background: var(--title-fg); transform: rotate(45deg); }
 .st-x::after { transform: rotate(-45deg); }
 .st-main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 8px 0; }
-.st-tabs { display: flex; flex-wrap: wrap; position: relative; z-index: 1; }
-.st-tab { display: flex; align-items: center; gap: 5px; height: 36px; padding: 0 7px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: 2px; cursor: pointer; } /* breathing room between tabs */
-.st-tab img { width: 24px; height: 24px; }
-.st-tab:hover { background: var(--hover); }
-.st-tab.on { background: var(--panel); border-bottom-color: var(--panel); }
-.st-page { flex: 1; min-height: 0; overflow-y: auto; margin-top: -1px; padding: 8px; background: var(--panel); border: 1px solid var(--border); }
+.st-page { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
 .st-foot { flex: none; display: flex; justify-content: center; padding: 8px; }
 .ok { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 80px; height: 30px; padding: 0 12px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
 .ok:hover:not(:disabled) { background: var(--hover); border-color: var(--outline); }

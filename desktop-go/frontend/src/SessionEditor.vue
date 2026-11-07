@@ -8,6 +8,7 @@ import {
   SessionPolicy, SetSessionPolicy, KnownUsers, type Folder, type WslDistribution, type Policy,
 } from "./api";
 import Dropdown, { type Option } from "./Dropdown.vue";
+import TabBar from "./TabBar.vue";
 import { SCHEMES, MONO_FONTS } from "./schemes";
 import { ICON_PICKER } from "./iconCatalog";
 
@@ -318,12 +319,8 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
             </section>
 
             <!-- icon tabs -->
-            <div class="tabs">
-              <button v-for="[id, label, ic] in pages" :key="id" class="tab" :class="page === id ? 'on' : ''" @click="page = id; iconPicker = false">
-                <img :src="icon(ic)" />{{ label }}
-              </button>
-            </div>
-            <div class="panel">
+            <TabBar v-model="page" class="tabs" :tabs="pages" @update:model-value="iconPicker = false" />
+            <div class="panel tab-page">
               <div class="page">
                 <!-- Bookmark: icon picker -->
                 <template v-if="iconPicker">
@@ -600,13 +597,9 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
 .req { color: var(--danger); margin-left: 2px; }
 
 /* icon tabs joined to the panel */
-.tabs { display: flex; flex: none; margin-top: 16px; position: relative; z-index: 1; }
+.tabs { margin-top: 16px; }
 /* same tab look as the Settings window (one pattern for every tabbed dialog) */
-.tab { display: flex; align-items: center; gap: 5px; height: 36px; padding: 0 7px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: 2px; cursor: pointer; } /* breathing room between tabs */
-.tab img { width: 24px; height: 24px; }
-.tab:hover { background: var(--hover); }
-.tab.on { background: var(--panel); border-bottom-color: var(--panel); }
-.panel { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: center; margin-top: -1px; padding: 12px; background: var(--panel); border: 1px solid var(--border); }
+.panel { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: center; padding: 12px; }
 .page { flex: 1; align-self: stretch; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .big { flex: none; width: 64px; height: 64px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--input); border: 1px solid var(--border); cursor: pointer; }
 .big:hover { border-color: var(--outline); background: var(--hover); }

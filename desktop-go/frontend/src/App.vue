@@ -937,9 +937,11 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .qc.err { border-color: var(--danger); }
 .qc::placeholder { color: var(--text-muted); }
 .tabstrip { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 2px; padding-left: 2px; overflow: hidden; }
-.tab, .tab-home, .tab-new { height: 26px; flex: none; display: flex; align-items: center; background: var(--tab-inactive); border: 1px solid var(--border); cursor: pointer; color: var(--text); font-size: 12px; position: relative; }
-.tab:hover, .tab-home:hover, .tab-new:hover { background: var(--hover); }
-.tab.sel, .tab-home.sel { background: var(--tab-active); border-bottom-color: transparent; height: 27px; margin-bottom: -1px; } /* joins the work area */
+/* Same pattern as TabBar.vue: muted inactive tabs, hover tint, the active tab bold on the work-area colour */
+.tab, .tab-home, .tab-new { height: 26px; flex: none; display: flex; align-items: center; background: var(--tab-inactive); border: 1px solid var(--border-subtle); border-bottom-color: var(--border); border-radius: var(--ctl-radius) var(--ctl-radius) 0 0 !important; cursor: pointer; color: var(--text-muted); font-size: 12px; position: relative; transition: background-color 0.12s ease, color 0.12s ease; }
+.tab:hover:not(.sel), .tab-home:hover:not(.sel), .tab-new:hover { background: var(--hover); color: var(--text); }
+.tab.sel, .tab-home.sel { color: var(--text); font-weight: 600; background: var(--tab-active); border-color: var(--border); border-bottom-color: transparent; height: 27px; margin-bottom: -1px; } /* joins the work area */
+@media (prefers-reduced-motion: reduce) { .tab, .tab-home, .tab-new { transition: none; } }
 .tab-home { width: 36px; justify-content: center; }
 .tab-home img { width: 16px; height: 16px; }
 .tab-new { width: 26px; justify-content: center; }
