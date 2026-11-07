@@ -602,7 +602,7 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
 /* icon tabs joined to the panel */
 .tabs { display: flex; flex: none; margin-top: 16px; position: relative; z-index: 1; }
 /* same tab look as the Settings window (one pattern for every tabbed dialog) */
-.tab { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: -1px; cursor: pointer; }
+.tab { display: flex; align-items: center; gap: 5px; height: 36px; padding: 0 7px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: 2px; cursor: pointer; } /* breathing room between tabs */
 .tab img { width: 24px; height: 24px; }
 .tab:hover { background: var(--hover); }
 .tab.on { background: var(--panel); border-bottom-color: var(--panel); }

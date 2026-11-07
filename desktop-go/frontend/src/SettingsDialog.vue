@@ -329,7 +329,7 @@ watch(tab, async (t) => {
 .st-x::after { transform: rotate(-45deg); }
 .st-main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 8px 0; }
 .st-tabs { display: flex; flex-wrap: wrap; position: relative; z-index: 1; }
-.st-tab { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: -1px; cursor: pointer; }
+.st-tab { display: flex; align-items: center; gap: 5px; height: 36px; padding: 0 7px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: 2px; cursor: pointer; } /* breathing room between tabs */
 .st-tab img { width: 24px; height: 24px; }
 .st-tab:hover { background: var(--hover); }
 .st-tab.on { background: var(--panel); border-bottom-color: var(--panel); }
