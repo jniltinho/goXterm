@@ -179,7 +179,7 @@ function respondTrust(decision: "once" | "save" | "reject") {
 }
 
 // Interactive SSH password prompt (sessions with no saved credential); also queued.
-type PassReq = { reqId: string; host: string; user: string };
+type PassReq = { reqId: string; host: string; user: string; prompt?: string };
 const passQ = ref<PassReq[]>([]);
 const passReq = computed(() => passQ.value[0] ?? null);
 const passValue = ref("");
@@ -533,7 +533,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
       <div class="dialog" style="width: 400px">
         <div class="dialog-title">Password</div>
         <div class="dialog-body">
-          <p class="dialog-sub">Enter the password for <b>{{ (passReq.user || "user") + "@" + passReq.host }}</b>.</p>
+          <p class="dialog-sub" v-if="passReq.prompt">{{ passReq.prompt }}.</p>
+          <p class="dialog-sub" v-else>Enter the password for <b>{{ (passReq.user || "user") + "@" + passReq.host }}</b>.</p>
           <label class="dialog-label">Password</label>
           <input type="password" class="dialog-input" v-model="passValue" @keyup.enter="respondPassword(true)" autofocus />
           <div class="dialog-actions">

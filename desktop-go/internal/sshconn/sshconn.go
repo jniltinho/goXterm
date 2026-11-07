@@ -27,10 +27,22 @@ type Config struct {
 	// AskPassword, when set, is called to prompt the user for a password (or a key passphrase) when
 	// one is needed. It may block (e.g. a UI dialog); the answer is reused within this dial.
 	AskPassword func() (string, error)
-	KeyFile     string // optional private key path (public-key auth); ~ is expanded
-	UseAgent    bool   // also try the ssh-agent at $SSH_AUTH_SOCK
-	HostKey     ssh.HostKeyCallback
-	Cols, Rows  int
+	// AskPassphrase, when set, prompts for a key file's passphrase (distinct wording from the account
+	// password). Falls back to AskPassword when nil.
+	AskPassphrase func(keyFile string) (string, error)
+	KeyFile       string // optional private key path (public-key auth); ~ is expanded
+	UseAgent      bool   // also try the ssh-agent at $SSH_AUTH_SOCK
+	HostKey       ssh.HostKeyCallback
+	Cols, Rows    int
+	// Log, when set, receives one-line auth diagnostics (agent availability, key load result) so the
+	// user can see why a password is being asked instead of the key being used.
+	Log func(string)
+}
+
+func (c Config) log(s string) {
+	if c.Log != nil {
+		c.Log(s)
+	}
 }
 
 // Session is an open SSH shell with a PTY.
@@ -64,25 +76,42 @@ func DialClient(cfg Config) (*ssh.Client, error) {
 			return ans, nil
 		})
 	}
-	// Public-key auth (ssh-agent and/or an explicit key file) is tried before passwords.
+	// Public-key auth is tried before passwords. The explicitly configured key file is offered FIRST,
+	// then the ssh-agent: the user's chosen key is the intent, and trying it first avoids the server's
+	// MaxAuthTries being spent on unrelated agent keys (which would otherwise fall through to a
+	// password prompt even though a working key is configured).
+	if cfg.KeyFile != "" {
+		// Lazily: loaded only when this method is reached, so a passphrase-protected key prompts only
+		// if needed. A load error skips the method and falls through to the agent / password.
+		auths = append(auths, ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
+			ask := cfg.AskPassword
+			if cfg.AskPassphrase != nil {
+				kf := cfg.KeyFile
+				ask = func() (string, error) { return cfg.AskPassphrase(kf) }
+			}
+			signer, err := loadKey(cfg.KeyFile, ask)
+			if err != nil {
+				cfg.log(fmt.Sprintf("key %s could not be loaded: %v", cfg.KeyFile, err))
+				return nil, nil
+			}
+			cfg.log(fmt.Sprintf("offering key %s (%s)", cfg.KeyFile, signer.PublicKey().Type()))
+			return []ssh.Signer{signer}, nil
+		}))
+	}
 	if cfg.UseAgent {
 		if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 			if ac, err := net.Dial("unix", sock); err == nil {
-				auths = append(auths, ssh.PublicKeysCallback(agent.NewClient(ac).Signers))
+				client := agent.NewClient(ac)
+				if keys, kerr := client.List(); kerr == nil {
+					cfg.log(fmt.Sprintf("ssh-agent: %d key(s) available", len(keys)))
+				}
+				auths = append(auths, ssh.PublicKeysCallback(client.Signers))
+			} else {
+				cfg.log("ssh-agent: SSH_AUTH_SOCK is set but the agent is not reachable")
 			}
+		} else {
+			cfg.log("ssh-agent: requested but SSH_AUTH_SOCK is not set (agent unavailable)")
 		}
-	}
-	if cfg.KeyFile != "" {
-		// Lazily: the key is loaded only if the agent did not already authenticate, so a
-		// passphrase-protected key never prompts when the agent holds it (fixes "asks the password
-		// even with a key"). A load error skips the method and falls through to the password.
-		auths = append(auths, ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
-			signer, err := loadKey(cfg.KeyFile, cfg.AskPassword)
-			if err != nil {
-				return nil, nil
-			}
-			return []ssh.Signer{signer}, nil
-		}))
 	}
 	if cfg.Password != "" {
 		pw := cfg.Password

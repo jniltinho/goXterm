@@ -156,7 +156,11 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 func (a *App) dial(cfg sshconn.Config) (string, error) {
 	tabID, onData, onClose := a.newStreamTab()
 	cfg.AskPassword = a.askPassword(cfg.Host, cfg.User)
+	cfg.AskPassphrase = a.askPassphrase
 	cfg.HostKey = a.sshHostKeyCallback(cfg.Host, cfg.Port)
+	// Surface auth diagnostics as dim lines in the terminal so the user can see whether the key/agent
+	// was used before any password prompt.
+	cfg.Log = func(s string) { onData([]byte("\x1b[90m[rustxterm] " + s + "\x1b[0m\r\n")) }
 	if cfg.Cols == 0 {
 		cfg.Cols, cfg.Rows = 80, 24
 	}

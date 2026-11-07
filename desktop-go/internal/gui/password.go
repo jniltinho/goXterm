@@ -12,10 +12,21 @@ type passAns struct {
 	ok bool
 }
 
-// askPassword returns a callback (for sshconn.Config.AskPassword) that prompts the user for a
-// password through the SPA ("ssh:password") and blocks until SshPasswordRespond delivers it. Used for
-// sessions with no saved credential, or when a saved password was rejected.
+// askPassword returns a callback (for sshconn.Config.AskPassword) that prompts the user for the
+// account password through the SPA ("ssh:password") and blocks until SshPasswordRespond delivers it.
 func (a *App) askPassword(host, user string) func() (string, error) {
+	return a.ask("", host, user)
+}
+
+// askPassphrase prompts for an SSH key file's passphrase, with wording that distinguishes it from the
+// account password (used by sshconn when a key is passphrase-protected).
+func (a *App) askPassphrase(keyFile string) (string, error) {
+	return a.ask("Enter the passphrase for key "+keyFile, "", "")()
+}
+
+// ask emits an "ssh:password" prompt and blocks for the answer. prompt overrides the default dialog
+// text (account password) when non-empty — e.g. a key passphrase.
+func (a *App) ask(prompt, host, user string) func() (string, error) {
 	return func() (string, error) {
 		ch := make(chan passAns, 1)
 		a.mu.Lock()
@@ -33,7 +44,7 @@ func (a *App) askPassword(host, user string) func() (string, error) {
 		}()
 
 		if a.emit != nil {
-			a.emit("ssh:password", map[string]any{"reqId": reqID, "host": host, "user": user})
+			a.emit("ssh:password", map[string]any{"reqId": reqID, "host": host, "user": user, "prompt": prompt})
 		}
 		select {
 		case ans := <-ch:
