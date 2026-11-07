@@ -4,13 +4,18 @@
 package sshconn
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 // Config describes one SSH connection.
@@ -19,9 +24,11 @@ type Config struct {
 	Port     int
 	User     string
 	Password string // static password/keyboard-interactive auth, tried first when non-empty
-	// AskPassword, when set, is called to prompt the user for a password if there is no saved one (or
-	// it was rejected). It may block (e.g. a UI dialog); the answer is reused within this dial.
+	// AskPassword, when set, is called to prompt the user for a password (or a key passphrase) when
+	// one is needed. It may block (e.g. a UI dialog); the answer is reused within this dial.
 	AskPassword func() (string, error)
+	KeyFile     string // optional private key path (public-key auth); ~ is expanded
+	UseAgent    bool   // also try the ssh-agent at $SSH_AUTH_SOCK
 	HostKey     ssh.HostKeyCallback
 	Cols, Rows  int
 }
@@ -57,6 +64,19 @@ func DialClient(cfg Config) (*ssh.Client, error) {
 			return ans, nil
 		})
 	}
+	// Public-key auth (ssh-agent and/or an explicit key file) is tried before passwords.
+	if cfg.UseAgent {
+		if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+			if ac, err := net.Dial("unix", sock); err == nil {
+				auths = append(auths, ssh.PublicKeysCallback(agent.NewClient(ac).Signers))
+			}
+		}
+	}
+	if cfg.KeyFile != "" {
+		if signer, err := loadKey(cfg.KeyFile, cfg.AskPassword); err == nil {
+			auths = append(auths, ssh.PublicKeys(signer))
+		}
+	}
 	if cfg.Password != "" {
 		pw := cfg.Password
 		auths = append(auths, ssh.Password(pw), ki(func() (string, error) { return pw, nil }))
@@ -85,6 +105,37 @@ func DialClient(cfg Config) (*ssh.Client, error) {
 		Timeout:         15 * time.Second,
 	}
 	return ssh.Dial("tcp", net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port)), clientCfg)
+}
+
+// loadKey reads a private key file and returns its signer. If the key is passphrase-protected and
+// ask is set, it prompts for the passphrase once.
+func loadKey(path string, ask func() (string, error)) (ssh.Signer, error) {
+	b, err := os.ReadFile(expandHome(path))
+	if err != nil {
+		return nil, err
+	}
+	signer, err := ssh.ParsePrivateKey(b)
+	if err == nil {
+		return signer, nil
+	}
+	var pm *ssh.PassphraseMissingError
+	if errors.As(err, &pm) && ask != nil {
+		pw, aerr := ask()
+		if aerr != nil {
+			return nil, aerr
+		}
+		return ssh.ParsePrivateKeyWithPassphrase(b, []byte(pw))
+	}
+	return nil, err
+}
+
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(h, p[2:])
+		}
+	}
+	return p
 }
 
 // Connect dials, authenticates, opens a PTY shell, and pumps output to onData until it ends, then
