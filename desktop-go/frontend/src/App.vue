@@ -449,7 +449,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" :monitor="t.monitor" @close="closeTab(t.id)" class="absolute inset-0 p-1" />
             <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
             <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
-            <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
+            <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" class="absolute inset-0" />
           </template>
           <div v-if="!tabs.length" class="home">
             <div class="home-brand"><img :src="icon('logo')" class="home-logo" @error="($event.target as HTMLImageElement).src = icon('session')" /><span>rustXterm</span></div>

@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, type RdpView } from "./api";
 
 const props = defineProps<{ connect: () => Promise<RdpView> }>();
+const emit = defineEmits<{ close: [] }>();
 
 const canvas = ref<HTMLCanvasElement | null>(null);
+const overlay = ref<HTMLDivElement | null>(null);
 const status = ref("Connecting…");
+// Set once the session ends (logoff, network drop, server kick): the last frame stays, dimmed,
+// under a "Session stopped" notice — Return/Ctrl+D close the tab, R reconnects (terminal parity).
+const stopped = ref<{ reason: string } | null>(null);
 let tabId = "";
 let ctx: CanvasRenderingContext2D | null = null;
 let offFrame: (() => void) | undefined;
@@ -25,6 +30,13 @@ const SC: Record<string, number> = {
   Comma: 0x33, Period: 0x34, Slash: 0x35, ShiftRight: 0x36, AltLeft: 0x38, Space: 0x39, CapsLock: 0x3a,
 };
 
+// Server disconnect reasons → plain words (the raw reason stays visible, muted).
+function friendly(raw: string): string {
+  if (/ULTIMATUM/i.test(raw)) return "the remote session ended (logged off or disconnected by the server)";
+  if (/EOF|reset|closed/i.test(raw)) return "the connection was closed";
+  return raw || "disconnected";
+}
+
 function pos(e: MouseEvent): [number, number] {
   const c = canvas.value!;
   const r = c.getBoundingClientRect();
@@ -33,12 +45,22 @@ function pos(e: MouseEvent): [number, number] {
   return [Math.max(0, Math.min(c.width - 1, x)), Math.max(0, Math.min(c.height - 1, y))];
 }
 
-onMounted(async () => {
+function unsubscribe() {
+  offFrame?.(); offReady?.(); offClose?.();
+  offFrame = offReady = offClose = undefined;
+}
+
+async function start() {
+  stopped.value = null;
+  status.value = "Connecting…";
   let view: RdpView;
   try {
     view = await props.connect();
   } catch (e) {
-    status.value = String(e);
+    status.value = "";
+    stopped.value = { reason: String(e) };
+    await nextTick();
+    overlay.value?.focus();
     return;
   }
   tabId = view.tabId;
@@ -55,25 +77,42 @@ onMounted(async () => {
     status.value = "";
   });
   offReady = Events.On("rdp:ready:" + tabId, () => (status.value = ""));
-  offClose = Events.On("rdp:close:" + tabId, (ev: { data: unknown }) => {
-    status.value = "[disconnected] " + String(ev.data ?? "");
+  offClose = Events.On("rdp:close:" + tabId, async (ev: { data: unknown }) => {
+    status.value = "";
+    stopped.value = { reason: String(ev.data ?? "") };
+    await nextTick();
+    overlay.value?.focus();
   });
   await RdpStart(tabId);
   c.focus();
-});
+}
+
+async function reconnect() {
+  unsubscribe();
+  if (tabId) { void RdpDisconnect(tabId); tabId = ""; }
+  ctx?.clearRect(0, 0, canvas.value?.width ?? 0, canvas.value?.height ?? 0);
+  await start();
+}
+
+function onStoppedKey(e: KeyboardEvent) {
+  const k = e.key.toLowerCase();
+  if (e.key === "Enter" || (e.ctrlKey && k === "d")) { e.preventDefault(); emit("close"); }
+  else if (k === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); void reconnect(); }
+}
+
+onMounted(start);
 
 onBeforeUnmount(() => {
-  offFrame?.();
-  offReady?.();
-  offClose?.();
+  unsubscribe();
   if (tabId) void RdpDisconnect(tabId);
 });
 
-function onMove(e: MouseEvent) { const [x, y] = pos(e); void RdpMouse(tabId, "move", 0, x, y); }
-function onDown(e: MouseEvent) { canvas.value?.focus(); const [x, y] = pos(e); void RdpMouse(tabId, "down", e.button, x, y); }
-function onUp(e: MouseEvent) { const [x, y] = pos(e); void RdpMouse(tabId, "up", e.button, x, y); }
-function onWheel(e: WheelEvent) { const [x, y] = pos(e); void RdpMouse(tabId, "wheel", e.deltaY < 0 ? 120 : -120, x, y); }
+function onMove(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "move", 0, x, y); } }
+function onDown(e: MouseEvent) { if (stopped.value) return; canvas.value?.focus(); const [x, y] = pos(e); void RdpMouse(tabId, "down", e.button, x, y); }
+function onUp(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "up", e.button, x, y); } }
+function onWheel(e: WheelEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "wheel", e.deltaY < 0 ? 120 : -120, x, y); } }
 function onKey(e: KeyboardEvent, down: boolean) {
+  if (stopped.value) return;
   const sc = SC[e.code];
   if (sc === undefined) return;
   e.preventDefault();
@@ -87,6 +126,7 @@ function onKey(e: KeyboardEvent, down: boolean) {
       ref="canvas"
       tabindex="0"
       class="rdp-canvas"
+      :class="stopped ? 'dim' : ''"
       @mousemove="onMove"
       @mousedown="onDown"
       @mouseup="onUp"
@@ -95,12 +135,43 @@ function onKey(e: KeyboardEvent, down: boolean) {
       @keydown="onKey($event, true)"
       @keyup="onKey($event, false)"
     ></canvas>
-    <div v-if="status" class="status">{{ status }}</div>
+    <div v-if="status && !stopped" class="status">{{ status }}</div>
+    <div v-if="stopped" ref="overlay" class="stopped" tabindex="0" @keydown="onStoppedKey">
+      <div class="stopped-card">
+        <div class="stopped-rule"></div>
+        <div class="stopped-title">✖ Session stopped</div>
+        <div class="stopped-why">{{ friendly(stopped.reason) }}</div>
+        <div v-if="stopped.reason && friendly(stopped.reason) !== stopped.reason" class="stopped-raw">{{ stopped.reason }}</div>
+        <ul class="stopped-keys">
+          <li>Press <b>Return</b> or <b>Ctrl+D</b> to close this tab</li>
+          <li>Press <b>R</b> to reconnect</li>
+        </ul>
+        <div class="stopped-actions">
+          <button class="sbtn primary" @click="reconnect">Reconnect</button>
+          <button class="sbtn" @click="emit('close')">Close tab</button>
+        </div>
+        <div class="stopped-rule"></div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .rdp { position: relative; }
-.rdp-canvas { image-rendering: pixelated; outline: none; max-width: 100%; max-height: 100%; }
+.rdp-canvas { image-rendering: pixelated; outline: none; max-width: 100%; max-height: 100%; transition: filter .15s; }
+.rdp-canvas.dim { filter: grayscale(.6) brightness(.45); }
 .status { position: absolute; top: 8px; left: 8px; color: #cbd5e1; background: rgba(0, 0, 0, .6); padding: 4px 8px; font-size: 12px; }
+.stopped { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; outline: none; }
+.stopped-card { min-width: 420px; max-width: 80%; background: #0b0e11; border: 1px solid #c0392b; padding: 14px 18px; font-family: "DejaVu Sans Mono", monospace; font-size: 13px; color: #cbd5e1; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.stopped-rule { border-top: 1px dashed #c0392b; margin: 2px 0 10px; }
+.stopped-card .stopped-rule:last-child { margin: 12px 0 2px; }
+.stopped-title { color: #e05561; font-weight: 700; }
+.stopped-why { margin-top: 4px; }
+.stopped-raw { margin-top: 2px; color: #6b7a8a; font-size: 11.5px; word-break: break-all; }
+.stopped-keys { margin: 10px 0 0; padding-left: 18px; color: #8a97a5; }
+.stopped-keys b { color: #d6a8f0; font-weight: 600; }
+.stopped-actions { display: flex; gap: 8px; margin-top: 12px; }
+.sbtn { height: 26px; padding: 0 14px; font-size: 12px; background: #1b2129; color: #cbd5e1; border: 1px solid #3a4654; cursor: pointer; font-family: inherit; }
+.sbtn:hover { border-color: #6aa0da; }
+.sbtn.primary { background: #2f6fb3; border-color: #2f6fb3; color: #fff; }
 </style>
