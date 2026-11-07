@@ -11,7 +11,7 @@ DOCKER     := docker run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp
 GO_ENV     := -e GOFLAGS=-buildvcs=false -e GOCACHE=/src/.cache/go-build -e GOMODCACHE=/src/.cache/mod -e CGO_ENABLED=1
 RUN         = $(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)
 
-.PHONY: image tidy check layers test frontend build appimage windows macos dist-all clean
+.PHONY: prints image tidy check layers test frontend build appimage windows macos dist-all clean
 
 image:            ## build toolchain image (Go + GTK/WebKitGTK + SQLCipher)
 	docker build -q -t $(IMAGE) -f build/linux.Dockerfile build
@@ -71,6 +71,14 @@ macos: image frontend ## macOS amd64+arm64 + universal "rustXterm (Go).app" zip 
 	@echo 'Unsigned universal app: xattr -dr com.apple.quarantine "rustXterm (Go).app"' 
 
 dist-all: appimage windows macos ## Linux binary + AppImage, Windows .exe, macOS per-arch — all in dist/
+
+# Screenshot sweep (13.1) on Linux into ../docs/prints/go-linux/<skin>/ (git-ignored). Needs the QA
+# container `rxt-qa` (toolchain image on the lab network, with the QA store) and RXT_QA_PASS set.
+prints: build    ## screenshots of every screen in Light and Dark → ../docs/prints/go-linux/
+	@test -n "$$RXT_QA_PASS" || { echo "set RXT_QA_PASS (the QA store's throwaway master password)"; exit 1; }
+	docker start rxt-qa >/dev/null
+	for s in light dark; do docker exec -e RXT_QA_PASS rxt-qa sh /w/build/qa/prints.sh $$s /w/.cache/prints/$$s || exit 1; \
+	  mkdir -p ../docs/prints/go-linux/$$s && cp .cache/prints/$$s/*.png ../docs/prints/go-linux/$$s/; done
 
 clean:
 	rm -rf dist .cache

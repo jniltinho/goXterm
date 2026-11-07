@@ -33,6 +33,8 @@ type Config struct {
 	Password    string
 	Mode        Mode
 	TLSInsecure bool // accept a self-signed server certificate (lab/tests)
+	// VerifyTLS decides whether the server certificate is trusted (tlstrust.Verifier).
+	VerifyTLS func(tls.ConnectionState) error
 }
 
 // Client is an open FTP(S) connection.
@@ -43,7 +45,8 @@ func Connect(cfg Config) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	opts := []ftp.DialOption{ftp.DialWithTimeout(15 * time.Second)}
 	if cfg.Mode == Explicit || cfg.Mode == Implicit {
-		tc := &tls.Config{ServerName: cfg.Host, InsecureSkipVerify: cfg.TLSInsecure}
+		tc := &tls.Config{ServerName: cfg.Host, InsecureSkipVerify: cfg.TLSInsecure || cfg.VerifyTLS != nil,
+			VerifyConnection: cfg.VerifyTLS}
 		if cfg.Mode == Implicit {
 			opts = append(opts, ftp.DialWithTLS(tc))
 		} else {

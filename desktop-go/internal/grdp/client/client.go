@@ -3,6 +3,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"os"
 
@@ -181,14 +182,16 @@ func Bpp(bp uint16) int {
 }
 
 type Setting struct {
-	Width             int
-	Height            int
-	RequestedProtocol uint32
-	LogLevel          glog.LEVEL
-	TLSMinVersion     uint16
-	TLSVerify         bool
-	VerifyServer      bool // Verify server PubKeyAuth in NLA (MITM protection)
-	AuthOnly          bool // Stop after NLA auth; skip MCS/SEC/PDU (fast credential check)
+	Width                 int
+	Height                int
+	RequestedProtocol     uint32
+	LogLevel              glog.LEVEL
+	TLSMinVersion         uint16
+	TLSVerify             bool
+	VerifyConnection      func(tls.ConnectionState) error // see core.SocketLayer.VerifyConnection
+	AllowStandardSecurity bool                            // accept standard RDP security (no TLS) from the server
+	VerifyServer          bool                            // Verify server PubKeyAuth in NLA (MITM protection)
+	AuthOnly              bool                            // Stop after NLA auth; skip MCS/SEC/PDU (fast credential check)
 }
 
 func NewSetting() *Setting {

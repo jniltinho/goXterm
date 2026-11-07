@@ -26,18 +26,19 @@ type App struct {
 	zoom     func(float64)                      // set by gui.Run; the webview zoom (Interface size)
 	version  string                             // set by gui.Run, shown in Settings → Diagnostics
 
-	mu     sync.Mutex
-	seq    int
-	term   map[string]termStream       // tabId → live terminal (SSH, Telnet or Serial)
-	ascii  map[string]bool             // file tabs in the SFTP panel's ASCII mode
-	remote map[string]remoteFS         // tabId → live SFTP/FTP file session
-	vnc    map[string]*vncconn.Session // tabId → live VNC session
-	rdp    map[string]*rdpconn.Session // tabId → live RDP session
-	trust  map[string]chan string      // reqId → pending SSH host-key trust decision
-	pass   map[string]chan passAns     // reqId → pending interactive password entry
-	mon    map[string]chan struct{}    // tabId → stop channel for its remote-monitoring loop
-	tun    map[string]*tunRun          // via+name → running port-forwarding tunnel
-	early  map[string]*earlyTab        // tabId → output/banner held until the SPA attaches
+	mu      sync.Mutex
+	seq     int
+	term    map[string]termStream       // tabId → live terminal (SSH, Telnet or Serial)
+	ascii   map[string]bool             // file tabs in the SFTP panel's ASCII mode
+	rdpSave map[string]*passwordSaver   // RDP tabs whose typed password is saved after RdpStart
+	remote  map[string]remoteFS         // tabId → live SFTP/FTP file session
+	vnc     map[string]*vncconn.Session // tabId → live VNC session
+	rdp     map[string]*rdpconn.Session // tabId → live RDP session
+	trust   map[string]chan string      // reqId → pending SSH host-key trust decision
+	pass    map[string]chan passAns     // reqId → pending interactive password entry
+	mon     map[string]chan struct{}    // tabId → stop channel for its remote-monitoring loop
+	tun     map[string]*tunRun          // via+name → running port-forwarding tunnel
+	early   map[string]*earlyTab        // tabId → output/banner held until the SPA attaches
 	// shellPID caches each SSH tab's login-shell PID for "Follow terminal folder" (-1 unsupported).
 	shellPID map[string]int
 	multi    multiExec         // MultiExec: broadcast typed input to the selected terminals

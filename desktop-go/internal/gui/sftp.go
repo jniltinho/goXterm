@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"os"
@@ -66,12 +67,26 @@ func (a *App) FtpConnect(sessionID int64, mode string) (*SftpSession, error) {
 	if port == 0 {
 		port = 21
 	}
+	// No saved password: ask (with "Save password") and keep it only after the login works.
+	var saver *passwordSaver
+	if password == "" {
+		saver = &passwordSaver{sessionID: sessionID}
+		pw, err := a.ask("", sv.Host, sv.User, saver)()
+		if err != nil {
+			return nil, err
+		}
+		password = pw
+	}
 	c, err := ftpconn.Connect(ftpconn.Config{
 		Host: sv.Host, Port: port, User: sv.User, Password: password,
 		Mode: ftpMode(mode), TLSInsecure: os.Getenv("RXT_SSH_INSECURE") == "1",
+		VerifyTLS: a.ftpsVerifier(sv.Host, port),
 	})
 	if err != nil {
 		return nil, err
+	}
+	if saver != nil {
+		_ = saver.commit()
 	}
 	return a.registerRemote(c, "f")
 }
@@ -317,4 +332,12 @@ func (a *App) RemoteNewFile(tabID, remote string) error {
 	defer os.Remove(name)
 	_, err = c.Upload(name, remote)
 	return err
+}
+
+// ftpsVerifier is the FTPS certificate trust (tlstrust), off only for the lab override.
+func (a *App) ftpsVerifier(host string, port int) func(tls.ConnectionState) error {
+	if os.Getenv("RXT_SSH_INSECURE") == "1" {
+		return nil
+	}
+	return a.tlsVerifier(host, port)
 }

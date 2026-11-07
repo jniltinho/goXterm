@@ -28,6 +28,9 @@ func (a *App) Tunnels() ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rows == nil {
+		rows = []map[string]any{} // JSON [] rather than null for "no tunnels"
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, m := range rows {

@@ -45,6 +45,9 @@ type Config struct {
 	LegacyTLS bool
 	// OnClipboard, when set, receives text copied on the remote desktop.
 	OnClipboard func(string)
+	// VerifyTLS decides whether the server certificate is trusted (tlstrust.Verifier); nil accepts
+	// any certificate (tests only).
+	VerifyTLS func(tls.ConnectionState) error
 }
 
 // Rect is a changed region handed to onFrame as a PNG.
@@ -60,12 +63,15 @@ type Session struct {
 	closed bool
 }
 
+// requested is the x224 protocol offer: NLA offers CredSSP or plain TLS (the server picks, as the
+// Rust client does), SSL offers TLS, Std (only with "Allow legacy RDP security") offers all three
+// and is the only mode that accepts the unencrypted standard RDP security (see AllowStandardSecurity).
 func requested(p Protocol) uint32 {
 	switch p {
 	case NLA:
-		return x224.PROTOCOL_HYBRID
+		return x224.PROTOCOL_HYBRID | x224.PROTOCOL_SSL
 	case Std:
-		return x224.PROTOCOL_RDP
+		return x224.PROTOCOL_HYBRID | x224.PROTOCOL_SSL // | PROTOCOL_RDP, which is 0
 	default:
 		return x224.PROTOCOL_SSL
 	}
@@ -89,7 +95,9 @@ func Connect(cfg Config, onFrame func(Rect), onReady func(), onClose func(error)
 	s.Width, s.Height = w, h
 	s.LogLevel = glog.ERROR
 	s.SetRequestedProtocol(requested(cfg.Protocol))
-	s.TLSVerify = false // lab/self-signed; a trust prompt is a follow-up (ssh_trust/cert_trust)
+	s.AllowStandardSecurity = cfg.Protocol == Std
+	s.TLSVerify = false // trust is decided by VerifyTLS (pinning / trust on first use), not by CA roots alone
+	s.VerifyConnection = cfg.VerifyTLS
 	s.TLSMinVersion = tls.VersionTLS12
 	if cfg.LegacyTLS {
 		s.TLSMinVersion = tls.VersionTLS10 // opt-in for old servers; blocks NLA (see Config.LegacyTLS)

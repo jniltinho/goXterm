@@ -45,6 +45,17 @@ func (s *Store) CertTrust(host string, port int) (sha256 string, ok bool, err er
 	return sha256, true, nil
 }
 
+// SaveCertTrust pins a TLS certificate fingerprint for host:port (Rust save_cert_trust).
+func (s *Store) SaveCertTrust(host string, port int, sha256 string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.db.Exec(`INSERT OR REPLACE INTO cert_trust (host, port, sha256) VALUES (?, ?, ?)`,
+		strings.ToLower(host), port, sha256); err != nil {
+		return err
+	}
+	return s.writeBack()
+}
+
 // SSHTrustCount / CertTrustCount report row counts, for verification.
 func (s *Store) SSHTrustCount() (int, error)  { return s.count(`ssh_trust`) }
 func (s *Store) CertTrustCount() (int, error) { return s.count(`cert_trust`) }

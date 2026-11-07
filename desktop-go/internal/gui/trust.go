@@ -1,7 +1,9 @@
 package gui
 
 import (
+	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"rustxterm-go/internal/store"
+	"rustxterm-go/internal/tlstrust"
 )
 
 // sshHostKeyCallback verifies the server's host key against ~/.ssh/known_hosts and the stored
@@ -44,6 +47,51 @@ func (a *App) sshHostKeyCallback(host string, port int) ssh.HostKeyCallback {
 }
 
 func (a *App) promptTrust(host string, port int, key ssh.PublicKey, algo, keyB64 string) error {
+	d, err := a.askTrust(map[string]any{"host": host, "port": port, "algorithm": algo, "fingerprint": ssh.FingerprintSHA256(key)})
+	if err != nil {
+		return fmt.Errorf("host key trust prompt timed out for %s:%d", host, port)
+	}
+	switch d {
+	case "once":
+		return nil
+	case "save":
+		if st, err := openStore(); err == nil {
+			_ = st.SaveSSHTrust(host, port, algo, keyB64)
+			st.Close()
+		}
+		return nil
+	}
+	return fmt.Errorf("host key not trusted for %s:%d (%s)", host, port, ssh.FingerprintSHA256(key))
+}
+
+// tlsVerifier is the TLS trust decision for RDP and FTPS (tlstrust): system-trusted certificates
+// pass, a certificate pinned in cert_trust passes, anything else asks with the same trust dialog as
+// SSH host keys ("Accept and save" pins it, in the Rust format).
+func (a *App) tlsVerifier(host string, port int) func(tls.ConnectionState) error {
+	pinned := ""
+	if st, err := openStore(); err == nil {
+		pinned, _, _ = st.CertTrust(host, port)
+		st.Close()
+	}
+	ask := func(q tlstrust.Question) (bool, error) {
+		d, err := a.askTrust(map[string]any{"host": host, "port": port, "kind": "tls", "algorithm": q.Subject,
+			"fingerprint": "SHA256:" + q.Fingerprint, "changed": q.Changed})
+		if err != nil || (d != "once" && d != "save") {
+			return false, fmt.Errorf("certificate not trusted for %s:%d (%s)", host, port, q.Fingerprint)
+		}
+		return d == "save", nil
+	}
+	save := func(fp string) {
+		if st, err := openStore(); err == nil {
+			_ = st.SaveCertTrust(host, port, fp)
+			st.Close()
+		}
+	}
+	return tlstrust.Verifier(host, pinned, ask, save)
+}
+
+// askTrust shows the trust dialog ("ssh:trust" event) and waits for "once", "save" or "reject".
+func (a *App) askTrust(payload map[string]any) (string, error) {
 	ch := make(chan string, 1)
 	a.mu.Lock()
 	a.seq++
@@ -60,27 +108,14 @@ func (a *App) promptTrust(host string, port int, key ssh.PublicKey, algo, keyB64
 	}()
 
 	if a.emit != nil {
-		a.emit("ssh:trust", map[string]any{
-			"reqId": reqID, "host": host, "port": port,
-			"algorithm": algo, "fingerprint": ssh.FingerprintSHA256(key),
-		})
+		payload["reqId"] = reqID
+		a.emit("ssh:trust", payload)
 	}
 	select {
 	case d := <-ch:
-		switch d {
-		case "once":
-			return nil
-		case "save":
-			if st, err := openStore(); err == nil {
-				_ = st.SaveSSHTrust(host, port, algo, keyB64)
-				st.Close()
-			}
-			return nil
-		default:
-			return fmt.Errorf("host key not trusted for %s:%d (%s)", host, port, ssh.FingerprintSHA256(key))
-		}
+		return d, nil
 	case <-time.After(2 * time.Minute):
-		return fmt.Errorf("host key trust prompt timed out for %s:%d", host, port)
+		return "", errors.New("trust prompt timed out")
 	}
 }
 

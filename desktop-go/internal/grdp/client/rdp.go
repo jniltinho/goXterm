@@ -79,6 +79,7 @@ func (c *RdpClient) dialAndSetup(ctx context.Context, host, user, pwd string) (s
 			sock.TLSMinVersion = c.setting.TLSMinVersion
 		}
 		sock.TLSVerify = c.setting.TLSVerify
+		sock.VerifyConnection = c.setting.VerifyConnection
 	}
 	c.tpkt = tpkt.New(sock, nla.NewNTLMv2(domain, user, pwd))
 	if c.setting != nil && c.setting.VerifyServer {
@@ -127,6 +128,7 @@ func (c *RdpClient) Login(ctx context.Context, host, user, pwd string, width, he
 	if c.setting != nil && c.setting.RequestedProtocol != 0 {
 		c.x224.SetRequestedProtocol(c.setting.RequestedProtocol)
 	}
+	c.x224.AllowStandard = c.setting == nil || c.setting.AllowStandardSecurity
 
 	err = c.x224.Connect(ctx)
 	if err != nil {

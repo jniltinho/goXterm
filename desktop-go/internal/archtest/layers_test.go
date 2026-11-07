@@ -36,6 +36,7 @@ var allowed = map[string][]string{
 	"internal/tunnelconn": {},
 	"internal/vncconn":    {},
 	"internal/wslconn":    {},
+	"internal/tlstrust":   {},
 	"internal/archtest":   {},
 }
 

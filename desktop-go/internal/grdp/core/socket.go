@@ -16,6 +16,8 @@ type SocketLayer struct {
 	ctx           context.Context
 	TLSMinVersion uint16
 	TLSVerify     bool
+	// VerifyConnection, when set, decides certificate trust (rustXterm: pinning / trust on first use).
+	VerifyConnection func(tls.ConnectionState) error
 }
 
 func NewSocketLayer(conn net.Conn) *SocketLayer {
@@ -75,7 +77,8 @@ func (s *SocketLayer) StartTLS() error {
 		minVer = tls.VersionTLS12
 	}
 	config := &tls.Config{
-		InsecureSkipVerify: !s.TLSVerify,
+		InsecureSkipVerify: !s.TLSVerify || s.VerifyConnection != nil,
+		VerifyConnection:   s.VerifyConnection,
 		MinVersion:         minVer,
 		MaxVersion:         tls.VersionTLS13,
 	}

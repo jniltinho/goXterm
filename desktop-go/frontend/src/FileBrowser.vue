@@ -30,11 +30,11 @@ const icon = (name: string) => `./icons/${name}.png`;
 const entryIcon = (e: Entry) => (e.dir ? icon("folder") : icon("file"));
 
 async function loadLocal() {
-  try { localEntries.value = await LocalList(localPath.value); localErr.value = ""; }
+  try { localEntries.value = (await LocalList(localPath.value)) ?? []; localErr.value = ""; }
   catch (e) { localErr.value = String(e); }
 }
 async function loadRemote() {
-  try { remoteEntries.value = await RemoteList(tabId, remotePath.value); remoteErr.value = ""; }
+  try { remoteEntries.value = (await RemoteList(tabId, remotePath.value)) ?? []; remoteErr.value = ""; }
   catch (e) { remoteErr.value = String(e); }
 }
 

@@ -183,6 +183,8 @@ type X224 struct {
 	requestedProtocol uint32
 	selectedProtocol  uint32
 	dataHeader        *DataHeader
+	// AllowStandard accepts a server that answers with standard RDP security (no TLS).
+	AllowStandard bool
 }
 
 func New(t core.Transport) *X224 {
@@ -192,6 +194,7 @@ func New(t core.Transport) *X224 {
 		PROTOCOL_RDP | PROTOCOL_SSL | PROTOCOL_HYBRID,
 		PROTOCOL_SSL,
 		NewDataHeader(),
+		false,
 	}
 
 	t.On("close", func() {
@@ -282,6 +285,17 @@ func (x *X224) recvConnectionConfirm(s []byte) {
 		}
 	} else {
 		x.selectedProtocol = PROTOCOL_RDP
+	}
+
+	// Never fall back to standard RDP security (no TLS) unless allowed (rustXterm: the session's
+	// "Allow legacy RDP security").
+	if x.selectedProtocol == PROTOCOL_RDP && !x.AllowStandard {
+		err := &core.RDPError{Kind: core.ErrKindProtocol,
+			Message: "the server offers only standard RDP security (no TLS); allow legacy RDP security in the session to connect"}
+		glog.Error(err)
+		x.Emit("error", err)
+		x.Close()
+		return
 	}
 
 	if x.selectedProtocol == PROTOCOL_HYBRID_EX {

@@ -26,12 +26,19 @@ const editing = ref<Tunnel | null>(null); // null = not editing; object = the fo
 const original = ref<{ via: number; name: string } | null>(null); // key before an edit (for rename)
 
 async function refresh() {
-  try { list.value = await Tunnels(); err.value = ""; }
+  try { list.value = (await Tunnels()) ?? []; err.value = ""; } // Go sends null for "none"
   catch (e) { err.value = String(e); }
 }
 
 let off: (() => void) | undefined;
+// Escape closes the edit form first, then the window (Rust dialog_keys); an open list keeps it.
+function onKey(e: KeyboardEvent) {
+  if (e.key !== "Escape" || document.querySelector(".dd-pop, .ask-backdrop")) return;
+  if (editing.value) editing.value = null;
+  else emit("close");
+}
 onMounted(async () => {
+  window.addEventListener("keydown", onKey);
   await refresh();
   off = Events.On("tunnel:state", (ev: { data: { via: number; name: string; state: string } }) => {
     const d = ev.data;
@@ -40,7 +47,7 @@ onMounted(async () => {
     if (d.state === "error") refresh();
   });
 });
-onBeforeUnmount(() => off?.());
+onBeforeUnmount(() => { off?.(); window.removeEventListener("keydown", onKey); });
 
 function newTunnel() { original.value = null; editing.value = blank(); }
 function edit(t: Tunnel) { original.value = { via: t.via, name: t.name }; editing.value = { ...t }; }

@@ -351,7 +351,7 @@ const ctx = ref<{ x: number; y: number; session?: Session; folder?: Folder; root
 
 // SSH host-key trust prompt (TOFU): the backend emits "ssh:trust" for an unknown key and blocks.
 // Prompts queue so concurrent connections (e.g. the SSH terminal and its SFTP pane) each get one.
-type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string };
+type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string; kind?: "tls"; changed?: boolean };
 const trustQ = ref<TrustReq[]>([]);
 const trustReq = computed(() => trustQ.value[0] ?? null);
 function respondTrust(decision: "once" | "save" | "reject") {
@@ -869,10 +869,12 @@ const tabIcon = (t: Tab) => icon(t.icon);
     <!-- SSH host-key trust (trust-on-first-use) -->
     <div v-if="trustReq" class="modal-backdrop" style="z-index: 65">
       <div class="dialog" style="width: 470px">
-        <div class="dialog-title">Unknown host key</div>
+        <div class="dialog-title">{{ trustReq.kind === "tls" ? (trustReq.changed ? "Certificate changed" : "Untrusted certificate") : "Unknown host key" }}</div>
         <div class="dialog-body">
-          <p class="dialog-sub">The SSH host key of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not known. No credentials are sent until you accept.</p>
-          <div class="fp-head"><img :src="icon('key')" class="dbtn-ico" /> {{ trustReq.algorithm }} key fingerprint</div>
+          <p v-if="trustReq.kind === 'tls' && trustReq.changed" class="dialog-sub warn-text">The certificate of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> differs from the one saved before. This happens after a certificate renewal, or when someone intercepts the connection.</p>
+          <p v-else-if="trustReq.kind === 'tls'" class="dialog-sub">The TLS certificate of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not trusted by this system. No credentials are sent until you accept.</p>
+          <p v-else class="dialog-sub">The SSH host key of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not known. No credentials are sent until you accept.</p>
+          <div class="fp-head"><img :src="icon(trustReq.kind === 'tls' ? 'lock' : 'key')" class="dbtn-ico" /> {{ trustReq.kind === "tls" ? `Certificate "${trustReq.algorithm}" SHA-256 fingerprint` : `${trustReq.algorithm} key fingerprint` }}</div>
           <div class="fp">{{ trustReq.fingerprint }}</div>
           <p class="dialog-sub">Accept only if it matches the fingerprint published by the server administrator.</p>
           <div class="dialog-actions">
@@ -886,13 +888,14 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
     <!-- interactive SSH password (sessions without a saved credential) -->
     <div v-if="passReq" class="modal-backdrop" style="z-index: 66">
-      <div class="dialog" style="width: 400px">
+      <!-- Enter confirms from the field or the "Save password" box, Escape cancels -->
+      <div class="dialog" style="width: 400px" @keydown.enter.prevent="respondPassword(true)" @keydown.esc="respondPassword(false)">
         <div class="dialog-title">Password</div>
         <div class="dialog-body">
           <p class="dialog-sub" v-if="passReq.prompt">{{ passReq.prompt }}.</p>
           <p class="dialog-sub" v-else>Enter the password for <b>{{ (passReq.user || "user") + "@" + passReq.host }}</b>.</p>
           <label class="dialog-label">Password</label>
-          <input type="password" class="dialog-input" v-model="passValue" @keyup.enter="respondPassword(true)" v-focus />
+          <input type="password" class="dialog-input" v-model="passValue" v-focus />
           <label v-if="passReq.canSave" class="dialog-check"><input v-model="passSave" type="checkbox" /> Save password</label>
           <div class="dialog-actions">
             <button class="dbtn primary" @click="respondPassword(true)"><img :src="icon('ok')" class="dbtn-ico" /> OK</button>
@@ -1018,6 +1021,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .dialog-input:focus { border-color: var(--focus); }
 .dialog-err { color: var(--danger); font-size: 12px; margin-top: 6px; }
 .dialog-warn { color: var(--warning); }
+.warn-text { color: var(--warning); }
 .dialog-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .dialog-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .dialog-actions { display: flex; justify-content: center; gap: 24px; margin-top: 12px; }

@@ -46,10 +46,31 @@ func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 		user = d + `\` + user // grdp splits DOMAIN\user; UPN (user@domain) is passed as-is
 	}
 	w, h := rdpSize(rdp["resolution"], tabW, tabH)
-	return a.rdpDial(rdpconn.Config{
+	// No saved password: ask (with "Save password"). It travels only inside the TLS channel, after the
+	// certificate check, and is kept only once the connection is up.
+	var saver *passwordSaver
+	if password == "" {
+		saver = &passwordSaver{sessionID: sessionID}
+		pw, err := a.ask("", asString(m["host"]), user, saver)()
+		if err != nil {
+			return nil, err
+		}
+		password = pw
+	}
+	view, err := a.rdpDial(rdpconn.Config{
 		Host: asString(m["host"]), Port: port, User: user, Password: password,
 		Width: w, Height: h, Protocol: proto, LegacyTLS: legacy,
+		VerifyTLS: a.tlsVerifier(asString(m["host"]), port),
 	})
+	if err == nil && saver != nil {
+		a.mu.Lock()
+		if a.rdpSave == nil {
+			a.rdpSave = map[string]*passwordSaver{}
+		}
+		a.rdpSave[view.TabID] = saver // stored by RdpStart once the login worked
+		a.mu.Unlock()
+	}
+	return view, err
 }
 
 // rdpSize picks the remote desktop size like the Rust app: a session's fixed resolution
@@ -157,7 +178,17 @@ func (a *App) RdpStart(tabID string) error {
 	if s == nil {
 		return errors.New("the RDP session has closed")
 	}
-	return s.Start()
+	if err := s.Start(); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	saver := a.rdpSave[tabID]
+	delete(a.rdpSave, tabID)
+	a.mu.Unlock()
+	if saver != nil {
+		_ = saver.commit() // logged in: keep the password the user chose to save
+	}
+	return nil
 }
 
 // RdpMouse sends a mouse event: kind "move"/"down"/"up"/"wheel"; button 0 left,1 middle,2 right.

@@ -3,6 +3,7 @@ package gui
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -31,7 +32,21 @@ func (a *App) VncConnect(sessionID int64) (*VncView, error) {
 	if port == 0 {
 		port = 5900
 	}
-	return a.vncDial(sv.Host, port, password)
+	// No saved password: ask (with "Save password"), and keep it only once the server accepted it.
+	var saver *passwordSaver
+	if password == "" {
+		saver = &passwordSaver{sessionID: sessionID}
+		pw, err := a.ask(fmt.Sprintf("Enter the VNC password for %s:%d", sv.Host, port), "", "", saver)()
+		if err != nil {
+			return nil, err
+		}
+		password = pw
+	}
+	view, err := a.vncDial(sv.Host, port, password)
+	if err == nil && saver != nil {
+		_ = saver.commit() // a failed save only means the next connection asks again
+	}
+	return view, err
 }
 
 // HasVncDemo / ConnectVncDemo auto-open a VNC view to RXT_DEMO_VNC = "password@host:port" (lab/demo).
