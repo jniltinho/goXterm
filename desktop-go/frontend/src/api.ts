@@ -92,6 +92,7 @@ export const TelnetConnect = (id: number) => call<string>("TelnetConnect", id);
 export const TelnetQuickConnect = (host: string, port: number) => call<string>("TelnetQuickConnect", host, port);
 export const HasTelnetDemo = () => call<boolean>("HasTelnetDemo");
 export const ConnectTelnetDemo = () => call<string>("ConnectTelnetDemo");
+export const LocalShell = () => call<string>("LocalShell");
 export const SerialConnect = (id: number) => call<string>("SerialConnect", id);
 export const SerialOpen = (device: string, baud: number) => call<string>("SerialOpen", device, baud);
 export const SerialPorts = () => call<string[]>("SerialPorts");

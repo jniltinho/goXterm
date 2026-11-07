@@ -61,7 +61,7 @@
 
 ## 10. Serial, Telnet, local shell
 
-- [~] 10.1 Implement local shell and Telnet and verify each opens a working terminal tab against the lab — Telnet done (stdlib IAC negotiation, shared terminal, negotiation unit test); local shell (PTY "+" tab) is the remaining piece
+- [x] 10.1 Implement local shell and Telnet and verify each opens a working terminal tab against the lab — Telnet (stdlib IAC, negotiation test) and a local shell in a PTY (creack/pty, cross-platform; echo loopback test), both sharing the terminal; a toolbar "Local terminal" button opens the shell
 - [x] 10.2 Implement Serial (`go.bug.st/serial`) with the fake/loopback device and verify open/read/write in the lab — config read from the session, mode-mapping unit test, and a pty loopback test exchanging bytes both ways on a real device node
 
 ## 11. Tunnels

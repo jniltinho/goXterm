@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, shallowRef } from "vue";
 import {
-  Sessions, Folders, Locked, Unlock, Connect, ConnectDemo, HasDemo,
+  Sessions, Folders, Locked, Unlock, Connect, ConnectDemo, HasDemo, LocalShell,
   TelnetConnect, ConnectTelnetDemo, HasTelnetDemo,
   SerialConnect, ConnectSerialDemo, HasSerialDemo,
   SftpConnect, FtpConnect, ConnectSftpDemo, HasSftpDemo, ConnectFtpDemo, HasFtpDemo,
@@ -271,6 +271,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
     </div>
     <header class="toolbar flex items-center gap-1 px-1.5 py-1">
       <img :src="icon('session-new')" class="tbico" title="New session" @click="newSession()" />
+      <img :src="icon('terminal')" class="tbico" title="Local terminal" @click="openTerm('Local terminal', 'terminal', () => LocalShell())" />
       <img :src="icon('ssh')" class="tbico" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true)" :class="selected ? '' : 'off'" />
       <img :src="icon('sftp')" class="tbico" title="Open SFTP file browser" @click="openSftpFor(selected)" :class="selected ? '' : 'off'" />
       <img :src="icon('ftp')" class="tbico" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)" :class="selected ? '' : 'off'" />
