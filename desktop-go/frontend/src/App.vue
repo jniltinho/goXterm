@@ -9,7 +9,13 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond } from "./api";
+import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings } from "./api";
+
+// Toolbar/tab appearance flags from Settings → Display (config.toml, no unlock needed).
+const ui = ref({ toolbarCaptions: true, showTabNumbers: true, showCloseButtons: true });
+async function loadUI() {
+  try { const s = await GetSettings(); ui.value = { toolbarCaptions: s.toolbarCaptions, showTabNumbers: s.showTabNumbers, showCloseButtons: s.showCloseButtons }; } catch { /* defaults */ }
+}
 import { Events } from "@wailsio/runtime";
 import TerminalView from "./Terminal.vue";
 import FileBrowser from "./FileBrowser.vue";
@@ -77,6 +83,7 @@ async function openDemos() {
 onMounted(async () => {
   Events.On("ssh:trust", (ev: { data: unknown }) => { trustQ.value = [...trustQ.value, ev.data as TrustReq]; });
   Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passQ.value = [...passQ.value, ev.data as PassReq]; });
+  await loadUI();
   try { locked.value = await Locked(); } catch { locked.value = true; }
   if (locked.value) { loading.value = false; return; }
   await loadData();
@@ -271,21 +278,21 @@ const tabIcon = (t: Tab) => icon(t.icon);
         </div>
       </div>
     </div>
-    <header class="toolbar flex items-center gap-1 px-1.5 py-1">
-      <img :src="icon('session-new')" class="tbico" title="New session" @click="newSession()" />
-      <img :src="icon('terminal')" class="tbico" title="Local terminal" @click="openTerm('Local terminal', 'terminal', () => LocalShell())" />
-      <img :src="icon('ssh')" class="tbico" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true)" :class="selected ? '' : 'off'" />
-      <img :src="icon('sftp')" class="tbico" title="Open SFTP file browser" @click="openSftpFor(selected)" :class="selected ? '' : 'off'" />
-      <img :src="icon('ftp')" class="tbico" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)" :class="selected ? '' : 'off'" />
-      <img :src="icon('vnc')" class="tbico" title="Open VNC" @click="openVncFor(selected)" :class="selected ? '' : 'off'" />
-      <img :src="icon('rdp')" class="tbico" title="Open RDP" @click="openRdpFor(selected)" :class="selected ? '' : 'off'" />
-      <span class="mx-1 h-5 w-px bg-black/10"></span>
-      <img :src="icon('tunnel')" class="tbico" title="SSH tunnels (port forwarding)" @click="tunnelsOpen = true" />
-      <span class="mx-1 h-5 w-px bg-black/10"></span>
-      <input class="qc" placeholder="Quick connect — user@host[:port]" disabled />
-      <span class="ml-auto flex items-center gap-1">
-        <img :src="icon('gear')" class="tbico" title="Settings" @click="settingsOpen = true" />
-        <img :src="icon('help')" class="tbico" title="Help" />
+    <header class="toolbar flex items-stretch gap-0.5 px-1.5 py-1" :class="ui.toolbarCaptions ? 'cap' : ''">
+      <button class="tbtn" title="New session" @click="newSession()"><img :src="icon('session-new')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">New</span></button>
+      <button class="tbtn" title="Local terminal" @click="openTerm('Local terminal', 'terminal', () => LocalShell())"><img :src="icon('terminal')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Local</span></button>
+      <button class="tbtn" :class="selected ? '' : 'off'" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true)"><img :src="icon('ssh')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SSH</span></button>
+      <button class="tbtn" :class="selected ? '' : 'off'" title="Open SFTP file browser" @click="openSftpFor(selected)"><img :src="icon('sftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SFTP</span></button>
+      <button class="tbtn" :class="selected ? '' : 'off'" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)"><img :src="icon('ftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">FTP</span></button>
+      <button class="tbtn" :class="selected ? '' : 'off'" title="Open VNC" @click="openVncFor(selected)"><img :src="icon('vnc')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">VNC</span></button>
+      <button class="tbtn" :class="selected ? '' : 'off'" title="Open RDP" @click="openRdpFor(selected)"><img :src="icon('rdp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">RDP</span></button>
+      <span class="tbsep"></span>
+      <button class="tbtn" title="SSH tunnels (port forwarding)" @click="tunnelsOpen = true"><img :src="icon('tunnel')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Tunnels</span></button>
+      <span class="tbsep"></span>
+      <input class="qc self-center" placeholder="Quick connect — user@host[:port]" disabled />
+      <span class="ml-auto flex items-stretch gap-0.5">
+        <button class="tbtn" title="Settings" @click="settingsOpen = true"><img :src="icon('gear')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Settings</span></button>
+        <button class="tbtn" title="Help"><img :src="icon('help')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Help</span></button>
       </span>
     </header>
 
@@ -337,10 +344,10 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
       <main class="flex min-w-0 flex-1 flex-col bg-[#0b0e11]">
         <div v-if="tabs.length" class="tabbar flex items-stretch">
-          <button v-for="t in tabs" :key="t.id" class="tab flex items-center gap-1.5" :class="t.id === active ? 'tab-active' : ''" @click="active = t.id">
+          <button v-for="(t, i) in tabs" :key="t.id" class="tab flex items-center gap-1.5" :class="t.id === active ? 'tab-active' : ''" @click="active = t.id">
             <img :src="tabIcon(t)" class="h-3.5 w-3.5" />
-            <span class="max-w-[160px] truncate">{{ t.title }}</span>
-            <span class="tab-x" @click.stop="closeTab(t.id)">×</span>
+            <span class="max-w-[160px] truncate"><span v-if="ui.showTabNumbers" class="tab-n">{{ i + 1 }}</span>{{ t.title }}</span>
+            <span v-if="ui.showCloseButtons" class="tab-x" @click.stop="closeTab(t.id)">×</span>
           </button>
         </div>
         <div class="relative min-h-0 flex-1">
@@ -406,7 +413,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
     />
 
     <!-- global settings -->
-    <SettingsDialog v-if="settingsOpen" @saved="settingsOpen = false" @close="settingsOpen = false" />
+    <SettingsDialog v-if="settingsOpen" @saved="settingsOpen = false; loadUI()" @close="settingsOpen = false" />
     <TunnelsDialog v-if="tunnelsOpen" :sessions="sessions" @close="tunnelsOpen = false" />
 
     <!-- SSH host-key trust (trust-on-first-use) -->
@@ -448,10 +455,16 @@ const tabIcon = (t: Tab) => icon(t.icon);
 <style scoped>
 .app { background: #eef1f4; color: #1e1e1e; }
 .toolbar { background: linear-gradient(#fbfcfd, #e9edf1); border-bottom: 1px solid #c9d1d9; }
-.tbico { height: 20px; width: 20px; padding: 2px; cursor: pointer; }
-.tbico:hover { background: #d7e3f4; outline: 1px solid #a9c7ef; }
-.tbico.off { opacity: .4; cursor: default; }
-.qc { width: 320px; height: 24px; padding: 0 8px; font-size: 12px; background: #fff; border: 1px solid #c9d1d9; }
+.tbtn { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; background: transparent; border: 1px solid transparent; cursor: pointer; color: #2b3a47; }
+.tbtn:hover { background: #d7e3f4; border-color: #a9c7ef; }
+.tbtn.off { opacity: .4; cursor: default; }
+.tbtn.off:hover { background: transparent; border-color: transparent; }
+.toolbar.cap .tbtn { flex-direction: column; gap: 1px; padding: 2px 8px; min-width: 46px; }
+.tbico { height: 20px; width: 20px; padding: 1px; }
+.toolbar.cap .tbico { height: 24px; width: 24px; }
+.tbcap { font-size: 10.5px; line-height: 1; white-space: nowrap; }
+.tbsep { width: 1px; margin: 2px 4px; background: #c9d1d9; align-self: stretch; }
+.qc { width: 300px; height: 24px; padding: 0 8px; font-size: 12px; background: #fff; border: 1px solid #c9d1d9; }
 .sidebar { background: #f3f5f8; border-right: 1px solid #c9d1d9; }
 .side-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #5a6b7b; background: #e7ecf1; border-bottom: 1px solid #d6dde4; }
 .count { background: #d6dde4; color: #4a5a68; font-size: 10px; font-weight: 600; padding: 0 6px; }
@@ -464,6 +477,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tabbar { background: #1b2129; border-bottom: 1px solid #2a3340; }
 .tab { padding: 4px 8px; font-size: 12px; color: #9fb0c0; background: #222a33; border-right: 1px solid #2a3340; max-width: 220px; }
 .tab-active { color: #e6edf3; background: #0b0e11; }
+.tab-n { display: inline-block; margin-right: 5px; padding: 0 4px; font-size: 10px; color: #0b0e11; background: #6aa0da; border-radius: 2px; }
 .tab-x { margin-left: 2px; padding: 0 4px; color: #7f8ea0; }
 .tab-x:hover { color: #fff; background: #c0392b; }
 .statusbar { height: 22px; font-size: 11px; color: #5a6b7b; background: #e7ecf1; border-top: 1px solid #c9d1d9; }

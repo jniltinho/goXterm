@@ -40,7 +40,9 @@ export interface Settings {
   theme: string; logLevel: string; agentControl: boolean; copyOnSelect: boolean; rightClickPaste: boolean;
   pasteGuard: boolean; confirmClose: boolean; sidebarOpen: boolean; sidebarWidth: number; sidebarPage: string;
   uiScale: string; remoteMonitoring: boolean; remoteMonitoringInterval: number; notifications: boolean;
-  gpuBackend: string; firstRunThemeDone: boolean; terminal: TerminalPrefs;
+  gpuBackend: string; firstRunThemeDone: boolean;
+  toolbarCaptions: boolean; showTabNumbers: boolean; showCloseButtons: boolean;
+  terminal: TerminalPrefs;
 }
 // Native open-file dialog to pick an SSH private key; returns "" when cancelled.
 export const PickKeyFile = () => call<string>("PickKeyFile");

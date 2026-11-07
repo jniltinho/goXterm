@@ -92,13 +92,27 @@ async function save() {
         </template>
 
         <template v-else-if="tab === 'display'">
-          <div class="field"><label>Theme</label>
-            <select v-model="s.theme" class="in"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
-          </div>
-          <div class="field"><label>UI scale</label>
-            <select v-model="s.uiScale" class="in in-sm"><option value="auto">Auto</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option><option value="200">200%</option></select>
-          </div>
-          <p class="st-note">Theme and scale are saved for the native shell; the terminal theme is on the Terminal tab.</p>
+          <fieldset class="grp"><legend>Appearance</legend>
+            <div class="field"><label>Skin</label>
+              <select v-model="s.theme" class="in in-sm"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+            </div>
+          </fieldset>
+          <fieldset class="grp"><legend>Toolbar and tabs</legend>
+            <label class="row"><input type="checkbox" v-model="s.toolbarCaptions" /> Toolbar captions</label>
+            <label class="row"><input type="checkbox" v-model="s.showTabNumbers" /> Show tab numbers</label>
+            <label class="row"><input type="checkbox" v-model="s.showCloseButtons" /> Show close buttons</label>
+          </fieldset>
+          <fieldset class="grp"><legend>Graphics</legend>
+            <div class="field"><label>Rendering backend</label>
+              <select v-model="s.gpuBackend" class="in"><option value="auto">Automatic</option><option value="hardware">Hardware (GPU)</option><option value="software">Software (CPU)</option></select>
+            </div>
+            <p class="st-note">Applies at the next start. After a driver crash rustXterm picks a safer one.</p>
+          </fieldset>
+          <fieldset class="grp"><legend>Interface size</legend>
+            <div class="field"><label>Interface size</label>
+              <select v-model="s.uiScale" class="in in-sm"><option value="auto">Auto</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option><option value="200">200%</option></select>
+            </div>
+          </fieldset>
         </template>
 
         <template v-else-if="tab === 'shortcuts'">
@@ -155,6 +169,8 @@ async function save() {
 .in-sm { width: 90px; }
 .st-err { color: #c0392b; font-size: 12px; }
 .st-note { font-size: 12px; color: #7a8794; margin-top: 4px; }
+.grp { border: 1px solid #c2ccd6; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; background: #fbfcfd; }
+.grp legend { font-size: 12px; font-weight: 600; color: #33465a; padding: 0 6px; }
 .sc { display: flex; flex-direction: column; gap: 1px; }
 .sc-row { display: flex; justify-content: space-between; gap: 16px; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid #e3e9ee; }
 .sc-key { color: #1e3a5a; font-weight: 600; }

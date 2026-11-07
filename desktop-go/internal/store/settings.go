@@ -30,7 +30,11 @@ type Settings struct {
 	Notifications            bool          `toml:"notifications" json:"notifications"`
 	GPUBackend               string        `toml:"gpu_backend" json:"gpuBackend"`
 	FirstRunThemeDone        bool          `toml:"first_run_theme_done" json:"firstRunThemeDone"`
-	Terminal                 TerminalPrefs `toml:"terminal" json:"terminal"`
+	// Toolbar/tabs appearance (nil = default on); shown under Settings → Display.
+	ToolbarCaptions  *bool         `toml:"toolbar_captions" json:"toolbarCaptions"`
+	ShowTabNumbers   *bool         `toml:"show_tab_numbers" json:"showTabNumbers"`
+	ShowCloseButtons *bool         `toml:"show_close_buttons" json:"showCloseButtons"`
+	Terminal         TerminalPrefs `toml:"terminal" json:"terminal"`
 }
 
 // TerminalPrefs mirrors the [terminal] table.
@@ -79,6 +83,9 @@ func SaveSettings(s Settings) error {
 	m["remote_monitoring"] = s.RemoteMonitoring
 	m["remote_monitoring_interval_secs"] = s.RemoteMonitoringInterval
 	m["notifications"] = s.Notifications
+	m["toolbar_captions"] = derefOr(s.ToolbarCaptions, true)
+	m["show_tab_numbers"] = derefOr(s.ShowTabNumbers, true)
+	m["show_close_buttons"] = derefOr(s.ShowCloseButtons, true)
 	term, _ := m["terminal"].(map[string]any)
 	if term == nil {
 		term = map[string]any{}
@@ -99,4 +106,12 @@ func SaveSettings(s Settings) error {
 		return err
 	}
 	return os.WriteFile(path, buf.Bytes(), 0o644)
+}
+
+// derefOr returns *p, or def when p is nil (for settings that default on).
+func derefOr(p *bool, def bool) bool {
+	if p == nil {
+		return def
+	}
+	return *p
 }

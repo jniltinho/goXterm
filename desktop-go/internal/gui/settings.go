@@ -33,6 +33,19 @@ func (a *App) GetSettings() (store.Settings, error) {
 	if s.UIScale == "" {
 		s.UIScale = "auto"
 	}
+	if s.GPUBackend == "" {
+		s.GPUBackend = "auto"
+	}
+	on := true
+	if s.ToolbarCaptions == nil {
+		s.ToolbarCaptions = &on
+	}
+	if s.ShowTabNumbers == nil {
+		s.ShowTabNumbers = &on
+	}
+	if s.ShowCloseButtons == nil {
+		s.ShowCloseButtons = &on
+	}
 	return s, nil
 }
 
