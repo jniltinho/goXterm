@@ -73,7 +73,27 @@ func (a *App) SaveFolder(id int64, name string, parent *int64) (int64, error) {
 	return st.SaveFolder(id, name, parent)
 }
 
-// DeleteFolder removes a folder; its sessions and subfolders fall back to the root.
+// SetFolderIcon sets a folder's icon (Change color / Edit folder); "" or "folder" = default yellow.
+func (a *App) SetFolderIcon(id int64, icon string) error {
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	return st.SetFolderIcon(id, icon)
+}
+
+// MoveSession moves a session to a folder (nil = root; the tree's "Move to root").
+func (a *App) MoveSession(id int64, folder *int64) error {
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	return st.MoveSession(id, folder)
+}
+
+// DeleteFolder removes a folder; its sessions and subfolders move to its parent.
 func (a *App) DeleteFolder(id int64) error {
 	st, err := openStore()
 	if err != nil {

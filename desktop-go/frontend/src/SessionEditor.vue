@@ -2,7 +2,7 @@
 import { reactive, ref, onMounted, computed } from "vue";
 import { SaveSession, SessionJSON, PickKeyFile, WslAvailable, WslDistributions, type Folder, type WslDistribution } from "./api";
 
-const props = defineProps<{ sessionId: number | null; folders: Folder[] }>();
+const props = defineProps<{ sessionId: number | null; folders: Folder[]; initialFolder?: number | null }>();
 const emit = defineEmits<{ saved: [id: number]; close: [] }>();
 
 // Open the native file picker for the SSH private key; keep the current value on cancel/error.
@@ -64,7 +64,7 @@ function defaults(): Form {
   };
 }
 
-const form = reactive<Form>(defaults());
+const form = reactive<Form>({ ...defaults(), folder: props.initialFolder ?? null });
 const raw = ref<Record<string, unknown>>({}); // full loaded JSON, to preserve unknown fields on save
 const tab = ref<"advanced" | "bookmark" | "agent">("advanced");
 const error = ref("");

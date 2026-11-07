@@ -75,6 +75,9 @@ export const DuplicateSession = (id: number) => call<number>("DuplicateSession",
 export const RenameSession = (id: number, name: string) => call<void>("RenameSession", id, name);
 export const SaveFolder = (id: number, name: string, parent: number | null) => call<number>("SaveFolder", id, name, parent);
 export const DeleteFolder = (id: number) => call<void>("DeleteFolder", id);
+// Folder icon ("folder" = default yellow) and moving a session (null = the root).
+export const SetFolderIcon = (id: number, icon: string) => call<void>("SetFolderIcon", id, icon);
+export const MoveSession = (id: number, folder: number | null) => call<void>("MoveSession", id, folder);
 
 // SSH host-key trust (TOFU): the backend emits "ssh:trust" for an unknown key; answer once/save/reject.
 export const SshTrustRespond = (reqId: string, decision: string) => call<void>("SshTrustRespond", reqId, decision);

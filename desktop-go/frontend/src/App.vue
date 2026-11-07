@@ -9,16 +9,17 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { SetMultiExec, SelectMultiExec, WslConnect } from "./api";
+import { SetMultiExec, SelectMultiExec, WslConnect, SetFolderIcon, MoveSession } from "./api";
+import FolderDialog from "./FolderDialog.vue";
 import { SaveSettings } from "./api";
-import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
+import { DeleteSession, DuplicateSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
 
 // Toolbar/tab appearance flags from Settings → Display (config.toml, no unlock needed).
 const ui = ref({ toolbarCaptions: true, showTabNumbers: true, showCloseButtons: true });
 // Rust Metrics: sidebar 240 px (Settings value), icon strip 34 px, 16 px tree indent.
 const STRIP_W = 34, INDENT = 16;
 const sideW = ref(240);
-const rootOpen = ref(true);
+const rootOpen = ref(true); // restored from localStorage in onMounted
 const status = ref("Ready");
 // Behaviour switches from Settings (Rust defaults until loaded).
 const cfg = ref({ sftpAutoSwitch: true, remoteMonitoring: true, confirmClose: true });
@@ -69,7 +70,7 @@ function onKey(e: KeyboardEvent) {
   if (inEditable()) return;
   if (!selected.value) return;
   if (e.key === "Enter") { e.preventDefault(); openSession(selected.value); }
-  else if (e.key === "F2") { e.preventDefault(); renameSession(selected.value); }
+  else if (e.key === "F2") { e.preventDefault(); editSession(selected.value); }
   else if (e.key === "Delete") { e.preventDefault(); delSession(selected.value); }
 }
 import { Events } from "@wailsio/runtime";
@@ -81,7 +82,7 @@ import SessionEditor from "./SessionEditor.vue";
 import SettingsDialog from "./SettingsDialog.vue";
 import SftpPanel from "./SftpPanel.vue";
 import AskDialog from "./AskDialog.vue";
-import { askText, askConfirm, showInfo } from "./ask";
+import { askConfirm, showInfo } from "./ask";
 import TunnelsDialog from "./TunnelsDialog.vue";
 
 const sessions = ref<Session[]>([]);
@@ -142,6 +143,8 @@ async function openDemos() {
 onMounted(async () => {
   Events.On("ssh:trust", (ev: { data: unknown }) => { trustQ.value = [...trustQ.value, ev.data as TrustReq]; });
   Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passQ.value = [...passQ.value, ev.data as PassReq]; });
+  rootOpen.value = loadJSON("rxt-root-open", true);
+  watch(rootOpen, (v) => saveJSON("rxt-root-open", v));
   await loadUI();
   window.addEventListener("click", (e) => { if (!(e.target as HTMLElement).closest(".menubar")) menu.value = ""; });
   window.addEventListener("keydown", onKey);
@@ -351,7 +354,9 @@ function respondPassword(ok: boolean) {
   passValue.value = "";
 }
 
-function newSession() { editorSessionId.value = null; editorOpen.value = true; }
+// New session (in a folder when started from the tree).
+const editorFolder = ref<number | null>(null);
+function newSession(folder: number | null = null) { editorSessionId.value = null; editorFolder.value = folder; editorOpen.value = true; }
 function importSessions() { /* TODO: MobaXterm .mxtsessions / rustXterm import */ }
 function editSession(s: Session) { editorSessionId.value = s.id; editorOpen.value = true; }
 async function onEditorSaved(_id: number) { editorOpen.value = false; await loadData(); }
@@ -363,28 +368,44 @@ async function delSession(s: Session) {
 async function dupSession(s: Session) {
   try { await DuplicateSession(s.id); await loadData(); } catch (e) { error.value = String(e); }
 }
-async function renameSession(s: Session) {
-  const name = await askText("Rename session", "Session name:", s.name);
-  if (name === null || !name.trim() || name === s.name) return;
-  try { await RenameSession(s.id, name.trim()); await loadData(); } catch (e) { error.value = String(e); }
+// New / Edit folder dialog (Rust Modal::FolderName: name + icon grid).
+const folderDlg = ref<{ title: string; id: number; parent: number | null; name: string; icon: string } | null>(null);
+function newFolder(parent: number | null) { folderDlg.value = { title: "New folder", id: 0, parent, name: "", icon: "folder" }; }
+function editFolder(f: Folder) { folderDlg.value = { title: "Edit folder", id: f.id, parent: f.parent, name: f.name, icon: f.icon || "folder" }; }
+async function saveFolderDlg(name: string, icon: string) {
+  const d = folderDlg.value;
+  folderDlg.value = null;
+  if (!d) return;
+  try {
+    const id = await SaveFolder(d.id, name, d.parent);
+    await SetFolderIcon(id, icon);
+    await loadData();
+  } catch (e) { error.value = String(e); }
 }
-async function newFolder(parent: number | null) {
-  const name = await askText("New folder", "Folder name:");
-  if (!name || !name.trim()) return;
-  try { await SaveFolder(0, name.trim(), parent); await loadData(); } catch (e) { error.value = String(e); }
+async function setFolderColor(f: Folder, icon: string) {
+  try { await SetFolderIcon(f.id, icon); await loadData(); } catch (e) { error.value = String(e); }
 }
-async function renameFolder(f: Folder) {
-  const name = await askText("Rename folder", "Folder name:", f.name);
-  if (name === null || !name.trim() || name === f.name) return;
-  try { await SaveFolder(f.id, name.trim(), f.parent); await loadData(); } catch (e) { error.value = String(e); }
+async function moveToRoot(s: Session) {
+  try { await MoveSession(s.id, null); await loadData(); } catch (e) { error.value = String(e); }
 }
+// Rust icons::FOLDER_COLORS for "Change color" (label = the colour, "folder" = Yellow).
+const FOLDER_COLORS = ["folder", "folder-blue", "folder-green", "folder-gray", "folder-red", "folder-purple", "folder-silver",
+  "folder-steel", "folder-orange", "folder-pink", "folder-teal", "folder-cyan", "folder-brown", "folder-lime", "folder-navy", "folder-black"];
+const colorLabel = (n: string) => (n === "folder" ? "Yellow" : n[7].toUpperCase() + n.slice(8));
+const colorsOpen = ref(false);
 async function delFolder(f: Folder) {
-  if (!(await askConfirm("Delete folder", `Delete folder "${f.name}"? Its sessions and subfolders move to the root.`, "Delete"))) return;
+  if (!(await askConfirm("Delete folder", "Delete this folder? Its sessions move to the parent folder.", "Delete"))) return;
   try { await DeleteFolder(f.id); await loadData(); } catch (e) { error.value = String(e); }
 }
-function openCtx(e: MouseEvent, s: Session) { selected.value = s; ctx.value = { x: e.clientX, y: e.clientY, session: s }; }
-function openFolderCtx(e: MouseEvent, f: Folder) { ctx.value = { x: e.clientX, y: e.clientY, folder: f }; }
-function closeCtx() { ctx.value = null; }
+const ctxPos = (e: MouseEvent) => ({ x: Math.min(e.clientX, window.innerWidth - 230), y: Math.min(e.clientY, window.innerHeight - 270) });
+function openCtx(e: MouseEvent, s: Session) { selected.value = s; ctx.value = { ...ctxPos(e), session: s }; }
+function openFolderCtx(e: MouseEvent, f: Folder) { ctx.value = { ...ctxPos(e), folder: f }; }
+// Right click on the tree's empty area: the root folder menu (Rust: the rows' "rest" area).
+function onTreeContext(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest(".treerow") || locked.value) return;
+  ctx.value = { ...ctxPos(e), root: true };
+}
+function closeCtx() { ctx.value = null; colorsOpen.value = false; }
 
 // openSession opens a session in the tab its protocol needs (double-click / Enter).
 function openSession(s: Session) {
@@ -433,7 +454,13 @@ type Row =
   | { kind: "session"; session: Session; depth: number };
 
 // Collapsed folders (by id); toggled by the tree chevron. A new Set keeps the computed reactive.
-const collapsed = ref<Set<number>>(new Set());
+// Folder open/closed state survives a restart (Rust keeps it in persisted egui memory).
+const collapsed = ref<Set<number>>(new Set(loadJSON<number[]>("rxt-collapsed", [])));
+function loadJSON<T>(key: string, def: T): T {
+  try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : def; } catch { return def; }
+}
+function saveJSON(key: string, v: unknown) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* private mode */ } }
+watch(collapsed, (s) => saveJSON("rxt-collapsed", [...s]));
 function toggleFolder(id: number) {
   const next = new Set(collapsed.value);
   if (!next.delete(id)) next.add(id);
@@ -607,9 +634,9 @@ const tabIcon = (t: Tab) => icon(t.icon);
             :monitor="!!tabMon[activeSsh]"
             @toggle-monitor="tabMon[activeSsh] = !tabMon[activeSsh]"
           />
-          <div v-else class="tree">
+          <div v-else class="tree" @contextmenu.prevent="onTreeContext">
             <div class="treerow root" :style="{ paddingLeft: '4px' }" @click="rootOpen = !rootOpen" @contextmenu.prevent="!locked && (ctx = { x: $event.clientX, y: $event.clientY, root: true })">
-              <span class="tw">{{ rootOpen ? "▼" : "▶" }}</span>
+              <span class="tw"><i class="tri" :class="rootOpen ? 'open' : ''"></i></span>
               <img :src="icon('folder-user')" class="ico" />
               <span class="truncate">User sessions</span>
             </div>
@@ -630,7 +657,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
                     @click="toggleFolder(row.folder.id)"
                     @contextmenu.prevent="openFolderCtx($event, row.folder)"
                   >
-                    <span class="tw">{{ row.hasKids ? (row.open ? "▼" : "▶") : "" }}</span>
+                    <span class="tw"><i class="tri" :class="row.open ? 'open' : ''"></i></span>
                     <img :src="folderIcon(row.folder)" class="ico" />
                     <span class="truncate">{{ row.folder.name }}</span>
                   </div>
@@ -708,33 +735,44 @@ const tabIcon = (t: Tab) => icon(t.icon);
     <!-- tree context menu -->
     <div v-if="ctx" class="ctx-mask" @click="closeCtx" @contextmenu.prevent="closeCtx">
       <div class="ctx" :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }" @click.stop>
+        <!-- Rust sidebar menus: session_row / folder_menu -->
         <template v-if="ctx.session">
-          <button class="ctx-item" @click="openSession(ctx!.session!); closeCtx()"><img :src="icon('ssh')" class="ctx-ico" /> Connect</button>
-          <button class="ctx-item" @click="editSession(ctx!.session!); closeCtx()"><img :src="icon('gear')" class="ctx-ico" /> Edit session</button>
-          <button class="ctx-item" @click="dupSession(ctx!.session!); closeCtx()"><img :src="icon('session')" class="ctx-ico" /> Duplicate session</button>
-          <button class="ctx-item" @click="renameSession(ctx!.session!); closeCtx()"><span class="ctx-ico">✎</span> Rename session</button>
-          <button class="ctx-item danger" @click="delSession(ctx!.session!); closeCtx()"><span class="ctx-ico ctx-del">✕</span> Delete session</button>
+          <button class="ctx-item" @click="openSession(ctx!.session!); closeCtx()"><img :src="icon('play')" class="ctx-ico" /> Connect<span class="ctx-sc">Enter</span></button>
+          <button class="ctx-item" @click="editSession(ctx!.session!); closeCtx()"><img :src="icon('edit')" class="ctx-ico" /> Edit session</button>
+          <button class="ctx-item" @click="dupSession(ctx!.session!); closeCtx()"><img :src="icon('copy')" class="ctx-ico" /> Duplicate session</button>
+          <button class="ctx-item" @click="editSession(ctx!.session!); closeCtx()"><img :src="icon('rename')" class="ctx-ico" /> Rename session<span class="ctx-sc">F2</span></button>
+          <button class="ctx-item" @click="delSession(ctx!.session!); closeCtx()"><img :src="icon('delete')" class="ctx-ico" /> Delete session<span class="ctx-sc">Del</span></button>
           <div class="ctx-sep"></div>
-          <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
+          <button class="ctx-item" @click="newSession(ctx!.session!.folder); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session here</button>
+          <button class="ctx-item" @click="newFolder(ctx!.session!.folder); closeCtx()"><img :src="icon('new-folder')" class="ctx-ico" /> New folder here</button>
+          <button v-if="ctx.session.folder !== null" class="ctx-item" @click="moveToRoot(ctx!.session!); closeCtx()"><img :src="icon('folder-up')" class="ctx-ico" /> Move to root</button>
         </template>
-        <template v-else-if="ctx.root">
-          <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
-          <button class="ctx-item" @click="newFolder(null); closeCtx()"><img :src="icon('folder')" class="ctx-ico" /> New folder</button>
-        </template>
-        <template v-else-if="ctx.folder">
-          <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session here</button>
-          <button class="ctx-item" @click="newFolder(ctx!.folder!.id); closeCtx()"><img :src="icon('folder')" class="ctx-ico" /> New folder here</button>
-          <div class="ctx-sep"></div>
-          <button class="ctx-item" @click="renameFolder(ctx!.folder!); closeCtx()"><span class="ctx-ico">✎</span> Rename folder</button>
-          <button class="ctx-item danger" @click="delFolder(ctx!.folder!); closeCtx()"><span class="ctx-ico ctx-del">✕</span> Delete folder</button>
+        <template v-else>
+          <button class="ctx-item" @click="newSession(ctx!.folder?.id ?? null); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
+          <button class="ctx-item" @click="newFolder(ctx!.folder?.id ?? null); closeCtx()"><img :src="icon('new-folder')" class="ctx-ico" /> New folder</button>
+          <button class="ctx-item" disabled title="Import is not available yet"><img :src="icon('download')" class="ctx-ico" /> Import sessions…</button>
+          <template v-if="ctx.folder">
+            <div class="ctx-sep"></div>
+            <button class="ctx-item" @click="editFolder(ctx!.folder!); closeCtx()"><img :src="icon('edit')" class="ctx-ico" /> Edit folder…<span class="ctx-sc">F2</span></button>
+            <div class="ctx-sub" @mouseenter="colorsOpen = true" @mouseleave="colorsOpen = false">
+              <button class="ctx-item" :class="colorsOpen ? 'on' : ''" @click="colorsOpen = !colorsOpen"><span class="ctx-ico"></span> Change color<span class="ctx-arrow"></span></button>
+              <div v-if="colorsOpen" class="ctx ctx-colors">
+                <button v-for="c in FOLDER_COLORS" :key="c" class="ctx-item" @click="setFolderColor(ctx!.folder!, c); closeCtx()"><img :src="icon(c)" class="ctx-ico" /> {{ colorLabel(c) }}</button>
+              </div>
+            </div>
+            <button class="ctx-item" @click="delFolder(ctx!.folder!); closeCtx()"><img :src="icon('delete')" class="ctx-ico" /> Delete folder</button>
+          </template>
         </template>
       </div>
     </div>
+
+    <FolderDialog v-if="folderDlg" :title="folderDlg.title" :name="folderDlg.name" :icon="folderDlg.icon" @ok="saveFolderDlg" @cancel="folderDlg = null" />
 
     <!-- session editor -->
     <SessionEditor
       v-if="editorOpen"
       :sessionId="editorSessionId"
+      :initial-folder="editorFolder"
       :folders="folders"
       @saved="onEditorSaved"
       @close="editorOpen = false"
@@ -849,7 +887,10 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tree { flex: 1; min-height: 0; overflow-y: auto; padding-top: 2px; }
 .treerow { display: flex; align-items: center; gap: 4px; height: 24px; padding-right: 6px; font-size: 12px; cursor: default; user-select: none; white-space: nowrap; }
 .treerow:hover { background: var(--hover); }
-.treerow .tw { flex: 0 0 12px; text-align: center; font-size: 8px; color: var(--text-muted); }
+.treerow .tw { flex: 0 0 12px; display: flex; align-items: center; justify-content: center; }
+/* egui's collapsing triangle: filled, text colour, pointing right (closed) or down (open) */
+.tri { width: 0; height: 0; border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent; border-left: 6px solid var(--text); opacity: .75; transition: transform .1s; }
+.tri.open { transform: rotate(90deg); }
 .treerow .ico { height: 22px; width: 22px; flex: none; }
 .treerow.session.sel { background: var(--pressed); }
 
@@ -913,5 +954,12 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .ctx-ico { height: 16px; width: 16px; display: inline-flex; align-items: center; justify-content: center; }
 .ctx-del { color: var(--danger); font-weight: 700; }
 .ctx-sep { height: 1px; background: var(--border-subtle); margin: 3px 0; }
+.ctx-item:disabled { color: var(--text-disabled); cursor: default; background: transparent; }
+.ctx-item:disabled .ctx-ico { opacity: .45; }
+.ctx-sc { margin-left: auto; padding-left: 20px; color: var(--text-muted); }
+.ctx-sub { position: relative; }
+.ctx-item.on { background: var(--pressed); }
+.ctx-arrow { margin-left: auto; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 4px solid var(--text); }
+.ctx-colors { position: absolute; left: 100%; top: -3px; min-width: 120px; }
 .app :deep(*), .app { border-radius: 0 !important; }
 </style>

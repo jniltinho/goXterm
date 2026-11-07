@@ -1,6 +1,8 @@
 package store
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -70,3 +72,47 @@ func TestCreateWithKeyring(t *testing.T) {
 		t.Fatal("a keyring error must abort store creation")
 	}
 }
+
+// Folder icon, moving a session and deleting a folder (contents go to the parent, as in Rust).
+func TestFolderEdits(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "lab-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir, "lab-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	top, _ := s.SaveFolder(0, "Lab", nil)
+	sub, _ := s.SaveFolder(0, "Servers", &top)
+	id, err := s.SaveSession(`{"id":0,"name":"lab","protocol":"ssh","host":"sshd","port":22,"folder":` + itoa(sub) + `}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetFolderIcon(top, "folder-green"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteFolder(sub); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := s.Sessions()
+	if f, _ := rows[0]["folder"].(int64); f != top {
+		t.Fatalf("session after deleting its folder: folder %v, want parent %d", rows[0]["folder"], top)
+	}
+	if err := s.MoveSession(id, nil); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ = s.Sessions()
+	var js string
+	_ = s.db.QueryRow(`SELECT json FROM sessions WHERE id=?`, id).Scan(&js)
+	if rows[0]["folder"] != nil || !strings.Contains(js, `"folder":null`) {
+		t.Fatalf("move to root: %v %s", rows[0]["folder"], js)
+	}
+	fs, _ := s.Folders()
+	if len(fs) != 1 || fs[0]["icon"] != "folder-green" {
+		t.Fatalf("folders: %v", fs)
+	}
+}
+
+func itoa(i int64) string { return strconv.FormatInt(i, 10) }

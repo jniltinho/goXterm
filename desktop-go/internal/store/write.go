@@ -130,12 +130,50 @@ func (s *Store) SaveFolder(id int64, name string, parent *int64) (int64, error) 
 	return id, nil
 }
 
-// DeleteFolder removes a folder; its sessions and subfolders fall back to the root (ON DELETE SET
-// NULL), rather than being deleted.
+// DeleteFolder removes a folder; its sessions and subfolders move to its parent folder (Rust: "Its
+// sessions move to the parent folder"), never deleted.
 func (s *Store) DeleteFolder(id int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := s.db.Exec(`DELETE FROM folders WHERE id=?`, id); err != nil {
+	var parent any
+	if err := s.db.QueryRow(`SELECT parent FROM folders WHERE id=?`, id).Scan(&parent); err != nil {
+		return err
+	}
+	for _, q := range []string{
+		`UPDATE sessions SET folder=?1, json=json_set(json, '$.folder', ?1) WHERE folder=?2`,
+		`UPDATE folders SET parent=?1 WHERE parent=?2`,
+		`DELETE FROM folders WHERE id=?2`,
+	} {
+		if _, err := s.db.Exec(q, parent, id); err != nil {
+			return err
+		}
+	}
+	return s.writeBack()
+}
+
+// SetFolderIcon sets a folder's catalog icon ("" = the default yellow folder, stored as NULL).
+func (s *Store) SetFolderIcon(id int64, icon string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var v any
+	if icon != "" && icon != "folder" {
+		v = icon
+	}
+	if _, err := s.db.Exec(`UPDATE folders SET icon=? WHERE id=?`, v, id); err != nil {
+		return err
+	}
+	return s.writeBack()
+}
+
+// MoveSession puts a session in folder (nil = the root), in the column and in its stored JSON.
+func (s *Store) MoveSession(id int64, folder *int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var f any
+	if folder != nil {
+		f = *folder
+	}
+	if _, err := s.db.Exec(`UPDATE sessions SET folder=?1, json=json_set(json, '$.folder', ?1) WHERE id=?2`, f, id); err != nil {
 		return err
 	}
 	return s.writeBack()
