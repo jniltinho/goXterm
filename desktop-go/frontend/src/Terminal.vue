@@ -9,6 +9,7 @@ import { ref as vref } from "vue";
 import { Send, Resize, Disconnect, MonitorStart, MonitorStop, GetSettings, TermAttach, SaveTerminalOutput, ClipboardText, SetClipboardText, type Attach, type Metrics } from "./api";
 import { renderBanner } from "./banner";
 import { askConfirm } from "./ask";
+import { commandFor } from "./commands";
 import { schemeName, schemeIsDark, xtermTheme } from "./schemes";
 
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
@@ -258,7 +259,7 @@ window.addEventListener("rxt-settings", onSettings);
 osScheme.addEventListener("change", applyScheme);
 
 onMounted(async () => {
-  const tp = { fontFamily: "DejaVu Sans Mono", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000, scheme: "" };
+  const tp = { fontFamily: "", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000, scheme: "" };
   try {
     const s = await GetSettings();
     Object.assign(tp, s.terminal);
@@ -273,7 +274,8 @@ onMounted(async () => {
   dark = schemeIsDark(schemeName(schemeSetting));
   baseFont = tp.fontSize || 13;
   term = new Terminal({
-    fontFamily: `"${tp.fontFamily}","DejaVu Sans Mono",monospace`,
+    // "" / "monospace" = the Rust default (Cascadia Mono); DejaVu Sans Mono covers missing symbols.
+    fontFamily: `"${!tp.fontFamily || tp.fontFamily === "monospace" ? "Cascadia Mono" : tp.fontFamily}","DejaVu Sans Mono",monospace`,
     fontSize: baseFont,
     cursorBlink: tp.cursorBlink,
     cursorStyle,
@@ -287,10 +289,26 @@ onMounted(async () => {
   term.loadAddon(search);
   // App-level terminal keys are handled here and never reach the remote.
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type !== "keydown" || !(e.ctrlKey || e.metaKey)) return true;
-    if (e.shiftKey && e.code === "KeyF") { e.preventDefault(); void openFind(); return false; }
-    if (e.shiftKey && e.code === "KeyC") { e.preventDefault(); copy(); return false; }
-    if (e.shiftKey && e.code === "KeyV") { e.preventDefault(); void paste(); return false; }
+    if (e.type !== "keydown") return true;
+    // Settings › Shortcuts: terminal commands run here; app commands bubble to the window (App.vue).
+    const cmd = commandFor(e);
+    if (cmd) {
+      e.preventDefault();
+      if (cmd === "terminal.find") void openFind();
+      else if (cmd === "terminal.copy") copy();
+      else if (cmd === "terminal.paste") void paste();
+      else if (cmd === "terminal.save_text") void saveOutput();
+      else if (cmd === "tab.reconnect" && stopped) void restart();
+      return false; // never typed into the remote shell
+    }
+    // Built-in terminal clipboard keys (Rust: Shift+Insert pastes; Ctrl+Shift+C/V copy and paste).
+    if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key === "Insert") { e.preventDefault(); void paste(); return false; }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === "KeyC" || e.code === "KeyV")) {
+      e.preventDefault();
+      if (e.code === "KeyC") copy(); else void paste();
+      return false;
+    }
+    if (!(e.ctrlKey || e.metaKey)) return true;
     if (e.shiftKey || e.altKey) return true;
     if (e.key === "=" || e.key === "+") { e.preventDefault(); zoom(1); return false; }
     if (e.key === "-") { e.preventDefault(); zoom(-1); return false; }

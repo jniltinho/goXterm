@@ -314,8 +314,8 @@ const icon = (name: string) => `./icons/${name}.png`;
       </div>
 
       <div class="editor-actions">
-        <button class="dbtn primary" :disabled="saving" @click="save">{{ saving ? "Saving…" : "OK" }}</button>
-        <button class="dbtn" @click="emit('close')">Cancel</button>
+        <button class="dbtn primary" :disabled="saving" @click="save"><img :src="'./icons/ok.png'" class="bi" /> {{ saving ? "Saving…" : "OK" }}</button>
+        <button class="dbtn" @click="emit('close')"><img :src="'./icons/cancel.png'" class="bi" /> Cancel</button>
       </div>
     </div>
   </div>
@@ -351,11 +351,12 @@ const icon = (name: string) => `./icons/${name}.png`;
 .field { display: flex; align-items: center; gap: 10px; }
 .field label { font-size: 12.5px; min-width: 150px; }
 .editor-err { color: var(--k-c0392b); font-size: 12px; margin-top: 10px; }
-.editor-actions { display: flex; justify-content: center; gap: 10px; padding: 12px; border-top: 1px solid var(--k-d6dde4); background: var(--k-eef1f4); }
-.dbtn { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 22px; font-size: 13px; background: linear-gradient(var(--k-ffffff), var(--k-e9eef3)); border: 1px solid var(--k-a9b4c0); box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; color: var(--k-1e1e1e); }
-.dbtn:hover { border-color: var(--k-8fb4dd); }
-.dbtn.primary { background: linear-gradient(var(--k-5aa469), var(--k-3f8b50)); border-color: var(--k-367a46); color: #fff; }
-.dbtn.primary:hover { background: linear-gradient(var(--k-64b074), var(--k-459657)); }
+.editor-actions { display: flex; justify-content: center; gap: 24px; padding: 8px; border-top: 1px solid var(--border-subtle); background: var(--panel); }
+.dbtn { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 80px; height: 30px; padding: 0 8px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
+.dbtn:hover:not(:disabled) { background: var(--hover); border-color: var(--outline); }
+.dbtn.primary { background: var(--panel); color: var(--text); }
+.dbtn:disabled { color: var(--text-disabled); }
+.bi { width: 16px; height: 16px; }
 .dbtn.primary:disabled { opacity: .55; cursor: default; }
 :deep(*) { border-radius: 0 !important; }
 .wsl-dist { display: flex; gap: 4px; align-items: center; }

@@ -287,3 +287,39 @@ type clipboard interface {
 	Text() (string, bool)
 	SetText(string) bool
 }
+
+// StoreState is the Security page's view of the store (Rust settings::StoreState).
+type StoreState struct {
+	Unlocked bool `json:"unlocked"`
+	Keyring  bool `json:"keyring"`
+}
+
+// GetStoreState reports whether the store is unlocked and has a keyring wrap.
+func (a *App) GetStoreState() StoreState {
+	return StoreState{Unlocked: !a.Locked(), Keyring: store.HasKeyring(store.DataDir())}
+}
+
+func cachedMaster() string {
+	masterPW.Lock()
+	defer masterPW.Unlock()
+	return masterPW.pw
+}
+
+// SetStoreKeyring turns "Unlock with system keyring" on or off for the unlocked store.
+func (a *App) SetStoreKeyring(on bool) error {
+	return store.SetKeyring(store.DataDir(), cachedMaster(), store.SystemKeyring(), on)
+}
+
+// ChangeMasterPassword re-wraps the store key under a new master password (at least 8 characters).
+func (a *App) ChangeMasterPassword(next string) error {
+	if len([]rune(next)) < minMaster {
+		return fmt.Errorf("use at least %d characters", minMaster)
+	}
+	if err := store.ChangePassword(store.DataDir(), cachedMaster(), store.SystemKeyring(), next); err != nil {
+		return err
+	}
+	masterPW.Lock()
+	masterPW.pw = next
+	masterPW.Unlock()
+	return nil
+}

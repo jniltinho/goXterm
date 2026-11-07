@@ -11,6 +11,7 @@ import {
 } from "./api";
 import { SetMultiExec, SelectMultiExec, WslConnect, SetFolderIcon, MoveSession } from "./api";
 import FolderDialog from "./FolderDialog.vue";
+import { commandFor, shortcutMap, DEFAULT_SHORTCUTS } from "./commands";
 import ImportDialog from "./ImportDialog.vue";
 import { ImportMobaPick, ImportMobaApply, type ImportPreview } from "./api";
 import { SaveSettings } from "./api";
@@ -32,6 +33,7 @@ async function loadUI() {
     const s = await GetSettings();
     ui.value = { toolbarCaptions: s.toolbarCaptions, showTabNumbers: s.showTabNumbers, showCloseButtons: s.showCloseButtons };
     sideW.value = Math.min(600, Math.max(160, s.sidebarWidth || 240));
+    shortcutMap.value = { ...DEFAULT_SHORTCUTS, ...s.shortcuts };
     cfg.value = { sftpAutoSwitch: s.sftpAutoSwitch, remoteMonitoring: s.remoteMonitoring, confirmClose: s.confirmClose };
     if (!layoutLoaded) { // the saved layout, once (Rust: sidebar_open, sidebar_page, sidebar_width)
       sidebarCollapsed.value = s.sidebarOpen === false;
@@ -62,13 +64,28 @@ function cycleTab(dir: number) {
   const i = tabs.value.findIndex((t) => t.id === active.value);
   active.value = tabs.value[(i + dir + tabs.value.length) % tabs.value.length].id;
 }
+// Application commands bound in Settings › Shortcuts (Rust command ids; terminal.* run in the terminal).
+const quickInput = ref<HTMLInputElement | null>(null);
+const APP_COMMANDS: Record<string, () => void> = {
+  "session.new": () => newSession(),
+  "tab.new_local": () => openLocal(),
+  "session.quick_connect": () => { quickInput.value?.focus(); quickInput.value?.select(); },
+  "tab.close": () => { if (active.value) void requestClose(active.value); },
+  "tab.next": () => cycleTab(1),
+  "tab.prev": () => cycleTab(-1),
+  "tab.duplicate": () => { const t = tabs.value.find((x) => x.id === active.value); if (t) duplicateTab(t); },
+  "app.settings": () => (settingsOpen.value = true),
+  "app.toggle_sidebar": () => (sidebarCollapsed.value = !sidebarCollapsed.value),
+  "multiexec.toggle": () => toggleMultiExec(),
+  "tunnels.open": () => (tunnelsOpen.value = true),
+  "app.help": () => aboutApp(),
+  "app.about": () => aboutApp(),
+  "app.exit": () => void requestExit(),
+  "session.import": () => void importSessions(),
+};
 function onKey(e: KeyboardEvent) {
-  const mod = e.ctrlKey || e.metaKey;
-  const k = e.key.toLowerCase();
-  if (mod && e.shiftKey && k === "n") { e.preventDefault(); newSession(); return; }
-  if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); return; }
-  if (mod && e.shiftKey && k === "w") { e.preventDefault(); if (active.value) void requestClose(active.value); return; }
-  if (mod && e.key === ",") { e.preventDefault(); settingsOpen.value = true; return; }
+  const cmd = commandFor(e);
+  if (cmd && APP_COMMANDS[cmd]) { e.preventDefault(); APP_COMMANDS[cmd](); return; }
   if (inEditable()) return;
   if (!selected.value) return;
   if (e.key === "Enter") { e.preventDefault(); openSession(selected.value); }
@@ -613,7 +630,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
     <!-- 28 px row: Quick connect over the sidebar column, then the tab strip -->
     <div class="row">
       <div class="qc-col" :style="{ width: (sidebarCollapsed ? sideW - STRIP_W : sideW) + 'px' }">
-        <input v-model="quick" class="qc" placeholder="Quick connect..." spellcheck="false" aria-label="Quick connect" :class="quickErr ? 'err' : ''" :title="quickErr" @keydown.enter="quickConnect" @keydown.esc="quick = ''; quickErr = ''" />
+        <input ref="quickInput" v-model="quick" class="qc" placeholder="Quick connect..." spellcheck="false" aria-label="Quick connect" :class="quickErr ? 'err' : ''" :title="quickErr" @keydown.enter="quickConnect" @keydown.esc="quick = ''; quickErr = ''" />
       </div>
       <div class="tabstrip">
         <button class="tab-home" :class="!active ? 'sel' : ''" title="Home" @click="active = ''"><img :src="icon('house')" /></button>
@@ -805,7 +822,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
     <AskDialog />
 
     <!-- global settings -->
-    <SettingsDialog v-if="settingsOpen" @saved="settingsOpen = false; loadUI()" @close="settingsOpen = false" />
+    <SettingsDialog v-if="settingsOpen" @saved="loadUI()" @close="settingsOpen = false"
+      @import="settingsOpen = false; importSessions()" @unlock="settingsOpen = false; unlockError = ''; showUnlock = true" />
     <TunnelsDialog v-if="tunnelsOpen" :sessions="sessions" @close="tunnelsOpen = false" />
 
     <!-- SSH host-key trust (trust-on-first-use) -->
@@ -818,9 +836,9 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <div class="fp">{{ trustReq.fingerprint }}</div>
           <p class="dialog-sub">Accept only if it matches the fingerprint published by the server administrator.</p>
           <div class="dialog-actions">
-            <button class="dbtn primary" @click="respondTrust('once')">Accept once</button>
+            <button class="dbtn primary" @click="respondTrust('once')"><img :src="icon('ok')" class="dbtn-ico" /> Accept once</button>
             <button class="dbtn" @click="respondTrust('save')">Accept and save</button>
-            <button class="dbtn" @click="respondTrust('reject')">Cancel</button>
+            <button class="dbtn" @click="respondTrust('reject')"><img :src="icon('cancel')" class="dbtn-ico" /> Cancel</button>
           </div>
         </div>
       </div>
@@ -836,8 +854,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <label class="dialog-label">Password</label>
           <input type="password" class="dialog-input" v-model="passValue" @keyup.enter="respondPassword(true)" v-focus />
           <div class="dialog-actions">
-            <button class="dbtn primary" @click="respondPassword(true)">OK</button>
-            <button class="dbtn" @click="respondPassword(false)">Cancel</button>
+            <button class="dbtn primary" @click="respondPassword(true)"><img :src="icon('ok')" class="dbtn-ico" /> OK</button>
+            <button class="dbtn" @click="respondPassword(false)"><img :src="icon('cancel')" class="dbtn-ico" /> Cancel</button>
           </div>
         </div>
       </div>
@@ -960,8 +978,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .dialog-warn { color: var(--warning); }
 .dialog-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .dialog-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.dialog-actions { display: flex; justify-content: center; gap: 20px; margin-top: 12px; }
-.dbtn { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 74px; height: 26px; padding: 0 8px; font-size: 12px; background: var(--panel); border: 1px solid var(--border); cursor: pointer; color: var(--text); }
+.dialog-actions { display: flex; justify-content: center; gap: 24px; margin-top: 12px; }
+.dbtn { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 80px; height: 30px; padding: 0 8px; font-size: 12px; background: var(--panel); border: 1px solid var(--border); cursor: pointer; color: var(--text); }
 .dbtn:hover:not(:disabled) { background: var(--hover); border-color: var(--outline); }
 .dbtn.primary { background: var(--panel); color: var(--text); }
 .dbtn:disabled { color: var(--text-disabled); cursor: default; }

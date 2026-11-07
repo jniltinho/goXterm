@@ -113,8 +113,8 @@ const arrow = (t: Tunnel) =>
             <input type="checkbox" v-model="editing.exposure_confirmed" /> Expose on a non-loopback address (I understand the risk)
           </label>
           <div class="form-foot">
-            <button class="dbtn primary" @click="save">Save</button>
-            <button class="dbtn" @click="editing = null">Cancel</button>
+            <button class="dbtn primary" @click="save"><img :src="'./icons/ok.png'" class="bi" /> Save</button>
+            <button class="dbtn" @click="editing = null"><img :src="'./icons/cancel.png'" class="bi" /> Cancel</button>
           </div>
         </div>
 
@@ -138,7 +138,7 @@ const arrow = (t: Tunnel) =>
           <button class="dbtn" @click="newTunnel" :disabled="!gateways.length">New tunnel</button>
           <button class="dbtn" @click="startAll" :disabled="!list.length">Start all</button>
           <button class="dbtn" @click="stopAll" :disabled="!list.length">Stop all</button>
-          <button class="dbtn primary" @click="emit('close')">Close</button>
+          <button class="dbtn primary" @click="emit('close')"><img :src="'./icons/ok.png'" class="bi" /> Close</button>
         </template>
       </div>
     </div>
@@ -169,11 +169,11 @@ const arrow = (t: Tunnel) =>
 .mini:hover { border-color: var(--k-8fb4dd); }
 .mini.danger { color: var(--k-c0392b); }
 .st-actions { display: flex; justify-content: center; gap: 10px; padding: 12px; border-top: 1px solid var(--k-d6dde4); background: var(--k-eef1f4); }
-.dbtn { height: 30px; padding: 0 20px; font-size: 13px; background: linear-gradient(var(--k-ffffff), var(--k-e9eef3)); border: 1px solid var(--k-a9b4c0); box-shadow: 0 1px 2px rgba(0,0,0,.12); cursor: pointer; }
-.dbtn:hover { border-color: var(--k-8fb4dd); }
-.dbtn:disabled { opacity: .5; cursor: default; }
-.dbtn.primary { background: linear-gradient(var(--k-5aa469), var(--k-3f8b50)); border-color: var(--k-367a46); color: #fff; }
-.dbtn.primary:hover { background: linear-gradient(var(--k-64b074), var(--k-459657)); }
+.dbtn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 80px; height: 30px; padding: 0 8px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }
+.dbtn:hover:not(:disabled) { background: var(--hover); border-color: var(--outline); }
+.dbtn:disabled { color: var(--text-disabled); cursor: default; }
+.dbtn.primary { background: var(--panel); color: var(--text); }
+.bi { width: 16px; height: 16px; }
 :deep(*) { border-radius: 0 !important; }
 .dot { border-radius: 50% !important; }
 </style>

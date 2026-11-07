@@ -9,9 +9,7 @@ func (a *App) GetSettings() (store.Settings, error) {
 	if err != nil {
 		return s, err
 	}
-	if s.Terminal.FontFamily == "" {
-		s.Terminal.FontFamily = "DejaVu Sans Mono"
-	}
+	// "" (or "monospace") is the Rust default face, Cascadia Mono; the SPA resolves it.
 	if s.Terminal.FontSize == 0 {
 		s.Terminal.FontSize = 13
 	}

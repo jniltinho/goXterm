@@ -49,6 +49,7 @@ type mapKeyring map[string][]byte
 
 func (m mapKeyring) get(id string) ([]byte, bool, error) { b, ok := m[id]; return b, ok, nil }
 func (m mapKeyring) set(id string, b []byte) error       { m[id] = b; return nil }
+func (m mapKeyring) delete(id string) error              { delete(m, id); return nil }
 
 // With a keyring the store opens silently through the keyring wrap and still with the password.
 func TestCreateWithKeyring(t *testing.T) {
@@ -160,4 +161,40 @@ func TestImportSessions(t *testing.T) {
 	if len(rows) != 3 || in != 2 {
 		t.Fatalf("sessions %v", rows)
 	}
+}
+
+// Change the master password, then turn the keyring wrap on and off (Rust envelope edits).
+func TestChangePasswordAndKeyringToggle(t *testing.T) {
+	dir, kr := t.TempDir(), mapKeyring{}
+	if err := Create(dir, "old-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	if ChangePassword(dir, "wrong", nil, "new-master") == nil {
+		t.Fatal("changed with a wrong password")
+	}
+	if err := ChangePassword(dir, "old-master", nil, "new-master"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(dir, "old-master"); err == nil {
+		t.Fatal("old password still opens")
+	}
+	if HasKeyring(dir) {
+		t.Fatal("keyring before enabling")
+	}
+	if err := SetKeyring(dir, "new-master", kr, true); err != nil || !HasKeyring(dir) || len(kr) != 1 {
+		t.Fatalf("enable: %v %v %d", err, HasKeyring(dir), len(kr))
+	}
+	if s, ok, err := OpenWithKeyring(dir, kr); err != nil || !ok {
+		t.Fatalf("keyring open: %v %v", ok, err)
+	} else {
+		s.Close()
+	}
+	if err := SetKeyring(dir, "new-master", kr, false); err != nil || HasKeyring(dir) || len(kr) != 0 {
+		t.Fatalf("disable: %v %v %d", err, HasKeyring(dir), len(kr))
+	}
+	s, err := Open(dir, "new-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
 }

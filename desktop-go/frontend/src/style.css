@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./theme.css";
+@import "./fonts.css";
 
 html,
 body,
@@ -7,9 +8,6 @@ body,
   height: 100%;
   margin: 0;
 }
-/* Noto Sans, the Rust app's UI face (assets/fonts, copied by `make icons`). */
-@font-face { font-family: "Noto Sans"; src: url("/fonts/NotoSans-Regular.ttf") format("truetype"); font-weight: 400; }
-@font-face { font-family: "Noto Sans"; src: url("/fonts/NotoSans-Bold.ttf") format("truetype"); font-weight: 700; }
 body {
   background: var(--surface);
   color: var(--text);
