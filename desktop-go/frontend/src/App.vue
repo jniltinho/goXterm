@@ -9,6 +9,7 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
+import { SetMultiExec, SelectMultiExec } from "./api";
 import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
 
 // Toolbar/tab appearance flags from Settings → Display (config.toml, no unlock needed).
@@ -181,7 +182,7 @@ const TOOLBAR: { icon: string; label: string; run: () => void; on?: () => boolea
   { icon: "session-new", label: "Session", hint: "New session (Ctrl+Shift+N)", run: () => newSession() },
   { icon: "sessions", label: "Sessions", run: () => (sidebarCollapsed.value = !sidebarCollapsed.value), on: () => !sidebarCollapsed.value },
   { icon: "tunneling", label: "Tunneling", run: () => (tunnelsOpen.value = true) },
-  { icon: "multiexec", label: "MultiExec", disabled: true, hint: "MultiExec (not available yet)", run: () => {} },
+  { icon: "multiexec", label: "MultiExec", hint: "MultiExec: type in several terminals at once", run: () => toggleMultiExec(), on: () => multiexec.value },
   { icon: "settings", label: "Settings", hint: "Settings (Ctrl+,)", run: () => (settingsOpen.value = true) },
   { icon: "help", label: "Help", run: () => aboutApp() },
 ];
@@ -198,6 +199,20 @@ function quickConnect() {
   if (proto === "telnet") openTerm(host, "terminal", () => TelnetQuickConnect(host, port), false, url);
   else openTerm(user ? `${user}@${host}` : host, "ssh", () => QuickConnect(host, port, user, ""), true, url);
   quick.value = quickErr.value = "";
+}
+
+// MultiExec (Rust parity): the toggle shows a checkbox before each terminal tab; input typed in a
+// checked terminal is sent to all checked terminals.
+const multiexec = ref(false);
+const tabMulti = ref<Record<string, boolean>>({});
+function toggleMultiExec() {
+  multiexec.value = !multiexec.value;
+  void SetMultiExec(multiexec.value);
+}
+function selectMulti(id: string, on: boolean) {
+  tabMulti.value[id] = on;
+  const b = tabBackend.value[id];
+  if (b) void SelectMultiExec(b, on);
 }
 
 // Duplicate tab: the same connection again, in a new tab.
@@ -226,6 +241,7 @@ const sftpTerm = computed(() =>
 watch(sftpTerm, (id) => { if (!id) sidePage.value = "sessions"; });
 function onBackend(id: string, backend: string) {
   tabBackend.value[id] = backend;
+  if (tabMulti.value[id]) void SelectMultiExec(backend, true); // a reconnect has a new backend id
   delete tabCwd.value[id];
   if (id === active.value) sidePage.value = "sftp"; // MobaXterm opens the SFTP tab on connect
 }
@@ -329,7 +345,7 @@ function openRdp(title: string, connect: (w: number, h: number) => Promise<RdpVi
 }
 function openRdpFor(s: Session | null) { if (s) openRdp("RDP: " + s.name, (w, h) => RdpConnect(s.id, w, h), sessionUrl(s)); }
 function closeTab(id: string) {
-  for (const m of [tabState, tabUrl, tabMon, tabBackend, tabCwd, enterTick]) delete m.value[id];
+  for (const m of [tabState, tabUrl, tabMon, tabBackend, tabCwd, enterTick, tabMulti]) delete m.value[id];
   const i = tabs.value.findIndex((t) => t.id === id);
   tabs.value = tabs.value.filter((t) => t.id !== id);
   if (active.value === id) active.value = tabs.value[Math.max(0, i - 1)]?.id ?? "";
@@ -466,12 +482,16 @@ const tabIcon = (t: Tab) => icon(t.icon);
       </div>
       <div class="tabstrip">
         <button class="tab-home" :class="!active ? 'sel' : ''" title="Home" @click="active = ''"><img :src="icon('house')" /></button>
-        <button v-for="(t, i) in tabs" :key="t.id" class="tab" :class="t.id === active ? 'sel' : ''" :title="tabUrl[t.id] || t.title" @click="active = t.id" @mousedown.middle.prevent="closeTab(t.id)">
+        <template v-for="(t, i) in tabs" :key="t.id">
+        <input v-if="multiexec && t.kind === 'ssh'" type="checkbox" class="me-check" :checked="!!tabMulti[t.id]" :title="'MultiExec ' + t.title" @change="selectMulti(t.id, ($event.target as HTMLInputElement).checked)" />
+        <button class="tab" :class="t.id === active ? 'sel' : ''" :title="tabUrl[t.id] || t.title" @click="active = t.id" @mousedown.middle.prevent="closeTab(t.id)">
           <img :src="tabIcon(t)" class="tab-ico" />
           <span class="tab-dot" :class="tabState[t.id] ?? 'connecting'" :title="STATE_LABEL[tabState[t.id] ?? 'connecting']"></span>
           <span class="tab-t"><template v-if="ui.showTabNumbers">{{ i + 1 }}. </template>{{ t.title }}</span>
+          <img v-if="multiexec && tabMulti[t.id]" :src="icon('multiexec')" class="tab-ico" title="MultiExec" />
           <span v-if="ui.showCloseButtons" class="tab-x" title="Close" @click.stop="closeTab(t.id)">×</span>
         </button>
+        </template>
         <button class="tab-new" title="New local terminal" @click="openLocal"></button>
       </div>
     </div>
@@ -592,7 +612,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
     <footer class="statusbar">
       <span class="truncate">{{ active && tabUrl[active] ? `${tabUrl[active]} — ${STATE_LABEL[tabState[active] ?? "connecting"]}` : status }}</span>
-      <span class="ml-auto shrink-0">{{ tabs.length }} tab(s)</span>
+      <span v-if="multiexec" class="ml-auto shrink-0 me-on">MultiExec ON</span>
+      <span class="shrink-0" :class="multiexec ? '' : 'ml-auto'">{{ tabs.length }} tab(s)</span>
     </footer>
 
     <!-- tree context menu -->
@@ -717,6 +738,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tab-t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .tab-x { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); }
 .tab-x:hover { color: #fff; background: var(--danger); }
+.me-check { align-self: center; margin: 0 2px; }
+.me-on { color: var(--warning); }
 .tab-dot { width: 8px; height: 8px; clip-path: circle(50%); flex: none; background: var(--k-d4a72c); }
 .tab-dot.connected { background: var(--success); }
 .tab-dot.stopped { background: var(--danger); }

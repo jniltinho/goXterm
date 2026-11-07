@@ -160,6 +160,7 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		_ = a.RemoteDisconnect(tabID) // the side SFTP browser rides on this connection
 		a.mu.Lock()
 		delete(a.shellPID, tabID)
+		delete(a.multi.selected, tabID)
 		a.mu.Unlock()
 		msg := ""
 		if err != nil {
@@ -208,13 +209,29 @@ func (a *App) dial(cfg sshconn.Config) (string, error) {
 	return tabID, nil
 }
 
-// Send writes input to a terminal.
+// Send writes input to a terminal; with MultiExec on, input typed in a selected terminal goes to every
+// selected terminal (Rust engine semantics: an unselected terminal only gets its own input).
 func (a *App) Send(tabID, data string) error {
-	s := a.session(tabID)
-	if s == nil {
+	a.mu.Lock()
+	targets := a.multi.targets(tabID)
+	streams := make([]termStream, 0, len(targets))
+	for _, id := range targets {
+		if s := a.term[id]; s != nil {
+			streams = append(streams, s)
+		}
+	}
+	own := a.term[tabID]
+	a.mu.Unlock()
+	if own == nil {
 		return errors.New("the terminal has closed")
 	}
-	return s.Write([]byte(data))
+	var first error
+	for _, s := range streams {
+		if err := s.Write([]byte(data)); err != nil && s == own && first == nil {
+			first = err
+		}
+	}
+	return first
 }
 
 // Resize changes a terminal's size.
@@ -231,6 +248,7 @@ func (a *App) Disconnect(tabID string) error {
 	_ = a.RemoteDisconnect(tabID) // the tab's side SFTP browser, if open
 	a.mu.Lock()
 	delete(a.shellPID, tabID)
+	delete(a.multi.selected, tabID)
 	a.mu.Unlock()
 	s := a.session(tabID)
 	if s == nil {

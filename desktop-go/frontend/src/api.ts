@@ -101,6 +101,9 @@ export interface Metrics {
 }
 export const Resize = (tabId: string, cols: number, rows: number) => call<void>("Resize", tabId, cols, rows);
 export const Disconnect = (tabId: string) => call<void>("Disconnect", tabId);
+// MultiExec: with it on, input typed in a selected terminal goes to every selected terminal.
+export const SetMultiExec = (enabled: boolean) => call<void>("SetMultiExec", enabled);
+export const SelectMultiExec = (tabId: string, selected: boolean) => call<void>("SelectMultiExec", tabId, selected);
 export const HasDemo = () => call<boolean>("HasDemo");
 export const ConnectDemo = () => call<string>("ConnectDemo");
 

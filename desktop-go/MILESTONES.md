@@ -25,10 +25,11 @@ core modular (um pacote por protocolo). Cada marco é verificado (testes / lab D
 | **M13 — Builds multiplataforma** | Binário único (cobra: desktop+CLI+MCP) + AppImage; Linux/Windows/macOS em `dist/` | 1.3 (~) | builds verdes |
 | **M14 — SFTP lateral + abas** | Painel "SFTP browser" na conexão da aba SSH (toolbar, caminho, lista, download/upload por diálogo nativo, nova pasta/renomear/apagar); *Follow terminal folder* (OSC 7 ou cwd do shell após Return); faixa vertical Sessions/SFTP (abre SFTP ao conectar, volta a Sessions ao desconectar); abas estilo Rust (🏠, `+`, borda azul, ponto de estado); barra de monitoramento com ícones; zoom Ctrl+roda; RDP sem as linhas verticais (padding do bitmap recortado) | 6.2 | lab Docker (Xvfb), testes |
 | **M15 — Skins e shell do Rust** | Light / Dark / System com os tokens exatos do Rust (`Tokens::light/dark`) e Noto Sans 12px; shell com as medidas do `Metrics`: menu 20, toolbar 52 (Session/Sessions/Tunneling/MultiExec/Settings/Help + Exit), linha de 28 com Quick connect funcional sobre a sidebar e abas de 26, faixa de 34 com botões de 40, árvore "User sessions" (linhas 24, ícones 22), home do `home.rs`, status 18; diálogos/menus planos; menu de botão direito do terminal igual ao Rust (Copy/Paste/Select all/Find/Save/Clear/Reset/Duplicate/Reconnect/Close, Ctrl+Shift+C/V, colar com botão direito, copiar ao selecionar) | fase 4 | screenshots light/dark no lab |
+| **M17 — MultiExec** | Botão MultiExec da toolbar, caixinha antes de cada aba de terminal, marcador na aba e "MultiExec ON" no status; entrada digitada numa aba marcada vai a todas as marcadas (semântica do engine Rust) | 13.x | teste unitário + duas abas SSH no lab |
 | **M16 — Clipboard RDP** | Canal CLIPRDR (MS-RDPECLIP) no grdp: texto nos dois sentidos via clipboard nativo | 9.1 | testes + xrdp do lab nos dois sentidos |
 
 ## Restante antes do cutover
 
-- MultiExec; ops *live*/write do plano de controle + transportes macOS/Windows;
+- Ops *live*/write do plano de controle + transportes macOS/Windows;
   fronteira de confiança web (3.4); gate headless (3.5); gate de
   paridade multiplataforma (13.x). A GUI Rust permanece até o gate passar.

@@ -115,8 +115,8 @@ const rename = () => {
         <button class="sp-tb" title="Delete" :disabled="!sel" @click="remove"><img :src="icon('delete')" /></button>
       </div>
       <input v-model="pathInput" class="sp-path" spellcheck="false" @keydown.enter="list(pathInput)" />
-      <div class="sp-cols"><span class="c-name">Name</span><span class="c-size">Size (KB)</span><span class="c-time">Last modified</span></div>
-      <div class="sp-list min-h-0 flex-1 overflow-y-auto" :class="busy ? 'busy' : ''">
+      <div class="sp-scroll min-h-0 flex-1"><div class="sp-cols"><span class="c-name">Name</span><span class="c-size">Size (KB)</span><span class="c-time">Last modified</span></div>
+      <div class="sp-list" :class="busy ? 'busy' : ''">
         <div class="sp-row" @dblclick="list(parent(path))"><img :src="icon('ft-folder-up')" class="sp-ico" /><span class="c-name">..</span></div>
         <div
           v-for="e in sorted"
@@ -132,6 +132,7 @@ const rename = () => {
           <span class="c-size">{{ e.dir ? "" : kb(e.size) }}</span>
           <span class="c-time">{{ when(e.modTime) }}</span>
         </div>
+      </div>
       </div>
       <div v-if="err" class="sp-err">{{ err }}</div>
     </template>
@@ -155,8 +156,8 @@ const rename = () => {
 .sp-tb:disabled { opacity: .35; cursor: default; }
 .sp-path { margin: 4px; height: 24px; padding: 0 6px; font-size: 12px; background: var(--k-ffffff); border: 1px solid var(--k-a9b4c0); outline: none; }
 .sp-path:focus { border-color: var(--k-6aa0da); }
-.sp-cols, .sp-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 62px 104px; align-items: center; gap: 4px; padding: 0 6px; }
-.sp-cols { grid-template-columns: minmax(0, 1fr) 62px 104px; height: 22px; font-size: 11.5px; color: var(--k-4a5a68); background: var(--k-eef1f4); border-top: 1px solid var(--k-d6dde4); border-bottom: 1px solid var(--k-d6dde4); }
+.sp-cols, .sp-row { display: grid; grid-template-columns: 18px minmax(110px, 1fr) 58px 100px; align-items: center; gap: 4px; padding: 0 6px; min-width: 310px; }
+.sp-cols { grid-template-columns: minmax(132px, 1fr) 58px 100px; height: 22px; font-size: 11.5px; color: var(--k-4a5a68); background: var(--k-eef1f4); border-top: 1px solid var(--k-d6dde4); border-bottom: 1px solid var(--k-d6dde4); }
 .sp-cols .c-name { padding-left: 22px; }
 .sp-row { height: 21px; font-size: 12px; color: var(--k-1e2a36); cursor: default; user-select: none; }
 .sp-row:hover { background: var(--k-e3ebf3); }
@@ -165,6 +166,8 @@ const rename = () => {
 .c-size { text-align: right; color: var(--k-4a5a68); }
 .c-time { color: var(--k-6b7a8a); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
 .sp-list.busy { opacity: .6; }
+.sp-scroll { overflow: auto; }
+.sp-scroll .sp-cols { position: sticky; top: 0; z-index: 1; }
 .sp-err { padding: 4px 8px; font-size: 11.5px; color: var(--k-c0392b); border-top: 1px solid var(--k-d6dde4); }
 .sp-empty { flex: 1; padding: 12px 10px; font-size: 12px; color: var(--k-6b7a8a); }
 .sp-foot { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-top: 1px solid var(--k-c9d1d9); background: var(--k-eef1f4); }

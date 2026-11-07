@@ -38,6 +38,7 @@ type App struct {
 	early  map[string]*earlyTab        // tabId → output/banner held until the SPA attaches
 	// shellPID caches each SSH tab's login-shell PID for "Follow terminal folder" (-1 unsupported).
 	shellPID map[string]int
+	multi    multiExec         // MultiExec: broadcast typed input to the selected terminals
 	ctl      *control.Listener // agent control socket listener (nil when agent control is off)
 }
 
