@@ -67,6 +67,8 @@ export const Unlock = (password: string) => call<void>("Unlock", password);
 export const FirstRun = () => call<boolean>("FirstRun");
 export const CreateStore = (password: string, keyring: boolean) => call<void>("CreateStore", password, keyring);
 // Settings › Security: store state, keyring wrap on/off, change the master password.
+// Monospace families installed on the machine (Linux fontconfig; [] elsewhere).
+export const SystemMonoFonts = () => call<string[] | null>("SystemMonoFonts");
 export const GetStoreState = () => call<{ unlocked: boolean; keyring: boolean }>("GetStoreState");
 export const SetStoreKeyring = (on: boolean) => call<void>("SetStoreKeyring", on);
 export const ChangeMasterPassword = (next: string) => call<void>("ChangeMasterPassword", next);

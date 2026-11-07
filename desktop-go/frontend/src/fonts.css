@@ -14,3 +14,9 @@
 @font-face { font-family: "Fira Mono"; src: url("/fonts/FiraMono-Regular.ttf") format("truetype"); }
 @font-face { font-family: "Ubuntu Mono"; src: url("/fonts/UbuntuMono-Regular.ttf") format("truetype"); }
 @font-face { font-family: "Terminus"; src: url("/fonts/TerminusTTF-4.49.3.ttf") format("truetype"); }
+/* Extra high-quality monospace faces (variable, OFL; google/fonts) offered for the terminal. */
+@font-face { font-family: "Fira Code"; src: url("/fonts/FiraCode-Variable.ttf") format("truetype"); font-weight: 300 700; }
+@font-face { font-family: "Roboto Mono"; src: url("/fonts/RobotoMono-Variable.ttf") format("truetype"); font-weight: 100 700; }
+@font-face { font-family: "Noto Sans Mono"; src: url("/fonts/NotoSansMono-Variable.ttf") format("truetype"); font-weight: 100 900; }
+@font-face { font-family: "Geist Mono"; src: url("/fonts/GeistMono-Variable.ttf") format("truetype"); font-weight: 100 900; }
+@font-face { font-family: "Red Hat Mono"; src: url("/fonts/RedHatMono-Variable.ttf") format("truetype"); font-weight: 300 700; }

@@ -3,7 +3,7 @@
 // titled group boxes, edits applied at once (saved shortly after each change), OK / Esc / X only close.
 import { ref, onMounted, onBeforeUnmount, watch, computed } from "vue";
 import {
-  GetSettings, SaveSettings, Diagnostics, GetStoreState, SetStoreKeyring, ChangeMasterPassword,
+  GetSettings, SaveSettings, Diagnostics, GetStoreState, SetStoreKeyring, ChangeMasterPassword, SystemMonoFonts,
   type Settings, type Diag,
 } from "./api";
 import { SCHEMES } from "./schemes";
@@ -22,9 +22,20 @@ let lastTab: Tab = "general"; // the Rust window reopens on the last tab (app li
 const tab = ref<Tab>((window as unknown as { __rxtSettingsTab?: Tab }).__rxtSettingsTab ?? lastTab);
 watch(tab, (t) => { lastTab = t; (window as unknown as { __rxtSettingsTab?: Tab }).__rxtSettingsTab = t; });
 
-// Rust theme::MONO_FONTS, the first is the default.
+// Bundled faces: Rust theme::MONO_FONTS (the first is the default), then the extra high-quality ones.
 const MONO_FONTS = ["Cascadia Mono", "JetBrains Mono", "Hack", "DejaVu Sans Mono", "Inconsolata", "IBM Plex Mono",
-  "IBM Plex Mono Text", "Source Code Pro", "Fira Mono", "Ubuntu Mono", "Terminus"];
+  "IBM Plex Mono Text", "Source Code Pro", "Fira Mono", "Ubuntu Mono", "Terminus",
+  "Fira Code", "Roboto Mono", "Noto Sans Mono", "Geist Mono", "Red Hat Mono"];
+// Installed monospace faces: fontconfig on Linux, plus the usual macOS/Windows ones when present.
+const PROBE = ["Consolas", "Cascadia Code", "Lucida Console", "Courier New", "Menlo", "Monaco", "SF Mono",
+  "Andale Mono", "Liberation Mono", "Noto Mono", "Droid Sans Mono", "Iosevka", "Victor Mono", "Hasklig", "Meslo LG S"];
+const installed = ref<string[]>([]);
+function present(face: string): boolean { // the face changes the text width against both generic fallbacks
+  const c = document.createElement("canvas").getContext("2d");
+  if (!c) return false;
+  const w = (f: string) => { c.font = `16px ${f}`; return c.measureText("mmmmmmmmmmlli10OO").width; };
+  return w(`"${face}", monospace`) !== w("monospace") || w(`"${face}", serif`) !== w("serif");
+}
 const GPU = [["auto", "Automatic"], ["gl", "OpenGL"], ["dx12", "DirectX 12"], ["vulkan", "Vulkan"], ["cpu", "Software (CPU)"]];
 const LEVELS: [string, string, string][] = [
   ["off", "Off", "No log file is written."], ["error", "Error", "Warnings and errors only."],
@@ -41,7 +52,8 @@ const error = ref("");
 // Font family: "" / "monospace" = the default (Cascadia Mono); a face set elsewhere stays selectable.
 const fontNames = computed(() => {
   const cur = s.value?.terminal.fontFamily ?? "";
-  return cur && cur !== "monospace" && !MONO_FONTS.includes(cur) ? [...MONO_FONTS, cur] : MONO_FONTS;
+  const all = [...MONO_FONTS, ...installed.value];
+  return cur && cur !== "monospace" && !all.includes(cur) ? [...installed.value, cur] : installed.value;
 });
 const fontValue = computed({
   get: () => (!s.value?.terminal.fontFamily || s.value.terminal.fontFamily === "monospace" ? "" : s.value.terminal.fontFamily),
@@ -104,6 +116,10 @@ onMounted(async () => {
   window.addEventListener("mousedown", closeScheme);
   try { s.value = await GetSettings(); } catch (e) { error.value = String(e); }
   try { store.value = await GetStoreState(); } catch { /* older backend */ }
+  try {
+    const sys = (await SystemMonoFonts()) ?? [];
+    installed.value = [...new Set([...sys, ...PROBE.filter(present)])].filter((f) => !MONO_FONTS.includes(f)).sort();
+  } catch { /* none */ }
   setTimeout(() => (ready = true)); // the initial load is not an edit
 });
 onBeforeUnmount(() => {
@@ -148,7 +164,11 @@ watch(tab, async (t) => {
             <section class="grp"><div class="grp-h">Font and cursor</div><div class="grp-b">
               <div class="grid">
                 <label>Font family</label>
-                <select v-model="fontValue" class="in w150"><option value="">Default (Cascadia Mono)</option><option v-for="f in fontNames" :key="f" :value="f">{{ f }}</option></select>
+                <select v-model="fontValue" class="in w150">
+                  <option value="">Default (Cascadia Mono)</option>
+                  <optgroup label="Bundled"><option v-for="f in MONO_FONTS" :key="f" :value="f" :style="{ fontFamily: `'${f}'` }">{{ f }}</option></optgroup>
+                  <optgroup v-if="fontNames.length" label="Installed"><option v-for="f in fontNames" :key="'i' + f" :value="f">{{ f }}</option></optgroup>
+                </select>
                 <label>Font size</label>
                 <input v-model.number="s.terminal.fontSize" type="number" min="6" max="48" step="0.5" class="in w60" />
                 <label>Cursor</label>
