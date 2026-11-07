@@ -11,7 +11,7 @@ DOCKER     := docker run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp
 GO_ENV     := -e GOFLAGS=-buildvcs=false -e GOCACHE=/src/.cache/go-build -e GOMODCACHE=/src/.cache/mod -e CGO_ENABLED=1
 RUN         = $(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)
 
-.PHONY: image tidy check test frontend build appimage windows macos dist-all clean
+.PHONY: image tidy check layers test frontend build appimage windows macos dist-all clean
 
 image:            ## build toolchain image (Go + GTK/WebKitGTK + SQLCipher)
 	docker build -q -t $(IMAGE) -f build/linux.Dockerfile build
