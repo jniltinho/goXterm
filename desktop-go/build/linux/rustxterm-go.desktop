@@ -5,6 +5,6 @@ GenericName=Remote session manager
 Comment=Native terminal and remote session manager (SSH, SFTP, FTP, RDP, VNC, Telnet, Serial)
 Exec=rustxterm-go
 Icon=rustxterm-go
-Categories=Network;System;TerminalEmulator;RemoteAccess;
+Categories=System;TerminalEmulator;RemoteAccess;
 Terminal=false
 StartupWMClass=rustxterm
