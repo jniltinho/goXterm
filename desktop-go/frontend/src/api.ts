@@ -130,6 +130,15 @@ export const RemoteDownload = (tabId: string, remote: string, localDir: string) 
 export const RemoteUpload = (tabId: string, local: string, remoteDir: string) =>
   call<number>("RemoteUpload", tabId, local, remoteDir);
 export const RemoteDisconnect = (tabId: string) => call<void>("RemoteDisconnect", tabId);
+// Side SFTP browser of an SSH terminal tab (same connection; ids are the terminal's backend tabId),
+// "Follow terminal folder" and the editing operations of a remote file session.
+export const TermFiles = (termId: string) => call<RemoteSession>("TermFiles", termId);
+export const TermCwd = (termId: string) => call<string>("TermCwd", termId);
+export const RemoteMkdir = (tabId: string, dir: string) => call<void>("RemoteMkdir", tabId, dir);
+export const RemoteRemove = (tabId: string, path: string) => call<void>("RemoteRemove", tabId, path);
+export const RemoteRename = (tabId: string, from: string, to: string) => call<void>("RemoteRename", tabId, from, to);
+export const RemoteDownloadAs = (tabId: string, remote: string) => call<string>("RemoteDownloadAs", tabId, remote);
+export const RemoteUploadPick = (tabId: string, remoteDir: string) => call<string>("RemoteUploadPick", tabId, remoteDir);
 export const LocalHome = () => call<string>("LocalHome");
 export const LocalList = (dir: string) => call<Entry[]>("LocalList", dir);
 

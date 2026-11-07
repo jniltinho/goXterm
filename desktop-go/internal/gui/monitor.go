@@ -45,7 +45,7 @@ type Metrics struct {
 // sample is one raw reading; CPU and net are cumulative counters turned into rates by delta().
 type sample struct {
 	host, os                 string
-	cpuTotal, cpuIdle         uint64
+	cpuTotal, cpuIdle        uint64
 	memTotalKiB, memAvailKiB uint64
 	uptime                   float64
 	netRx, netTx             uint64

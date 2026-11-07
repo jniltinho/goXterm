@@ -23,8 +23,8 @@ func TestTelnetNegotiation(t *testing.T) {
 			return
 		}
 		defer c.Close()
-		c.Write([]byte{iac, will, optEcho})      // offer to echo
-		c.Write([]byte("hello"))                 // payload
+		c.Write([]byte{iac, will, optEcho}) // offer to echo
+		c.Write([]byte("hello"))            // payload
 		buf := make([]byte, 8)
 		c.SetReadDeadline(time.Now().Add(2 * time.Second))
 		n, _ := c.Read(buf) // expect the client's IAC DO ECHO

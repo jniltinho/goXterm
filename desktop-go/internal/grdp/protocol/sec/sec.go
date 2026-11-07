@@ -240,8 +240,8 @@ type SEC struct {
 	nbEncryptedPacket int
 	nbDecryptedPacket int
 
-	currentDecryptKey  []byte
-	currentEncryptKey []byte
+	currentDecryptKey    []byte
+	currentEncryptKey    []byte
 	initialDecryptKeyRef []byte
 	initialEncryptKeyRef []byte
 
@@ -469,7 +469,7 @@ type Client struct {
 	userId    uint16
 	channelId uint16
 	//initialise decrypt and encrypt keys
-	initialDecryptKey  []byte
+	initialDecryptKey []byte
 	initialEncryptKey []byte
 
 	fastPathListener core.FastPathListener

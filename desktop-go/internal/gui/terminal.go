@@ -157,6 +157,10 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 	}
 	onClose := func(err error) {
 		a.MonitorStop(tabID)
+		_ = a.RemoteDisconnect(tabID) // the side SFTP browser rides on this connection
+		a.mu.Lock()
+		delete(a.shellPID, tabID)
+		a.mu.Unlock()
 		msg := ""
 		if err != nil {
 			msg = err.Error()
@@ -224,6 +228,10 @@ func (a *App) Resize(tabID string, cols, rows int) error {
 
 // Disconnect closes a terminal.
 func (a *App) Disconnect(tabID string) error {
+	_ = a.RemoteDisconnect(tabID) // the tab's side SFTP browser, if open
+	a.mu.Lock()
+	delete(a.shellPID, tabID)
+	a.mu.Unlock()
 	s := a.session(tabID)
 	if s == nil {
 		return nil

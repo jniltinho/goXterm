@@ -117,7 +117,7 @@ func (a *App) sshBanner(userName, host string, port, keepalive int, serverVersio
 		check(false, "X11 forwarding", ""),
 		check(false, "Agent forwarding", ""),
 		check(keepalive > 0, "Keepalive", keepNote),
-		check(false, "Follow terminal folder", ""), // needs the SFTP side panel (task 6.2)
+		check(true, "Follow terminal folder", ""), // the SFTP side panel follows OSC 7 / the shell's cwd
 	}
 	server := strings.TrimSpace(serverVersion)
 	if keyFP != "" {

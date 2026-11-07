@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
@@ -12,7 +12,13 @@ import { renderBanner } from "./banner";
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
 // monitor shows the remote-monitoring bar (SSH only).
 const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean }>();
-const emit = defineEmits<{ close: []; state: ["connecting" | "connected" | "stopped"] }>();
+// backend: the backend tabId once connected (the side SFTP browser uses it); enter: the user pressed
+// Return (debounced, for "Follow terminal folder"); cwd: the shell reported its folder (OSC 7).
+const emit = defineEmits<{
+  close: []; state: ["connecting" | "connected" | "stopped"]; backend: [string]; enter: []; cwd: [string];
+}>();
+let enterTimer: ReturnType<typeof setTimeout> | undefined;
+const mi = (name: string) => `./icons/${name}.png`; // runtime path (public/), not a bundled import
 
 const metrics = vref<Metrics | null>(null);
 const cpuHistory = vref<number[]>([]);
@@ -53,6 +59,9 @@ const whenAttached = (f: () => void) => (attached ? f() : pending.push(f));
 function showStopped(why: string) {
   stopped = true;
   emit("state", "stopped");
+  offMon?.(); // the bar would otherwise keep the last (stale) metrics
+  offMon = undefined;
+  metrics.value = null;
   const red = "\x1b[31m", muted = "\x1b[90m", key = "\x1b[35m", rst = "\x1b[0m";
   const rule = red + "-".repeat(Math.max(1, (term.cols || 60) - 1)) + rst;
   const nl = term.buffer.active.cursorX > 0 ? "\r\n" : "";
@@ -138,8 +147,17 @@ async function attach() {
   if (a?.closed) showStopped(a.closeMsg);
 }
 
+function stopMon() {
+  offMon?.();
+  offMon = undefined;
+  metrics.value = null;
+  cpuHistory.value = [];
+  if (tabId) void MonitorStop(tabId);
+}
+watch(() => props.monitor, (on) => { if (on) startMon(); else stopMon(); });
+
 function startMon() {
-  if (!props.monitor || !tabId) return;
+  if (!props.monitor || !tabId || stopped) return;
   offMon?.();
   offMon = Events.On("monitor:" + tabId, (ev: { data: unknown }) => {
     const m = ev.data as Metrics;
@@ -167,6 +185,7 @@ async function restart() {
     stopped = true;
     return;
   }
+  emit("backend", tabId);
   wireEvents();
   await attach();
   startMon();
@@ -220,10 +239,24 @@ onMounted(async () => {
     return true;
   });
   term.open(el.value!);
+  // OSC 7 (file://host/path): the shell's folder, for the SFTP browser's "Follow terminal folder".
+  term.parser.registerOscHandler(7, (data) => {
+    try {
+      const p = decodeURIComponent(new URL(data).pathname);
+      if (p) emit("cwd", p);
+    } catch { /* not a file:// URL */ }
+    return true;
+  });
+  // Ctrl+wheel zoom; touchpads send many small deltas, so one step per ~100 px of accumulated scroll.
+  let wheelAcc = 0;
   el.value!.addEventListener("wheel", (e) => {
     if (!e.ctrlKey) return;
     e.preventDefault();
-    zoom(e.deltaY < 0 ? 1 : -1);
+    e.stopPropagation();
+    wheelAcc += e.deltaMode === 0 ? e.deltaY : e.deltaY * 100;
+    if (Math.abs(wheelAcc) < 50) return;
+    zoom(wheelAcc < 0 ? 1 : -1);
+    wheelAcc = 0;
   }, { passive: false, capture: true });
   fit.fit();
   term.writeln("\x1b[90mConnecting…\x1b[0m");
@@ -234,6 +267,7 @@ onMounted(async () => {
     emit("state", "stopped");
     return;
   }
+  emit("backend", tabId);
   wireEvents();
   await attach();
   startMon();
@@ -245,6 +279,10 @@ onMounted(async () => {
       return;
     }
     void Send(tabId, d);
+    if (d.includes("\r")) {
+      clearTimeout(enterTimer);
+      enterTimer = setTimeout(() => emit("enter"), 500); // let a `cd` finish first
+    }
   });
   void Resize(tabId, term.cols, term.rows);
   ro = new ResizeObserver(() => {
@@ -257,6 +295,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   ro?.disconnect();
+  clearTimeout(enterTimer);
   offOut?.();
   offClose?.();
   offMon?.();
@@ -284,16 +323,16 @@ onBeforeUnmount(() => {
     </div>
     <div ref="el" class="term-area"></div>
     <div v-if="monitor && metrics" class="mon">
-      <span class="seg mon-host" :title="metrics.os">{{ metrics.host || "—" }}</span>
+      <span class="seg mon-host" :title="metrics.os"><img :src="mi('servers')" class="mi" />{{ metrics.host || "—" }}</span>
       <span class="seg" :class="lvl(metrics.cpu, 70, 90)" v-if="metrics.cpu >= 0" title="CPU">
-        <i>CPU</i>{{ metrics.cpu.toFixed(0) }}%
+        <img :src="mi('chip')" class="mi" />{{ metrics.cpu.toFixed(0) }}%
         <svg v-if="cpuHistory.length > 1" class="spark" viewBox="0 0 38 11" preserveAspectRatio="none"><path :d="sparkPath(cpuHistory)" /></svg>
       </span>
-      <span class="seg" :class="lvl((metrics.memUsed / metrics.memTotal) * 100, 80, 95)" v-if="metrics.memTotal" title="Memory"><i>MEM</i>{{ fmtSize(metrics.memUsed / 1024) }} / {{ fmtSize(metrics.memTotal / 1024) }}</span>
-      <span class="seg" title="Network up"><i>↑</i>{{ fmtRate(metrics.netUp) }}</span>
-      <span class="seg" title="Network down"><i>↓</i>{{ fmtRate(metrics.netDown) }}</span>
-      <span class="seg" v-if="metrics.uptime" title="Uptime"><i>UP</i>{{ fmtUptime(metrics.uptime) }}</span>
-      <span class="seg" :class="lvl(d.usedPct, 80, 90)" v-for="d in (metrics.disks || []).slice(0, 4)" :key="d.mount" :title="d.mount"><i>{{ d.mount }}</i>{{ d.usedPct }}%</span>
+      <span class="seg" :class="lvl((metrics.memUsed / metrics.memTotal) * 100, 80, 95)" v-if="metrics.memTotal" title="Memory"><img :src="mi('ram')" class="mi" />{{ fmtSize(metrics.memUsed / 1024) }} / {{ fmtSize(metrics.memTotal / 1024) }}</span>
+      <span class="seg" title="Network up"><img :src="mi('upload')" class="mi" />{{ fmtRate(metrics.netUp) }}</span>
+      <span class="seg" title="Network down"><img :src="mi('download')" class="mi" />{{ fmtRate(metrics.netDown) }}</span>
+      <span class="seg" v-if="metrics.uptime" title="Uptime"><img :src="mi('monitor-clock')" class="mi" />{{ fmtUptime(metrics.uptime) }}</span>
+      <span class="seg" :class="lvl(d.usedPct, 80, 90)" v-for="d in (metrics.disks || []).slice(0, 4)" :key="d.mount" :title="`${d.mount}: ${fmtSize(d.usedKiB)} / ${fmtSize(d.sizeKiB)}`"><img :src="mi('hard-disk')" class="mi" />{{ d.mount }} {{ d.usedPct }}%</span>
     </div>
   </div>
 </template>
@@ -309,7 +348,7 @@ onBeforeUnmount(() => {
 .mon { display: flex; align-items: center; height: 22px; padding: 0 2px; background: #11161c; border-top: 1px solid #2a3340; font-size: 11px; color: #9fb0c0; overflow: hidden; white-space: nowrap; }
 .seg { display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; height: 13px; border-right: 1px solid #2a3340; }
 .seg:last-child { border-right: none; }
-.seg i { font-style: normal; color: #6b7a8a; font-size: 10px; }
+.mi { width: 14px; height: 14px; flex: none; }
 .mon-host { color: #cbd5e1; font-weight: 600; }
 .seg.warn { color: #e0b341; }
 .seg.danger { color: #e05561; }

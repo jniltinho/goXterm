@@ -70,6 +70,13 @@ func Run(version string, safeGPU bool) error {
 		return d.PromptForSingleSelection()
 	}
 	svc.quit = app.Quit
+	svc.openPath = func(title string) (string, error) {
+		d := app.Dialog.OpenFile().CanChooseFiles(true).SetTitle(title)
+		if home, err := os.UserHomeDir(); err == nil {
+			d.SetDirectory(home)
+		}
+		return d.PromptForSingleSelection()
+	}
 	svc.savePath = func(name string) (string, error) {
 		d := app.Dialog.SaveFile().CanCreateDirectories(true).SetFilename(name)
 		if home, err := os.UserHomeDir(); err == nil {

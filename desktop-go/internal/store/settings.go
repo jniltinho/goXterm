@@ -14,22 +14,22 @@ const settingsFile = "config.toml"
 // never stored here. Only the fields the Go app needs so far are typed; the rest load and are kept
 // by round-tripping the raw table when settings are written (phase 2 write path, task 2.1).
 type Settings struct {
-	Theme                    string        `toml:"theme" json:"theme"`
-	LogLevel                 string        `toml:"log_level" json:"logLevel"`
-	AgentControl             bool          `toml:"agent_control" json:"agentControl"`
-	CopyOnSelect             bool          `toml:"copy_on_select" json:"copyOnSelect"`
-	RightClickPaste          bool          `toml:"right_click_paste" json:"rightClickPaste"`
-	PasteGuard               bool          `toml:"paste_guard" json:"pasteGuard"`
-	ConfirmClose             bool          `toml:"confirm_close" json:"confirmClose"`
-	SidebarOpen              bool          `toml:"sidebar_open" json:"sidebarOpen"`
-	SidebarWidth             float64       `toml:"sidebar_width" json:"sidebarWidth"`
-	SidebarPage              string        `toml:"sidebar_page" json:"sidebarPage"`
-	UIScale                  string        `toml:"ui_scale" json:"uiScale"`
-	RemoteMonitoring         bool          `toml:"remote_monitoring" json:"remoteMonitoring"`
-	RemoteMonitoringInterval int           `toml:"remote_monitoring_interval_secs" json:"remoteMonitoringInterval"`
-	Notifications            bool          `toml:"notifications" json:"notifications"`
-	GPUBackend               string        `toml:"gpu_backend" json:"gpuBackend"`
-	FirstRunThemeDone        bool          `toml:"first_run_theme_done" json:"firstRunThemeDone"`
+	Theme                    string  `toml:"theme" json:"theme"`
+	LogLevel                 string  `toml:"log_level" json:"logLevel"`
+	AgentControl             bool    `toml:"agent_control" json:"agentControl"`
+	CopyOnSelect             bool    `toml:"copy_on_select" json:"copyOnSelect"`
+	RightClickPaste          bool    `toml:"right_click_paste" json:"rightClickPaste"`
+	PasteGuard               bool    `toml:"paste_guard" json:"pasteGuard"`
+	ConfirmClose             bool    `toml:"confirm_close" json:"confirmClose"`
+	SidebarOpen              bool    `toml:"sidebar_open" json:"sidebarOpen"`
+	SidebarWidth             float64 `toml:"sidebar_width" json:"sidebarWidth"`
+	SidebarPage              string  `toml:"sidebar_page" json:"sidebarPage"`
+	UIScale                  string  `toml:"ui_scale" json:"uiScale"`
+	RemoteMonitoring         bool    `toml:"remote_monitoring" json:"remoteMonitoring"`
+	RemoteMonitoringInterval int     `toml:"remote_monitoring_interval_secs" json:"remoteMonitoringInterval"`
+	Notifications            bool    `toml:"notifications" json:"notifications"`
+	GPUBackend               string  `toml:"gpu_backend" json:"gpuBackend"`
+	FirstRunThemeDone        bool    `toml:"first_run_theme_done" json:"firstRunThemeDone"`
 	// Toolbar/tabs appearance (nil = default on); shown under Settings → Display.
 	ToolbarCaptions  *bool         `toml:"toolbar_captions" json:"toolbarCaptions"`
 	ShowTabNumbers   *bool         `toml:"show_tab_numbers" json:"showTabNumbers"`

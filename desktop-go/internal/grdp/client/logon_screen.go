@@ -201,10 +201,18 @@ func (fb *framebuffer) blit(rects []pdu.BitmapData) {
 			continue
 		}
 
+		// Only DestLeft..DestRight × DestTop..DestBottom is on screen; the bitmap is padded.
+		vw, vh := int(r.DestRight)-dstLeft+1, int(r.DestBottom)-dstTop+1
+		if vw <= 0 || vw > w {
+			vw = w
+		}
+		if vh <= 0 || vh > h {
+			vh = h
+		}
 		// Blit pixels. grdp's RLE decoder yields top-down rows (no extra flip).
-		for row := 0; row < h; row++ {
+		for row := 0; row < vh; row++ {
 			srcRow := row
-			for col := 0; col < w; col++ {
+			for col := 0; col < vw; col++ {
 				px := (srcRow*w + col) * bpp
 				if px+bpp > len(pixdata) {
 					break

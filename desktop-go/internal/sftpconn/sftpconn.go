@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 
 	"rustxterm-go/internal/fsentry"
 	"rustxterm-go/internal/sshconn"
@@ -32,6 +33,19 @@ func Connect(cfg sshconn.Config) (*Client, error) {
 	}
 	return &Client{ssh: client, sftp: sc}, nil
 }
+
+// FromSSH opens an SFTP subsystem on an existing SSH connection (a terminal tab's), so the side
+// browser needs no second login. Close ends only the SFTP channel; the connection stays the tab's.
+func FromSSH(client *ssh.Client) (*Client, error) {
+	sc, err := sftp.NewClient(client)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{sftp: sc}, nil
+}
+
+// RealPath resolves a path on the server (symlinks included), e.g. /proc/<pid>/cwd.
+func (c *Client) RealPath(p string) (string, error) { return c.sftp.RealPath(p) }
 
 // Home returns the server's starting directory.
 func (c *Client) Home() (string, error) { return c.sftp.Getwd() }
@@ -93,8 +107,11 @@ func (c *Client) Mkdir(dir string) error       { return c.sftp.Mkdir(dir) }
 func (c *Client) Remove(path string) error     { return c.sftp.Remove(path) }
 func (c *Client) Rename(old, new string) error { return c.sftp.Rename(old, new) }
 
-// Close ends the SFTP session and its SSH transport.
+// Close ends the SFTP session and, when it owns one, its SSH transport.
 func (c *Client) Close() error {
-	_ = c.sftp.Close()
-	return c.ssh.Close()
+	err := c.sftp.Close()
+	if c.ssh != nil {
+		return c.ssh.Close()
+	}
+	return err
 }

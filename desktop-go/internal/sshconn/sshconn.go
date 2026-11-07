@@ -35,8 +35,8 @@ type Config struct {
 	HostKey       ssh.HostKeyCallback
 	Cols, Rows    int
 	KeepaliveSecs int // send keepalive@openssh.com every N seconds; 0 = off
-	// Log, when set, receives one-line auth diagnostics (agent availability, key load result) so the
-	// user can see why a password is being asked instead of the key being used.
+	// Log, when set, receives one-line auth problems (unreadable key, unreachable agent) so the user can
+	// see why a password is being asked instead of the key being used.
 	Log func(string)
 }
 
@@ -95,23 +95,16 @@ func DialClient(cfg Config) (*ssh.Client, error) {
 				cfg.log(fmt.Sprintf("key %s could not be loaded: %v", cfg.KeyFile, err))
 				return nil, nil
 			}
-			cfg.log(fmt.Sprintf("offering key %s (%s)", cfg.KeyFile, signer.PublicKey().Type()))
 			return []ssh.Signer{signer}, nil
 		}))
 	}
 	if cfg.UseAgent {
 		if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 			if ac, err := net.Dial("unix", sock); err == nil {
-				client := agent.NewClient(ac)
-				if keys, kerr := client.List(); kerr == nil {
-					cfg.log(fmt.Sprintf("ssh-agent: %d key(s) available", len(keys)))
-				}
-				auths = append(auths, ssh.PublicKeysCallback(client.Signers))
+				auths = append(auths, ssh.PublicKeysCallback(agent.NewClient(ac).Signers))
 			} else {
 				cfg.log("ssh-agent: SSH_AUTH_SOCK is set but the agent is not reachable")
 			}
-		} else {
-			cfg.log("ssh-agent: requested but SSH_AUTH_SOCK is not set (agent unavailable)")
 		}
 	}
 	if cfg.Password != "" {
@@ -287,6 +280,9 @@ func (s *Session) Write(p []byte) error {
 	_, err := s.stdin.Write(p)
 	return err
 }
+
+// SSHClient is the session's connection, for extra channels on it (e.g. the side SFTP browser).
+func (s *Session) SSHClient() *ssh.Client { return s.client }
 
 // ServerVersion is the server's SSH identification string (e.g. "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3").
 func (s *Session) ServerVersion() string { return string(s.client.ServerVersion()) }

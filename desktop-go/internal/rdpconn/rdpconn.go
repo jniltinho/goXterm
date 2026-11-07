@@ -116,18 +116,34 @@ func (s *Session) Start() error {
 	return s.c.LoginContext(context.Background())
 }
 
-// encode converts one decoded bitmap (bottom-up, 16/24/32 bpp) to an RGBA PNG at its screen position.
+// visible is the on-screen size of a bitmap update: its bitmap is padded (width to a multiple of 4)
+// and only DestLeft..DestRight × DestTop..DestBottom (inclusive) belongs on screen.
+func visible(b client.Bitmap) (int, int) {
+	w, h := b.DestRight-b.DestLeft+1, b.DestBottom-b.DestTop+1
+	if w <= 0 || w > b.Width {
+		w = b.Width
+	}
+	if h <= 0 || h > b.Height {
+		h = b.Height
+	}
+	return w, h
+}
+
+// encode converts one decoded bitmap (top-down, 16/24/32 bpp) to an RGBA PNG at its screen position,
+// cropped to its visible rectangle — drawing the padding columns too left black vertical lines
+// wherever the neighbouring area was not redrawn (partial updates: hover, closing a menu).
 func encode(b client.Bitmap) (Rect, bool) {
 	if b.Width <= 0 || b.Height <= 0 || len(b.Data) == 0 {
 		return Rect{}, false
 	}
 	bpp := b.BitsPerPixel // bytes per pixel (grdp Bpp = bits/8)
-	img := image.NewRGBA(image.Rect(0, 0, b.Width, b.Height))
-	for y := 0; y < b.Height; y++ {
+	vw, vh := visible(b)
+	img := image.NewRGBA(image.Rect(0, 0, vw, vh))
+	for y := 0; y < vh; y++ {
 		// grdp's RLE decoder already yields top-down rows, so each rectangle is read in order (an extra
 		// bottom-up flip turned every tile upside down against real servers — 2008 R2).
 		src := y
-		for x := 0; x < b.Width; x++ {
+		for x := 0; x < vw; x++ {
 			i := (src*b.Width + x) * bpp
 			if i+bpp > len(b.Data) {
 				continue
@@ -151,7 +167,7 @@ func encode(b client.Bitmap) (Rect, bool) {
 	if png.Encode(&buf, img) != nil {
 		return Rect{}, false
 	}
-	return Rect{X: b.DestLeft, Y: b.DestTop, W: b.Width, H: b.Height, PNG: buf.Bytes()}, true
+	return Rect{X: b.DestLeft, Y: b.DestTop, W: vw, H: vh, PNG: buf.Bytes()}, true
 }
 
 // MouseMove / MouseButton / Wheel / Key drive input. button: 0 left, 1 middle, 2 right.

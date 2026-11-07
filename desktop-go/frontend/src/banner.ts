@@ -32,7 +32,7 @@ function fit(text: string, max: number): string {
   return max <= 0 ? "" : c.slice(0, max - 1).join("") + ELL;
 }
 
-/** The box as terminal text (CRLF line ends, ending with a blank line), at most `cols` wide. */
+/** The box as terminal text (CRLF line ends, then a blank line as in the Rust app), at most `cols` wide. */
 export function renderBanner(b: Banner, cols: number, dark: boolean): string {
   if (cols < 6) return "";
   const sgr = (r: Role) => `\x1b[${dark ? r[1] : r[0]}m`;

@@ -108,7 +108,7 @@ func NewPDULayer(t core.Transport) *PDULayer {
 			// legacy bitmap-update PDUs (interleaved RLE), which grdp decodes. Advertising SET/STREAM
 			// surface bits made modern servers send codec-encoded surface bits (RemoteFX/NSCodec/
 			// planar) that grdp cannot decode, producing colour garbage on the desktop.
-			CAPSETTYPE_SURFACE_COMMANDS: &SurfaceCommandsCapability{CmdFlags: 0},
+			CAPSETTYPE_SURFACE_COMMANDS:   &SurfaceCommandsCapability{CmdFlags: 0},
 			CAPSSETTYPE_FRAME_ACKNOWLEDGE: &FrameAcknowledgeCapability{2},
 		},
 	}

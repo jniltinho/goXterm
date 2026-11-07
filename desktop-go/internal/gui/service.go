@@ -17,11 +17,12 @@ import (
 // It lists sessions/folders from the Rust store and runs SSH terminals, streaming output to the SPA
 // as Wails events (migrate-gui-to-go-wails phases 4–5).
 type App struct {
-	emit     func(name string, data any)   // set by gui.Run; emits Wails events to the SPA
-	pickFile func() (string, error)         // set by gui.Run; native open-file dialog (SSH key picker)
-	quit     func()                        // set by gui.Run; quits the app (Terminal → Exit menu)
-	savePath func(name string) (string, error) // set by gui.Run; native save-file dialog
-	version  string                        // set by gui.Run, shown in Settings → Diagnostics
+	emit     func(name string, data any)        // set by gui.Run; emits Wails events to the SPA
+	pickFile func() (string, error)             // set by gui.Run; native open-file dialog (SSH key picker)
+	quit     func()                             // set by gui.Run; quits the app (Terminal → Exit menu)
+	savePath func(name string) (string, error)  // set by gui.Run; native save-file dialog
+	openPath func(title string) (string, error) // set by gui.Run; native open-file dialog
+	version  string                             // set by gui.Run, shown in Settings → Diagnostics
 
 	mu     sync.Mutex
 	seq    int
@@ -34,7 +35,9 @@ type App struct {
 	mon    map[string]chan struct{}    // tabId → stop channel for its remote-monitoring loop
 	tun    map[string]*tunRun          // via+name → running port-forwarding tunnel
 	early  map[string]*earlyTab        // tabId → output/banner held until the SPA attaches
-	ctl    *control.Listener           // agent control socket listener (nil when agent control is off)
+	// shellPID caches each SSH tab's login-shell PID for "Follow terminal folder" (-1 unsupported).
+	shellPID map[string]int
+	ctl      *control.Listener // agent control socket listener (nil when agent control is off)
 }
 
 // termStream is any byte-stream terminal the SPA drives the same way (SSH/Telnet/Serial); each

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"rustxterm-go/internal/grdp/client"
 )
 
 // TestLabRDP connects to the protocol lab's xrdp (alice / lab-alice-pass on 127.0.0.1:13389, TLS/SSL
@@ -19,7 +21,17 @@ func TestLabRDP(t *testing.T) {
 	s, w, h, err := Connect(Config{
 		Host: "127.0.0.1", Port: 13389, User: "alice", Password: "lab-alice-pass",
 		Width: 1024, Height: 768, Protocol: SSL,
-	}, func(r Rect) { select { case frame <- r: default: } }, nil, func(e error) { select { case closed <- e: default: } })
+	}, func(r Rect) {
+		select {
+		case frame <- r:
+		default:
+		}
+	}, nil, func(e error) {
+		select {
+		case closed <- e:
+		default:
+		}
+	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -65,7 +77,17 @@ func TestRealRDP(t *testing.T) {
 		User: os.Getenv("RXT_RDP_USER"), Password: os.Getenv("RXT_RDP_PASS"),
 		Width: 1024, Height: 768, Protocol: proto,
 		LegacyTLS: os.Getenv("RXT_RDP_LEGACY") != "",
-	}, func(r Rect) { select { case frame <- r: default: } }, nil, func(e error) { select { case closed <- e: default: } })
+	}, func(r Rect) {
+		select {
+		case frame <- r:
+		default:
+		}
+	}, nil, func(e error) {
+		select {
+		case closed <- e:
+		default:
+		}
+	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -84,5 +106,19 @@ func TestRealRDP(t *testing.T) {
 		t.Fatalf("closed before a frame: %v", e)
 	case <-time.After(30 * time.Second):
 		t.Fatal("no bitmap update in time")
+	}
+}
+
+// TestEncodeCropsPadding: an update whose bitmap is padded to 4 px wide but covers 2 px on screen
+// must produce a 2 px image (the padding columns drew black lines over the desktop).
+func TestEncodeCropsPadding(t *testing.T) {
+	px := []byte{0xff, 0xff} // white, RGB565 LE
+	b := client.Bitmap{DestLeft: 10, DestTop: 5, DestRight: 11, DestBottom: 6, Width: 4, Height: 2, BitsPerPixel: 2}
+	for i := 0; i < 8; i++ {
+		b.Data = append(b.Data, px...)
+	}
+	r, ok := encode(b)
+	if !ok || r.W != 2 || r.H != 2 || r.X != 10 || r.Y != 5 {
+		t.Fatalf("encode = %+v ok=%v, want a 2x2 rect at 10,5", r, ok)
 	}
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, shallowRef } from "vue";
+import { ref, computed, watch, onMounted, shallowRef } from "vue";
 import {
   Sessions, Folders, Locked, Unlock, Connect, ConnectDemo, HasDemo, LocalShell,
   TelnetConnect, ConnectTelnetDemo, HasTelnetDemo,
@@ -56,6 +56,7 @@ import VncCanvas from "./VncView.vue";
 import RdpCanvas from "./RdpView.vue";
 import SessionEditor from "./SessionEditor.vue";
 import SettingsDialog from "./SettingsDialog.vue";
+import SftpPanel from "./SftpPanel.vue";
 import TunnelsDialog from "./TunnelsDialog.vue";
 
 const sessions = ref<Session[]>([]);
@@ -83,7 +84,7 @@ const recentSessions = computed(() =>
   recentIds.value.map((id) => sessions.value.find((s) => s.id === id)).filter((s): s is Session => !!s));
 
 type Tab =
-  | { id: string; title: string; kind: "ssh"; icon: string; connect: () => Promise<string>; monitor?: boolean }
+  | { id: string; title: string; kind: "ssh"; icon: string; connect: () => Promise<string>; ssh: boolean }
   | { id: string; title: string; kind: "files"; icon: string; connect: () => Promise<RemoteSession> }
   | { id: string; title: string; kind: "vnc"; icon: string; connect: () => Promise<VncView> }
   | { id: string; title: string; kind: "rdp"; icon: string; connect: (w: number, h: number) => Promise<RdpView> };
@@ -120,9 +121,9 @@ onMounted(async () => {
   window.addEventListener("click", (e) => { if (!(e.target as HTMLElement).closest(".menubar")) menu.value = ""; });
   window.addEventListener("keydown", onKey);
   try { locked.value = await Locked(); } catch { locked.value = true; }
+  await openDemos(); // lab targets from env vars: they need no saved sessions, so not gated on unlock
   if (locked.value) { loading.value = false; return; }
   await loadData();
-  await openDemos();
 });
 
 async function doUnlock() {
@@ -134,7 +135,6 @@ async function doUnlock() {
     locked.value = false;
     master.value = "";
     await loadData();
-    await openDemos();
   } catch (e) {
     unlockError.value = String(e);
   } finally {
@@ -159,10 +159,36 @@ function newTab(url: string) {
   if (url) tabUrl.value[id] = url;
   return id;
 }
-function openTerm(title: string, icon: string, connect: () => Promise<string>, monitor = false, url = "") {
+// ssh: a real SSH shell — it gets remote monitoring (on by default) and the side SFTP browser.
+function openTerm(title: string, icon: string, connect: () => Promise<string>, ssh = false, url = "") {
   const id = newTab(url);
-  tabs.value = [...tabs.value, { id, title, kind: "ssh", icon, connect, monitor }];
+  if (ssh) tabMon.value[id] = true;
+  tabs.value = [...tabs.value, { id, title, kind: "ssh", icon, connect, ssh }];
   active.value = id;
+}
+const openLocal = () => openTerm("Local terminal", "terminal", () => LocalShell(), false, "local://");
+
+// Side SFTP browser of the active SSH tab: its backend tabId, the folder OSC 7 reported, and a tick per
+// Return (the panel then asks the shell's cwd when the shell does not send OSC 7).
+const tabMon = ref<Record<string, boolean>>({});
+const tabBackend = ref<Record<string, string>>({});
+const tabCwd = ref<Record<string, string>>({});
+const enterTick = ref<Record<string, number>>({});
+const followFolder = ref(true);
+const sidePage = ref<"sessions" | "sftp">("sessions");
+const activeSsh = computed(() => {
+  const t = tabs.value.find((x) => x.id === active.value);
+  return t?.kind === "ssh" && t.ssh ? t.id : "";
+});
+// The live SSH connection the SFTP browser shows; when there is none (disconnected, tab closed, a
+// non-SSH tab or Home active) the sidebar goes back to Sessions.
+const sftpTerm = computed(() =>
+  activeSsh.value && tabState.value[activeSsh.value] !== "stopped" ? tabBackend.value[activeSsh.value] ?? "" : "");
+watch(sftpTerm, (id) => { if (!id) sidePage.value = "sessions"; });
+function onBackend(id: string, backend: string) {
+  tabBackend.value[id] = backend;
+  delete tabCwd.value[id];
+  if (id === active.value) sidePage.value = "sftp"; // MobaXterm opens the SFTP tab on connect
 }
 function openFiles(title: string, icon: string, connect: () => Promise<RemoteSession>, url = "") {
   const id = newTab(url);
@@ -264,8 +290,7 @@ function openRdp(title: string, connect: (w: number, h: number) => Promise<RdpVi
 }
 function openRdpFor(s: Session | null) { if (s) openRdp("RDP: " + s.name, (w, h) => RdpConnect(s.id, w, h), sessionUrl(s)); }
 function closeTab(id: string) {
-  delete tabState.value[id];
-  delete tabUrl.value[id];
+  for (const m of [tabState, tabUrl, tabMon, tabBackend, tabCwd, enterTick]) delete m.value[id];
   const i = tabs.value.findIndex((t) => t.id === id);
   tabs.value = tabs.value.filter((t) => t.id !== id);
   if (active.value === id) active.value = tabs.value[Math.max(0, i - 1)]?.id ?? "";
@@ -348,7 +373,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
         <button class="menu-t" :class="menu === 'terminal' ? 'on' : ''" @click.stop="toggleMenu('terminal')">Terminal</button>
         <div v-if="menu === 'terminal'" class="menu-d">
           <button class="menu-i" @click="runMenu(() => newSession())"><img :src="icon('session-new')" class="menu-ico" /> New session</button>
-          <button class="menu-i" @click="runMenu(() => openTerm('Local terminal', 'terminal', () => LocalShell(), false, 'local://'))"><img :src="icon('terminal')" class="menu-ico" /> Local terminal</button>
+          <button class="menu-i" @click="runMenu(openLocal)"><img :src="icon('terminal')" class="menu-ico" /> Local terminal</button>
           <div class="menu-sep"></div>
           <button class="menu-i" @click="runMenu(() => Quit())"><img :src="icon('exit')" class="menu-ico" /> Exit</button>
         </div>
@@ -388,7 +413,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
     </nav>
     <header class="toolbar flex items-stretch gap-0.5 px-1.5 py-1" :class="ui.toolbarCaptions ? 'cap' : ''">
       <button class="tbtn" title="New session" @click="newSession()"><img :src="icon('session-new')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">New</span></button>
-      <button class="tbtn" title="Local terminal" @click="openTerm('Local terminal', 'terminal', () => LocalShell(), false, 'local://')"><img :src="icon('terminal')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Local</span></button>
+      <button class="tbtn" title="Local terminal" @click="openLocal"><img :src="icon('terminal')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Local</span></button>
       <button class="tbtn" :class="selected ? '' : 'off'" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true, sessionUrl(selected))"><img :src="icon('ssh')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SSH</span></button>
       <button class="tbtn" :class="selected ? '' : 'off'" title="Open SFTP file browser" @click="openSftpFor(selected)"><img :src="icon('sftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SFTP</span></button>
       <button class="tbtn" :class="selected ? '' : 'off'" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)"><img :src="icon('ftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">FTP</span></button>
@@ -405,7 +430,31 @@ const tabIcon = (t: Tab) => icon(t.icon);
     </header>
 
     <div class="flex min-h-0 flex-1">
-      <aside v-show="!sidebarCollapsed" class="sidebar flex w-64 shrink-0 flex-col">
+      <!-- vertical page strip (MobaXterm): Sessions / SFTP; clicking the open page hides the sidebar -->
+      <nav class="strip">
+        <button
+          v-for="p in (['sessions', 'sftp'] as const)"
+          :key="p"
+          class="strip-b"
+          :class="!sidebarCollapsed && sidePage === p ? 'on' : ''"
+          :title="p === 'sessions' ? 'Sessions' : 'SFTP browser'"
+          @click="sidebarCollapsed = !sidebarCollapsed && sidePage === p; sidePage = p"
+        >
+          <img :src="icon(p === 'sessions' ? 'star' : 'sftp')" class="strip-ico" />
+          <span class="strip-t">{{ p === "sessions" ? "Sessions" : "SFTP" }}</span>
+        </button>
+      </nav>
+      <aside v-show="!sidebarCollapsed" class="sidebar flex w-72 shrink-0 flex-col">
+        <SftpPanel
+          v-if="sidePage === 'sftp'"
+          v-model:follow="followFolder"
+          :term-id="sftpTerm"
+          :cwd="tabCwd[activeSsh] ?? ''"
+          :enter-tick="enterTick[activeSsh] ?? 0"
+          :monitor="!!tabMon[activeSsh]"
+          @toggle-monitor="tabMon[activeSsh] = !tabMon[activeSsh]"
+        />
+        <template v-else>
         <div class="side-head flex items-center justify-between px-2 py-1">
           <span class="flex items-center gap-1.5"><img :src="icon('session')" class="h-3.5 w-3.5" /> Sessions</span>
           <span class="flex items-center gap-1.5">
@@ -451,25 +500,39 @@ const tabIcon = (t: Tab) => icon(t.icon);
             </div>
           </template>
         </div>
+        </template>
       </aside>
 
       <main class="flex min-w-0 flex-1 flex-col bg-[#0b0e11]">
-        <div v-if="tabs.length" class="tabbar flex items-stretch">
-          <button v-for="(t, i) in tabs" :key="t.id" class="tab flex items-center gap-1.5" :class="t.id === active ? 'tab-active' : ''" @click="active = t.id">
-            <img :src="tabIcon(t)" class="h-3.5 w-3.5" />
+        <div class="tabbar flex items-stretch">
+          <button class="tab-home" :class="!active ? 'tab-active' : ''" title="Home" @click="active = ''"><img :src="icon('house')" class="h-4 w-4" /></button>
+          <button v-for="(t, i) in tabs" :key="t.id" class="tab flex items-center gap-1.5" :class="t.id === active ? 'tab-active' : ''" :title="tabUrl[t.id] || t.title" @click="active = t.id" @mousedown.middle.prevent="closeTab(t.id)">
+            <img :src="tabIcon(t)" class="h-4 w-4" />
             <span class="tab-dot" :class="tabState[t.id] ?? 'connecting'" :title="STATE_LABEL[tabState[t.id] ?? 'connecting']"></span>
             <span class="max-w-[180px] truncate"><template v-if="ui.showTabNumbers">{{ i + 1 }}. </template>{{ t.title }}</span>
-            <span v-if="ui.showCloseButtons" class="tab-x" @click.stop="closeTab(t.id)">×</span>
+            <span v-if="ui.showCloseButtons" class="tab-x" title="Close" @click.stop="closeTab(t.id)">×</span>
           </button>
+          <button class="tab-new" title="New local terminal" @click="openLocal">+</button>
         </div>
         <div class="relative min-h-0 flex-1">
           <template v-for="t in tabs" :key="t.id">
-            <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" :monitor="t.monitor" @close="closeTab(t.id)" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0 p-1" />
+            <TerminalView
+              v-if="t.kind === 'ssh'"
+              v-show="t.id === active"
+              :connect="t.connect"
+              :monitor="!!tabMon[t.id]"
+              @close="closeTab(t.id)"
+              @state="(st) => (tabState[t.id] = st)"
+              @backend="(b) => onBackend(t.id, b)"
+              @cwd="(d) => (tabCwd[t.id] = d)"
+              @enter="enterTick[t.id] = (enterTick[t.id] ?? 0) + 1"
+              class="absolute inset-0 p-1"
+            />
             <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
             <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
             <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
           </template>
-          <div v-if="!tabs.length" class="home">
+          <div v-if="!active" class="home">
             <div class="home-brand"><img :src="icon('logo')" class="home-logo" @error="($event.target as HTMLImageElement).src = icon('session')" /><span>rustXterm</span></div>
             <div class="home-actions">
               <button class="home-btn" @click="newSession"><img :src="icon('session-new')" class="home-btn-ico" /> New session</button>
@@ -601,12 +664,22 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .treerow.session.sel { background: #cfe0f6; outline: 1px solid #a9c7ef; }
 .treerow.folder { color: #33465a; font-weight: 700; cursor: pointer; }
 .treerow.folder:hover { background: #e3ebf3; }
-.tabbar { background: #1b2129; border-bottom: 1px solid #2a3340; }
-.tab { padding: 4px 8px; font-size: 12px; color: #9fb0c0; background: #222a33; border-right: 1px solid #2a3340; max-width: 220px; }
-.tab-active { color: #e6edf3; background: #0b0e11; }
+.strip { display: flex; flex-direction: column; width: 26px; flex: none; background: #e2e7ec; border-right: 1px solid #c9d1d9; }
+.strip-b { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 8px; background: transparent; border: none; border-left: 2px solid transparent; border-bottom: 1px solid #d0d7de; cursor: pointer; color: #4a5a68; }
+.strip-b:hover { background: #d7e3f4; }
+.strip-b.on { background: #f3f5f8; color: #1e2a36; border-left-color: #2f6fb3; }
+.strip-ico { width: 16px; height: 16px; }
+.strip-t { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11.5px; letter-spacing: .02em; }
+.tabbar { height: 28px; background: #dfe5eb; border-bottom: 1px solid #c2ccd6; }
+.tab, .tab-home, .tab-new { border: none; border-right: 1px solid #c2ccd6; border-top: 2px solid transparent; cursor: pointer; }
+.tab { padding: 0 8px; font-size: 12px; color: #3a4a5a; background: #e9edf1; max-width: 240px; }
+.tab:hover, .tab-home:hover, .tab-new:hover { background: #f4f6f8; }
+.tab-home { width: 32px; display: flex; align-items: center; justify-content: center; background: #e9edf1; }
+.tab-new { width: 28px; font-size: 17px; line-height: 1; color: #4a5a68; background: transparent; }
+.tab-active, .tab-active:hover { color: #11202e; background: #fff; border-top-color: #2f6fb3; }
 .tab-x { margin-left: 2px; padding: 0 4px; color: #7f8ea0; }
 .tab-x:hover { color: #fff; background: #c0392b; }
-.tab-dot { width: 8px; height: 8px; border-radius: 50% !important; flex: none; background: #d4a72c; }
+.tab-dot { width: 8px; height: 8px; clip-path: circle(50%); flex: none; background: #d4a72c; }
 .tab-dot.connected { background: #3fb950; }
 .tab-dot.stopped { background: #e05561; }
 .sb-tabs { min-width: 56px; text-align: right; }

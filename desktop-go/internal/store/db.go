@@ -21,9 +21,9 @@ const dbFile = "rustxterm.db"
 type Store struct {
 	db   *sql.DB
 	tmp  string
-	dir  string    // directory holding rustxterm.db (for write-back)
-	key  [32]byte  // raw SQLCipher key (for re-encryption on write-back)
-	salt []byte    // original SQLCipher salt, reused so the same key keeps decrypting
+	dir  string   // directory holding rustxterm.db (for write-back)
+	key  [32]byte // raw SQLCipher key (for re-encryption on write-back)
+	salt []byte   // original SQLCipher salt, reused so the same key keeps decrypting
 	mu   sync.Mutex
 }
 
