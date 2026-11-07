@@ -21,7 +21,7 @@ type Settings struct {
 	RightClickPaste          bool    `toml:"right_click_paste" json:"rightClickPaste"`
 	PasteGuard               bool    `toml:"paste_guard" json:"pasteGuard"`
 	ConfirmClose             bool    `toml:"confirm_close" json:"confirmClose"`
-	SidebarOpen              bool    `toml:"sidebar_open" json:"sidebarOpen"`
+	SidebarOpen              *bool   `toml:"sidebar_open" json:"sidebarOpen"` // nil = default open
 	SidebarWidth             float64 `toml:"sidebar_width" json:"sidebarWidth"`
 	SidebarPage              string  `toml:"sidebar_page" json:"sidebarPage"`
 	UIScale                  string  `toml:"ui_scale" json:"uiScale"`
@@ -86,6 +86,17 @@ func SaveSettings(s Settings) error {
 	m["toolbar_captions"] = derefOr(s.ToolbarCaptions, true)
 	m["show_tab_numbers"] = derefOr(s.ShowTabNumbers, true)
 	m["show_close_buttons"] = derefOr(s.ShowCloseButtons, true)
+	// Layout and display (Settings › Display, the sidebar): written so they survive a restart.
+	m["sidebar_open"] = derefOr(s.SidebarOpen, true)
+	if s.SidebarWidth > 0 {
+		m["sidebar_width"] = s.SidebarWidth
+	}
+	for k, v := range map[string]string{"sidebar_page": s.SidebarPage, "ui_scale": s.UIScale, "gpu_backend": s.GPUBackend, "log_level": s.LogLevel} {
+		if v != "" {
+			m[k] = v
+		}
+	}
+	m["first_run_theme_done"] = s.FirstRunThemeDone
 	term, _ := m["terminal"].(map[string]any)
 	if term == nil {
 		term = map[string]any{}

@@ -10,6 +10,7 @@ import {
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
 import { SetMultiExec, SelectMultiExec } from "./api";
+import { SaveSettings } from "./api";
 import { DeleteSession, DuplicateSession, RenameSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
 
 // Toolbar/tab appearance flags from Settings → Display (config.toml, no unlock needed).
@@ -19,11 +20,18 @@ const STRIP_W = 34, INDENT = 16;
 const sideW = ref(240);
 const rootOpen = ref(true);
 const status = ref("Ready");
+// Focus a field when its dialog appears (the autofocus attribute is ignored for inserted elements).
+const vFocus = { mounted: (el: HTMLElement) => setTimeout(() => el.focus()) };
 async function loadUI() {
   try {
     const s = await GetSettings();
     ui.value = { toolbarCaptions: s.toolbarCaptions, showTabNumbers: s.showTabNumbers, showCloseButtons: s.showCloseButtons };
     sideW.value = Math.min(600, Math.max(160, s.sidebarWidth || 240));
+    if (!layoutLoaded) { // the saved layout, once (Rust: sidebar_open, sidebar_page, sidebar_width)
+      sidebarCollapsed.value = s.sidebarOpen === false;
+      sidePage.value = s.sidebarPage === "sftp" ? "sftp" : "sessions";
+      layoutLoaded = true;
+    }
     document.documentElement.dataset.theme = s.theme || "system"; // Skin: theme.css picks the palette
   } catch { /* defaults */ }
 }
@@ -252,6 +260,34 @@ const tabCwd = ref<Record<string, string>>({});
 const enterTick = ref<Record<string, number>>({});
 const followFolder = ref(true);
 const sidePage = ref<"sessions" | "sftp">("sessions");
+
+// Layout persistence: the sidebar state goes back to config.toml (debounced), so it survives a restart.
+let layoutLoaded = false;
+let layoutTimer: ReturnType<typeof setTimeout> | undefined;
+watch([sidebarCollapsed, sidePage, sideW], () => {
+  if (!layoutLoaded) return;
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(async () => {
+    try {
+      const s = await GetSettings();
+      s.sidebarOpen = !sidebarCollapsed.value;
+      s.sidebarPage = sidePage.value;
+      s.sidebarWidth = sideW.value;
+      await SaveSettings(s);
+    } catch { /* settings unavailable: keep the layout for this run */ }
+  }, 500);
+});
+
+// Sidebar resize (Rust: 160 px .. half the window), by dragging its right edge.
+function startResize(e: MouseEvent) {
+  const x0 = e.clientX, w0 = sideW.value;
+  const move = (m: MouseEvent) => {
+    sideW.value = Math.round(Math.min(Math.max(160, window.innerWidth / 2), Math.max(160, w0 + m.clientX - x0)));
+  };
+  const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+}
 const activeSsh = computed(() => {
   const t = tabs.value.find((x) => x.id === active.value);
   return t?.kind === "ssh" && t.ssh ? t.id : "";
@@ -434,7 +470,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
             class="dialog-input"
             v-model="master"
             @keyup.enter="doUnlock"
-            autofocus
+            v-focus
           />
           <template v-if="firstRun">
             <div v-if="master" class="dialog-hint">Strength: {{ strength(master) }}</div>
@@ -599,6 +635,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
           </div>
         </div>
       </aside>
+      <div v-show="!sidebarCollapsed" class="side-grip" title="Drag to resize the sidebar" @mousedown.prevent="startResize"></div>
 
       <main class="central">
         <div class="relative min-h-0 flex-1">
@@ -712,7 +749,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <p class="dialog-sub" v-if="passReq.prompt">{{ passReq.prompt }}.</p>
           <p class="dialog-sub" v-else>Enter the password for <b>{{ (passReq.user || "user") + "@" + passReq.host }}</b>.</p>
           <label class="dialog-label">Password</label>
-          <input type="password" class="dialog-input" v-model="passValue" @keyup.enter="respondPassword(true)" autofocus />
+          <input type="password" class="dialog-input" v-model="passValue" @keyup.enter="respondPassword(true)" v-focus />
           <div class="dialog-actions">
             <button class="dbtn primary" @click="respondPassword(true)">OK</button>
             <button class="dbtn" @click="respondPassword(false)">Cancel</button>
@@ -776,6 +813,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tab-dot.stopped { background: var(--danger); }
 
 .sidebar { flex: none; display: flex; background: var(--surface); border-right: 1px solid var(--border); }
+.side-grip { width: 4px; margin-left: -2px; margin-right: -2px; flex: none; cursor: col-resize; z-index: 2; }
+.side-grip:hover { background: var(--accent); opacity: .5; }
 .strip { width: 34px; flex: none; display: flex; flex-direction: column; background: var(--panel); }
 .strip-b { height: 40px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--panel); border: 1px solid var(--border); border-top: none; cursor: pointer; }
 .strip-b:first-child { border-top: 1px solid var(--border); }

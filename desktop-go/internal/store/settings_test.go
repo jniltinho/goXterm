@@ -17,7 +17,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	// seed a config with a key the Go Settings struct does not write back
-	seed := "theme = \"dark\"\nsidebar_width = 240.0\n[terminal]\nfont_size = 11.0\n"
+	seed := "theme = \"dark\"\nsidebar_width = 240.0\nkeyring_hint = true\n[terminal]\nfont_size = 11.0\n"
 	if err := os.WriteFile(filepath.Join(cfgDir, settingsFile), []byte(seed), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -31,6 +31,11 @@ func TestSettingsRoundTrip(t *testing.T) {
 	s.CopyOnSelect = true
 	s.RemoteMonitoring = true
 	s.RemoteMonitoringInterval = 3
+	if s.SidebarOpen != nil || s.SidebarWidth != 240 {
+		t.Fatalf("sidebar defaults: open %v width %v", s.SidebarOpen, s.SidebarWidth)
+	}
+	closed := false
+	s.SidebarOpen, s.SidebarWidth, s.SidebarPage, s.GPUBackend = &closed, 300, "sftp", "cpu"
 	if err := SaveSettings(s); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -43,10 +48,13 @@ func TestSettingsRoundTrip(t *testing.T) {
 		!got.RemoteMonitoring || got.RemoteMonitoringInterval != 3 {
 		t.Fatalf("typed keys not persisted: %+v", got)
 	}
+	if got.SidebarOpen == nil || *got.SidebarOpen || got.SidebarWidth != 300 || got.SidebarPage != "sftp" || got.GPUBackend != "cpu" {
+		t.Fatalf("layout/display keys not persisted: %+v", got)
+	}
 
-	// the untyped key (sidebar_width) must survive the save
+	// a key the Go app does not type must survive the save
 	raw, _ := os.ReadFile(filepath.Join(cfgDir, settingsFile))
-	if !strings.Contains(string(raw), "sidebar_width") {
-		t.Fatalf("untyped key sidebar_width was dropped:\n%s", raw)
+	if !strings.Contains(string(raw), "keyring_hint") {
+		t.Fatalf("existing key dropped:\n%s", raw)
 	}
 }

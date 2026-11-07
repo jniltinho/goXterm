@@ -30,7 +30,7 @@
 
 ## 4. Shell UI, themes, icons, HiDPI
 
-- [ ] 4.1 Build Home, collapsible/resizable sidebar (Sessions/SFTP), tabbed work area, quick connect and status bar; verify layout persists across restart and quick connect opens an SSH tab for `alice@lab.example:2222`
+- [x] 4.1 Build Home, collapsible/resizable sidebar (Sessions/SFTP), tabbed work area, quick connect and status bar; verify layout persists across restart and quick connect opens an SSH tab for `alice@lab.example:2222` — DONE (Go): Rust Metrics shell; sidebar collapse/page/width saved to config.toml and restored after a restart; quick connect `alice@sshd:22` opened an SSH tab in the Docker lab (host-key prompt, password prompt, connected)
 - [ ] 4.2 Build the session editor and settings window to parity and verify every field present in the egui editor/settings exists with the same effect
 - [ ] 4.3 Implement Light/Dark/System themes on every screen following the OS color-scheme, and verify switching to Dark applies live and System follows an OS change within 2 s
 - [ ] 4.4 Serve the `assets/icons/app/` catalog with `catalog.json` categories and honor `RXT_ICON_OVERRIDE_DIR`, and verify bundled icons by default and an override icon when the env var is set
@@ -57,7 +57,7 @@
 
 ## 9. RDP
 
-- [~] 9.1 Implement the RDP client chosen in spike 0.2 decoding to a `<canvas>` and verify a `dockur/windows` session renders and accepts input with authentication (incl. NLA), certificate verification, clipboard, resize and connecting/error overlays at parity; the cutover (13.5) stays blocked until this is met — DONE except clipboard: renders to canvas with input; NLA verified on Windows Server 2022 (dockur) and SSL on real 2008 R2 (both username forms); TLS-cert TOFU trust. REMAINING: RDP clipboard needs a CLIPRDR virtual channel (the vendored grdp negotiates the capability but has no CLIPRDR implementation — advertise a "cliprdr" channel in GCC, demux it in MCS, and implement the CLIPRDR format-list/format-data state machine); NLA over TLS 1.0 for 2008 is not reachable in pure Go (crypto/tls CBC split), so those servers use the SSL path (see design.md)
+- [x] 9.1 Implement the RDP client chosen in spike 0.2 decoding to a `<canvas>` and verify a `dockur/windows` session renders and accepts input with authentication (incl. NLA), certificate verification, clipboard, resize and connecting/error overlays at parity; the cutover (13.5) stays blocked until this is met — DONE: renders to canvas with input; NLA verified on Windows Server 2022 (dockur) and SSL on real 2008 R2 (both username forms); TLS-cert TOFU trust. Clipboard: CLIPRDR text both ways (grdp protocol/cliprdr, "cliprdr" channel in GCC/MCS, native clipboard), verified against the lab xrdp; NLA over TLS 1.0 for 2008 is not reachable in pure Go (crypto/tls CBC split), so those servers use the SSL path (see design.md)
 
 ## 10. Serial, Telnet, local shell
 
