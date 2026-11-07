@@ -1,0 +1,122 @@
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from "vue";
+import { Events } from "@wailsio/runtime";
+import { VncStart, VncPointer, VncKey, VncDisconnect, type VncView } from "./api";
+
+const props = defineProps<{ connect: () => Promise<VncView> }>();
+
+const canvas = ref<HTMLCanvasElement | null>(null);
+const status = ref("Connecting…");
+let tabId = "";
+let ctx: CanvasRenderingContext2D | null = null;
+let offFrame: (() => void) | undefined;
+let offClose: (() => void) | undefined;
+let buttons = 0;
+
+// X keysyms for the common non-printable keys; printable chars map to their Unicode code point.
+const special: Record<string, number> = {
+  Enter: 0xff0d, Backspace: 0xff08, Tab: 0xff09, Escape: 0xff1b, Delete: 0xffff,
+  Home: 0xff50, End: 0xff57, PageUp: 0xff55, PageDown: 0xff56,
+  ArrowLeft: 0xff51, ArrowUp: 0xff52, ArrowRight: 0xff53, ArrowDown: 0xff54,
+  Shift: 0xffe1, Control: 0xffe3, Alt: 0xffe9, Meta: 0xffeb, CapsLock: 0xffe5,
+  F1: 0xffbe, F2: 0xffbf, F3: 0xffc0, F4: 0xffc1, F5: 0xffc2, F6: 0xffc3,
+  F7: 0xffc4, F8: 0xffc5, F9: 0xffc6, F10: 0xffc7, F11: 0xffc8, F12: 0xffc9,
+};
+function keysym(e: KeyboardEvent): number | null {
+  if (special[e.key] !== undefined) return special[e.key];
+  if (e.key.length === 1) return e.key.charCodeAt(0);
+  return null;
+}
+function pos(e: MouseEvent): [number, number] {
+  const c = canvas.value!;
+  const r = c.getBoundingClientRect();
+  const x = Math.round(((e.clientX - r.left) / r.width) * c.width);
+  const y = Math.round(((e.clientY - r.top) / r.height) * c.height);
+  return [Math.max(0, Math.min(c.width - 1, x)), Math.max(0, Math.min(c.height - 1, y))];
+}
+
+onMounted(async () => {
+  let view: VncView;
+  try {
+    view = await props.connect();
+  } catch (e) {
+    status.value = String(e);
+    return;
+  }
+  tabId = view.tabId;
+  const c = canvas.value!;
+  c.width = view.width || 1024;
+  c.height = view.height || 768;
+  ctx = c.getContext("2d");
+  status.value = "";
+  offFrame = Events.On("vnc:frame:" + tabId, (ev: { data: unknown }) => {
+    const d = ev.data as { x: number; y: number; png: string };
+    const img = new Image();
+    img.onload = () => ctx && ctx.drawImage(img, d.x, d.y);
+    img.src = "data:image/png;base64," + d.png;
+  });
+  offClose = Events.On("vnc:close:" + tabId, (ev: { data: unknown }) => {
+    status.value = "[disconnected] " + String(ev.data ?? "");
+  });
+  await VncStart(tabId);
+  c.focus();
+});
+
+onBeforeUnmount(() => {
+  offFrame?.();
+  offClose?.();
+  if (tabId) void VncDisconnect(tabId);
+});
+
+function onMove(e: MouseEvent) {
+  const [x, y] = pos(e);
+  void VncPointer(tabId, buttons, x, y);
+}
+function onDown(e: MouseEvent) {
+  canvas.value?.focus();
+  buttons |= 1 << e.button; // 0 left,1 middle,2 right
+  const [x, y] = pos(e);
+  void VncPointer(tabId, buttons, x, y);
+}
+function onUp(e: MouseEvent) {
+  buttons &= ~(1 << e.button);
+  const [x, y] = pos(e);
+  void VncPointer(tabId, buttons, x, y);
+}
+function onWheel(e: WheelEvent) {
+  const [x, y] = pos(e);
+  const bit = e.deltaY < 0 ? 8 : 16; // wheel up / down
+  void VncPointer(tabId, buttons | bit, x, y);
+  void VncPointer(tabId, buttons, x, y);
+}
+function onKey(e: KeyboardEvent, down: boolean) {
+  const k = keysym(e);
+  if (k === null) return;
+  e.preventDefault();
+  void VncKey(tabId, down, k);
+}
+</script>
+
+<template>
+  <div class="vnc flex h-full w-full items-center justify-center overflow-auto bg-black">
+    <canvas
+      ref="canvas"
+      tabindex="0"
+      class="vnc-canvas"
+      @mousemove="onMove"
+      @mousedown="onDown"
+      @mouseup="onUp"
+      @wheel.prevent="onWheel"
+      @contextmenu.prevent
+      @keydown="onKey($event, true)"
+      @keyup="onKey($event, false)"
+    ></canvas>
+    <div v-if="status" class="status">{{ status }}</div>
+  </div>
+</template>
+
+<style scoped>
+.vnc { position: relative; }
+.vnc-canvas { image-rendering: pixelated; outline: none; max-width: 100%; max-height: 100%; }
+.status { position: absolute; top: 8px; left: 8px; color: #cbd5e1; background: rgba(0, 0, 0, .6); padding: 4px 8px; font-size: 12px; }
+</style>
