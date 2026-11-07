@@ -41,6 +41,7 @@ build: image frontend ## the single binary for Linux amd64 → dist/
 
 # AppImage holds the binary, its .desktop and icon; GTK 4 + WebKitGTK 6.0 and libsqlcipher come from
 # the system (Ubuntu 24.04+, Fedora 39+, Debian 13+).
+# Built as .new then renamed, so a running copy of the AppImage ("Text file busy") is replaced too.
 # shortcut: GTK/WebKit/SQLCipher are not bundled; bundle them (linuxdeploy) for older distributions.
 appimage: build   ## the Linux app as an x86_64 AppImage → dist/
 	$(RUN) sh -c '\
@@ -50,7 +51,8 @@ appimage: build   ## the Linux app as an x86_64 AppImage → dist/
 	  cp build/linux/$(BIN).png $$app/$(BIN).png; cp build/linux/$(BIN).png $$app/usr/share/icons/hicolor/256x256/apps/$(BIN).png; \
 	  desktop-file-validate $$app/$(BIN).desktop && \
 	  ARCH=x86_64 appimagetool --no-appstream --runtime-file /usr/local/share/appimage-runtime-x86_64 \
-	    $$app dist/$(BIN)-$(VERSION)-x86_64.AppImage'
+	    $$app dist/$(BIN)-$(VERSION)-x86_64.AppImage.new && \
+	  mv -f dist/$(BIN)-$(VERSION)-x86_64.AppImage.new dist/$(BIN)-$(VERSION)-x86_64.AppImage'
 
 # With the pure-Go store, Windows and macOS cross-build CGO-free from Linux — no mingw/osxcross:
 #   windows: WebView2 (CGO_ENABLED=0), -H windowsgui.
