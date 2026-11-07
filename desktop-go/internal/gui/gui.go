@@ -96,7 +96,11 @@ func Run(version string, safeGPU bool) error {
 	app.OnShutdown(svc.stopControl)
 	// the app's own page loads only once the navigation guard is on (a blank page first where it needs the webview)
 	winOpts.URL, winOpts.HTML = guardedStart()
+	if s, err := store.LoadSettings(); err == nil {
+		winOpts.Zoom = uiZoom(s.UIScale) // Settings › Display › Interface size, from the first paint
+	}
 	win = app.Window.NewWithOptions(winOpts)
+	svc.zoom = func(f float64) { win.SetZoom(f) }
 	// WindowShow can fire more than once (map/expose/focus); do the guard and the first navigation exactly once,
 	// otherwise SetURL reloads the page on every event and the content flickers.
 	var once sync.Once

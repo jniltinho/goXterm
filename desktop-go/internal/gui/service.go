@@ -23,6 +23,7 @@ type App struct {
 	savePath func(name string) (string, error)  // set by gui.Run; native save-file dialog
 	openPath func(title string) (string, error) // set by gui.Run; native open-file dialog
 	clip     clipboard                          // set by gui.Run; the system clipboard
+	zoom     func(float64)                      // set by gui.Run; the webview zoom (Interface size)
 	version  string                             // set by gui.Run, shown in Settings → Diagnostics
 
 	mu     sync.Mutex

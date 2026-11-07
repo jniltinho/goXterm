@@ -796,7 +796,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .menu-ico { height: 16px; width: 16px; }
 .menu-sep { height: 1px; margin: 3px 0; background: var(--border-subtle); }
 
-.toolbar { display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 4px; background: var(--toolbar); }
+.toolbar { display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 4px; background: var(--toolbar); border-bottom: 1px solid var(--border-subtle); }
 .toolbar:not(.cap) { height: 34px; }
 .tbtn { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 56px; height: 48px; padding: 4px 6px 2px; background: transparent; border: none; cursor: pointer; color: var(--text); }
 .toolbar:not(.cap) .tbtn { min-width: 30px; width: 30px; height: 30px; justify-content: center; padding: 0; }
@@ -808,7 +808,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tbico { width: 24px; height: 24px; flex: none; }
 .tbcap { margin-top: auto; font-size: 11px; line-height: 14px; white-space: nowrap; }
 
-.row { display: flex; height: 28px; background: var(--toolbar); }
+.row { display: flex; height: 28px; background: var(--toolbar); border-bottom: 1px solid var(--border); position: relative; z-index: 1; }
 .qc-col { flex: none; display: flex; align-items: center; padding: 0 2px; }
 .qc { width: 100%; height: 26px; padding: 0 4px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }
 .qc:focus { border-color: var(--focus); }
@@ -817,7 +817,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tabstrip { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 2px; padding-left: 2px; overflow: hidden; }
 .tab, .tab-home, .tab-new { height: 26px; flex: none; display: flex; align-items: center; background: var(--tab-inactive); border: 1px solid var(--border); cursor: pointer; color: var(--text); font-size: 12px; position: relative; }
 .tab:hover, .tab-home:hover, .tab-new:hover { background: var(--hover); }
-.tab.sel, .tab-home.sel { background: var(--tab-active); border-bottom-color: transparent; }
+.tab.sel, .tab-home.sel { background: var(--tab-active); border-bottom-color: transparent; height: 27px; margin-bottom: -1px; } /* joins the work area */
 .tab.sel::before, .tab-home.sel::before { content: ""; position: absolute; left: -1px; right: -1px; top: -1px; height: 2px; background: var(--accent); }
 .tab-home { width: 36px; justify-content: center; }
 .tab-home img { width: 16px; height: 16px; }
@@ -853,7 +853,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .treerow.session.sel { background: var(--pressed); }
 
 .central { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
-.statusbar { height: 18px; display: flex; align-items: center; gap: 12px; padding: 0 6px; font-size: 11px; color: var(--text); background: var(--panel); }
+.statusbar { border-top: 1px solid var(--border-subtle); height: 18px; display: flex; align-items: center; gap: 12px; padding: 0 6px; font-size: 11px; color: var(--text); background: var(--panel); }
 
 /* Home (Rust home.rs) */
 .home { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; background: var(--surface); color: var(--text); }

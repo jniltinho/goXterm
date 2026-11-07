@@ -54,7 +54,15 @@ func (a *App) GetSettings() (store.Settings, error) {
 }
 
 // SaveSettings writes the global settings back to config.toml.
-func (a *App) SaveSettings(s store.Settings) error { return store.SaveSettings(s) }
+func (a *App) SaveSettings(s store.Settings) error {
+	if err := store.SaveSettings(s); err != nil {
+		return err
+	}
+	if a.zoom != nil {
+		a.zoom(uiZoom(s.UIScale)) // Interface size applies at once, as in the Rust app
+	}
+	return nil
+}
 
 // Diag is the read-only info shown in Settings → Diagnostics.
 type Diag struct {
