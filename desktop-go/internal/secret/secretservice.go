@@ -16,7 +16,6 @@ const (
 	busName     = "org.freedesktop.secrets"
 	servicePath = "/org/freedesktop/secrets"
 	defaultColl = "/org/freedesktop/secrets/aliases/default"
-	application = "rustxterm"
 	connTimeout = 3 * time.Second
 )
 

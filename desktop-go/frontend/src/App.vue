@@ -141,6 +141,7 @@ onMounted(async () => {
 // First start (no store yet): "Create master password", as the Rust store_ui (MIN_MASTER 8).
 const firstRun = ref(false);
 const confirmPw = ref("");
+const useKeyring = ref(false); // Rust default: off
 const MIN_MASTER = 8;
 function strength(p: string) {
   const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^\p{L}\p{N}]/u].filter((r) => r.test(p)).length;
@@ -160,7 +161,7 @@ async function doUnlock() {
   unlocking.value = true;
   try {
     if (firstRun.value) {
-      await CreateStore(master.value);
+      await CreateStore(master.value, useKeyring.value);
       firstRun.value = false;
       confirmPw.value = "";
     } else await Unlock(master.value);
@@ -439,6 +440,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <div v-if="master" class="dialog-hint">Strength: {{ strength(master) }}</div>
             <label class="dialog-label mt-1">Confirm master password</label>
             <input type="password" class="dialog-input" v-model="confirmPw" @keyup.enter="doUnlock" />
+            <label class="dialog-check"><input v-model="useKeyring" type="checkbox" /> Unlock with system keyring</label>
             <div v-if="master && confirmPw && createProblem" class="dialog-err">{{ createProblem }}</div>
           </template>
           <div v-if="unlockError" class="dialog-err">{{ unlockError }}</div>
@@ -829,6 +831,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .dialog-input:focus { border-color: var(--focus); }
 .dialog-err { color: var(--danger); font-size: 12px; margin-top: 6px; }
 .dialog-warn { color: var(--warning); }
+.dialog-check { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .dialog-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .dialog-actions { display: flex; justify-content: center; gap: 20px; margin-top: 12px; }
 .dbtn { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 74px; height: 26px; padding: 0 8px; font-size: 12px; background: var(--panel); border: 1px solid var(--border); cursor: pointer; color: var(--text); }

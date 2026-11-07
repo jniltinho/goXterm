@@ -168,12 +168,17 @@ func (a *App) FirstRun() bool { return !store.Exists(store.DataDir()) }
 // minMaster is the Rust MIN_MASTER: the shortest master password accepted for a new store.
 const minMaster = 8
 
-// CreateStore creates the encrypted store under a new master password and unlocks it.
-func (a *App) CreateStore(password string) error {
+// CreateStore creates the encrypted store under a new master password and unlocks it; useKeyring adds
+// the "Unlock with system keyring" wrap (Secret Service, Keychain or Credential Manager).
+func (a *App) CreateStore(password string, useKeyring bool) error {
 	if len([]rune(password)) < minMaster {
 		return fmt.Errorf("use at least %d characters", minMaster)
 	}
-	if err := store.Create(store.DataDir(), password); err != nil {
+	var kr store.Keyring
+	if useKeyring {
+		kr = store.SystemKeyring()
+	}
+	if err := store.Create(store.DataDir(), password, kr); err != nil {
 		return err
 	}
 	return a.Unlock(password)

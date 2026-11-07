@@ -89,8 +89,10 @@ func Exists(dir string) bool {
 
 // Create is the first start (Rust envelope::create + Db::open): a new random database key wrapped
 // under the master password in keys.v1, and an empty SQLCipher database with the full schema. It
-// refuses to replace an existing envelope. The store is then opened with Open.
-func Create(dir, password string) error {
+// refuses to replace an existing envelope. With kr (Settings "Unlock with system keyring") a second
+// wrap opens it through a random key kept in the platform keyring; a keyring error aborts before
+// anything is written. The store is then opened with Open or OpenWithKeyring.
+func Create(dir, password string, kr keyring) error {
 	if password == "" {
 		return errors.New("the master password cannot be empty")
 	}
@@ -103,6 +105,14 @@ func Create(dir, password string) error {
 	var key [32]byte
 	if _, err := rand.Read(key[:]); err != nil {
 		return err
+	}
+	var krWrap map[string]any
+	if kr != nil {
+		w, err := keyringWrap(kr, key)
+		if err != nil {
+			return fmt.Errorf("system keyring: %w", err)
+		}
+		krWrap = w
 	}
 	image, err := emptyImage()
 	if err != nil {
@@ -119,7 +129,7 @@ func Create(dir, password string) error {
 	if err := os.WriteFile(filepath.Join(dir, dbFile), enc, 0o600); err != nil {
 		return err
 	}
-	return writeEnvelope(dir, password, key) // last: the store exists only once both files do
+	return writeEnvelope(dir, password, key, krWrap) // last: the store exists only once both files do
 }
 
 // emptyImage builds the plaintext SQLite image: 4096-byte pages with the 80 reserved bytes per page
@@ -172,7 +182,7 @@ func emptyImage() ([]byte, error) {
 }
 
 // writeEnvelope writes keys.v1 with the master wrap (Rust envelope::create_with_params), atomically.
-func writeEnvelope(dir, password string, key [32]byte) error {
+func writeEnvelope(dir, password string, key [32]byte, krWrap map[string]any) error {
 	salt := make([]byte, 16)
 	nonce := make([]byte, chacha20poly1305.NonceSizeX)
 	if _, err := rand.Read(salt); err != nil {
@@ -188,10 +198,14 @@ func writeEnvelope(dir, password string, key [32]byte) error {
 	}
 	ct := aead.Seal(nil, nonce, key[:], []byte(aadMaster))
 	b64 := base64.StdEncoding.EncodeToString
+	wraps := []map[string]any{{"kind": "master", "nonce": b64(nonce), "ct": b64(ct)}}
+	if krWrap != nil {
+		wraps = append(wraps, krWrap)
+	}
 	env := map[string]any{
 		"version": 1,
 		"kdf":     map[string]any{"alg": "argon2id", "m_kib": kdfMKiB, "t": kdfT, "p": kdfP, "salt": b64(salt)},
-		"wraps":   []map[string]any{{"kind": "master", "nonce": b64(nonce), "ct": b64(ct)}},
+		"wraps":   wraps,
 	}
 	js, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
@@ -202,4 +216,28 @@ func writeEnvelope(dir, password string, key [32]byte) error {
 		return err
 	}
 	return os.Rename(tmp, filepath.Join(dir, envelopeFile))
+}
+
+// keyringWrap stores a new random wrapping key in the keyring under "rustxterm-db-<32 hex>" (Rust
+// KEYRING_ID_PREFIX) and seals the database key with it.
+func keyringWrap(kr keyring, key [32]byte) (map[string]any, error) {
+	idb := make([]byte, 16)
+	wrapping := make([]byte, 32)
+	nonce := make([]byte, chacha20poly1305.NonceSizeX)
+	for _, b := range [][]byte{idb, wrapping, nonce} {
+		if _, err := rand.Read(b); err != nil {
+			return nil, err
+		}
+	}
+	id := fmt.Sprintf("rustxterm-db-%x", idb)
+	if err := kr.set(id, wrapping); err != nil {
+		return nil, err
+	}
+	aead, err := chacha20poly1305.NewX(wrapping)
+	if err != nil {
+		return nil, err
+	}
+	b64 := base64.StdEncoding.EncodeToString
+	ct := aead.Seal(nil, nonce, key[:], []byte(aadKeyring))
+	return map[string]any{"kind": "keyring", "id": id, "nonce": b64(nonce), "ct": b64(ct)}, nil
 }

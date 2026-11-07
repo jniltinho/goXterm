@@ -8,10 +8,10 @@ import (
 // Create or a wrong password.
 func TestCreateOpenWrite(t *testing.T) {
 	dir := t.TempDir()
-	if err := Create(dir, "lab-master"); err != nil {
+	if err := Create(dir, "lab-master", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := Create(dir, "other"); err == nil {
+	if err := Create(dir, "other", nil); err == nil {
 		t.Fatal("Create replaced an existing store")
 	}
 	if _, err := Open(dir, "wrong"); err == nil {
@@ -42,3 +42,31 @@ func TestCreateOpenWrite(t *testing.T) {
 }
 
 func asID(v any) int64 { i, _ := v.(int64); return i }
+
+type mapKeyring map[string][]byte
+
+func (m mapKeyring) get(id string) ([]byte, bool, error) { b, ok := m[id]; return b, ok, nil }
+func (m mapKeyring) set(id string, b []byte) error       { m[id] = b; return nil }
+
+// With a keyring the store opens silently through the keyring wrap and still with the password.
+func TestCreateWithKeyring(t *testing.T) {
+	dir, kr := t.TempDir(), mapKeyring{}
+	if err := Create(dir, "lab-master", kr); err != nil {
+		t.Fatal(err)
+	}
+	if len(kr) != 1 {
+		t.Fatalf("keyring entries: %d", len(kr))
+	}
+	s, ok, err := OpenWithKeyring(dir, kr)
+	if err != nil || !ok {
+		t.Fatalf("keyring open: %v %v", ok, err)
+	}
+	s.Close()
+	if s, err = Open(dir, "lab-master"); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if Create(t.TempDir(), "lab-master", NoKeyring{}) == nil {
+		t.Fatal("a keyring error must abort store creation")
+	}
+}

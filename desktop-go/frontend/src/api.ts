@@ -64,7 +64,7 @@ export const Locked = () => call<boolean>("Locked");
 export const Unlock = (password: string) => call<void>("Unlock", password);
 // First start: no store yet → "Create master password" (at least 8 characters).
 export const FirstRun = () => call<boolean>("FirstRun");
-export const CreateStore = (password: string) => call<void>("CreateStore", password);
+export const CreateStore = (password: string, keyring: boolean) => call<void>("CreateStore", password, keyring);
 
 // Session editing — SaveSession takes the session JSON document (id 0 = new) and returns its id.
 export const SaveSession = (js: string) => call<number>("SaveSession", js);
