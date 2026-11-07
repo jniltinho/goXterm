@@ -86,7 +86,7 @@ type Tab =
   | { id: string; title: string; kind: "ssh"; icon: string; connect: () => Promise<string>; monitor?: boolean }
   | { id: string; title: string; kind: "files"; icon: string; connect: () => Promise<RemoteSession> }
   | { id: string; title: string; kind: "vnc"; icon: string; connect: () => Promise<VncView> }
-  | { id: string; title: string; kind: "rdp"; icon: string; connect: () => Promise<RdpView> };
+  | { id: string; title: string; kind: "rdp"; icon: string; connect: (w: number, h: number) => Promise<RdpView> };
 const tabs = shallowRef<Tab[]>([]);
 const active = ref("");
 let seq = 0;
@@ -110,7 +110,7 @@ async function openDemos() {
   try { if (await HasSftpDemo()) openFiles("lab: sftp demo", "sftp", () => ConnectSftpDemo()); } catch { /* none */ }
   try { if (await HasFtpDemo()) openFiles("lab: ftps demo", "ftps", () => ConnectFtpDemo()); } catch { /* none */ }
   try { if (await HasVncDemo()) openVnc("lab: vnc demo", () => ConnectVncDemo()); } catch { /* none */ }
-  try { if (await HasRdpDemo()) openRdp("lab: rdp demo", () => ConnectRdpDemo()); } catch { /* none */ }
+  try { if (await HasRdpDemo()) openRdp("lab: rdp demo", (w, h) => ConnectRdpDemo(w, h)); } catch { /* none */ }
 }
 
 onMounted(async () => {
@@ -242,12 +242,12 @@ function openSession(s: Session) {
 function openSftpFor(s: Session | null) { if (s) openFiles("SFTP: " + s.name, "sftp", () => SftpConnect(s.id)); }
 function openFtpFor(s: Session | null) { if (s) openFiles("FTP: " + s.name, "ftp", () => FtpConnect(s.id, "explicit")); }
 function openVncFor(s: Session | null) { if (s) openVnc("VNC: " + s.name, () => VncConnect(s.id)); }
-function openRdp(title: string, connect: () => Promise<RdpView>) {
+function openRdp(title: string, connect: (w: number, h: number) => Promise<RdpView>) {
   const id = "tab" + ++seq;
   tabs.value = [...tabs.value, { id, title, kind: "rdp", icon: "rdp", connect }];
   active.value = id;
 }
-function openRdpFor(s: Session | null) { if (s) openRdp("RDP: " + s.name, () => RdpConnect(s.id)); }
+function openRdpFor(s: Session | null) { if (s) openRdp("RDP: " + s.name, (w, h) => RdpConnect(s.id, w, h)); }
 function closeTab(id: string) {
   const i = tabs.value.findIndex((t) => t.id === id);
   tabs.value = tabs.value.filter((t) => t.id !== id);

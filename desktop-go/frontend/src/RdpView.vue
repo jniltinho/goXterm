@@ -3,9 +3,10 @@ import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, type RdpView } from "./api";
 
-const props = defineProps<{ connect: () => Promise<RdpView> }>();
+const props = defineProps<{ connect: (tabW: number, tabH: number) => Promise<RdpView> }>();
 const emit = defineEmits<{ close: [] }>();
 
+const root = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
 const overlay = ref<HTMLDivElement | null>(null);
 const status = ref("Connecting…");
@@ -17,6 +18,18 @@ let ctx: CanvasRenderingContext2D | null = null;
 let offFrame: (() => void) | undefined;
 let offReady: (() => void) | undefined;
 let offClose: (() => void) | undefined;
+let ro: ResizeObserver | undefined;
+
+// The remote desktop is created at the tab size ("fit to tab", Rust parity); when the window is
+// resized later it is scaled to fit, keeping its aspect ratio (pos() maps the mouse back).
+function fitCanvas() {
+  const c = canvas.value, r = root.value;
+  if (!c || !r || !c.width || !c.height) return;
+  const s = Math.min(r.clientWidth / c.width, r.clientHeight / c.height);
+  if (!(s > 0)) return;
+  c.style.width = Math.floor(c.width * s) + "px";
+  c.style.height = Math.floor(c.height * s) + "px";
+}
 
 // browser KeyboardEvent.code → PC Set-1 scancode (common keys; extended keys are a follow-up).
 const SC: Record<string, number> = {
@@ -55,7 +68,7 @@ async function start() {
   status.value = "Connecting…";
   let view: RdpView;
   try {
-    view = await props.connect();
+    view = await props.connect(Math.floor(root.value?.clientWidth ?? 0), Math.floor(root.value?.clientHeight ?? 0));
   } catch (e) {
     status.value = "";
     stopped.value = { reason: String(e) };
@@ -67,6 +80,7 @@ async function start() {
   const c = canvas.value!;
   c.width = view.width || 1280;
   c.height = view.height || 800;
+  fitCanvas();
   ctx = c.getContext("2d");
   status.value = "Negotiating…";
   offFrame = Events.On("rdp:frame:" + tabId, (ev: { data: unknown }) => {
@@ -100,9 +114,14 @@ function onStoppedKey(e: KeyboardEvent) {
   else if (k === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); void reconnect(); }
 }
 
-onMounted(start);
+onMounted(() => {
+  ro = new ResizeObserver(fitCanvas);
+  if (root.value) ro.observe(root.value);
+  void start();
+});
 
 onBeforeUnmount(() => {
+  ro?.disconnect();
   unsubscribe();
   if (tabId) void RdpDisconnect(tabId);
 });
@@ -121,7 +140,7 @@ function onKey(e: KeyboardEvent, down: boolean) {
 </script>
 
 <template>
-  <div class="rdp flex h-full w-full items-center justify-center overflow-auto bg-black">
+  <div ref="root" class="rdp flex h-full w-full items-center justify-center overflow-hidden bg-black">
     <canvas
       ref="canvas"
       tabindex="0"
@@ -158,7 +177,7 @@ function onKey(e: KeyboardEvent, down: boolean) {
 
 <style scoped>
 .rdp { position: relative; }
-.rdp-canvas { image-rendering: pixelated; outline: none; max-width: 100%; max-height: 100%; transition: filter .15s; }
+.rdp-canvas { outline: none; transition: filter .15s; }
 .rdp-canvas.dim { filter: grayscale(.6) brightness(.45); }
 .status { position: absolute; top: 8px; left: 8px; color: #cbd5e1; background: rgba(0, 0, 0, .6); padding: 4px 8px; font-size: 12px; }
 .stopped { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; outline: none; }

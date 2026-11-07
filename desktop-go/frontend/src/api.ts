@@ -163,9 +163,11 @@ export const TunnelStopAll = () => call<void>("TunnelStopAll");
 
 // RDP — the framebuffer is decoded in Go (vendored grdp) and streamed as per-rectangle PNGs over "rdp:frame:<tab>".
 export interface RdpView { tabId: string; width: number; height: number }
-export const RdpConnect = (id: number) => call<RdpView>("RdpConnect", id);
+// tabW/tabH: the tab's size in CSS px — the remote desktop is created at that size ("fit to tab")
+// unless the session has a fixed resolution.
+export const RdpConnect = (id: number, tabW: number, tabH: number) => call<RdpView>("RdpConnect", id, tabW, tabH);
 export const HasRdpDemo = () => call<boolean>("HasRdpDemo");
-export const ConnectRdpDemo = () => call<RdpView>("ConnectRdpDemo");
+export const ConnectRdpDemo = (tabW: number, tabH: number) => call<RdpView>("ConnectRdpDemo", tabW, tabH);
 export const RdpStart = (tabId: string) => call<void>("RdpStart", tabId);
 export const RdpMouse = (tabId: string, kind: string, button: number, x: number, y: number) =>
   call<void>("RdpMouse", tabId, kind, button, x, y);

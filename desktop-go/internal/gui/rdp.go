@@ -21,7 +21,7 @@ type RdpView struct {
 // allow_legacy_tls, allow_standard_security). Security mapping for pure Go: standard security → Std;
 // legacy TLS (old 2008-era servers) → SSL, because NLA over TLS 1.0 is unreachable on Go's crypto/tls
 // (see rdpconn.Config.LegacyTLS); otherwise NLA over TLS 1.2+.
-func (a *App) RdpConnect(sessionID int64) (*RdpView, error) {
+func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	m, password, err := sessionRawByID(sessionID)
 	if err != nil {
 		return nil, err
@@ -45,17 +45,36 @@ func (a *App) RdpConnect(sessionID int64) (*RdpView, error) {
 	if d := asString(rdp["domain"]); d != "" && !strings.ContainsAny(user, `\/@`) {
 		user = d + `\` + user // grdp splits DOMAIN\user; UPN (user@domain) is passed as-is
 	}
+	w, h := rdpSize(rdp["resolution"], tabW, tabH)
 	return a.rdpDial(rdpconn.Config{
 		Host: asString(m["host"]), Port: port, User: user, Password: password,
-		Width: 1280, Height: 800, Protocol: proto, LegacyTLS: legacy,
+		Width: w, Height: h, Protocol: proto, LegacyTLS: legacy,
 	})
+}
+
+// rdpSize picks the remote desktop size like the Rust app: a session's fixed resolution
+// ({"fixed":{"width","height"}}), otherwise the tab's size ("fittotab", the default), clamped to
+// what RDP servers accept, width rounded down to a multiple of 4 (some servers misdraw otherwise).
+func rdpSize(resolution any, tabW, tabH int) (int, int) {
+	if m, ok := resolution.(map[string]any); ok {
+		if f, ok := m["fixed"].(map[string]any); ok {
+			if w, h := int(asInt64(f["width"])), int(asInt64(f["height"])); w > 0 && h > 0 {
+				return w, h
+			}
+		}
+	}
+	if tabW <= 0 || tabH <= 0 {
+		return 1280, 800 // the tab was not laid out yet
+	}
+	clamp := func(v, lo, hi int) int { return min(max(v, lo), hi) }
+	return clamp(tabW, 640, 4096) &^ 3, clamp(tabH, 480, 2048)
 }
 
 // HasRdpDemo / ConnectRdpDemo auto-open an RDP view to RXT_DEMO_RDP = "[proto ]user:pass@host:port"
 // (proto: ssl|nla|std; default ssl). Lab/demo only.
 func (a *App) HasRdpDemo() bool { return os.Getenv("RXT_DEMO_RDP") != "" }
 
-func (a *App) ConnectRdpDemo() (*RdpView, error) {
+func (a *App) ConnectRdpDemo(tabW, tabH int) (*RdpView, error) {
 	v := os.Getenv("RXT_DEMO_RDP")
 	if v == "" {
 		return nil, errors.New("no demo target")
@@ -74,8 +93,9 @@ func (a *App) ConnectRdpDemo() (*RdpView, error) {
 	if port == 0 {
 		port = 3389
 	}
+	w, h := rdpSize(nil, tabW, tabH)
 	return a.rdpDial(rdpconn.Config{
-		Host: host, Port: port, User: user, Password: pass, Width: 1280, Height: 800,
+		Host: host, Port: port, User: user, Password: pass, Width: w, Height: h,
 		Protocol: proto, LegacyTLS: proto != rdpconn.NLA, // ssl/std demos target old servers
 	})
 }
