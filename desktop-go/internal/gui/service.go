@@ -22,6 +22,7 @@ type App struct {
 	quit     func()                             // set by gui.Run; quits the app (Terminal → Exit menu)
 	savePath func(name string) (string, error)  // set by gui.Run; native save-file dialog
 	openPath func(title string) (string, error) // set by gui.Run; native open-file dialog
+	clip     clipboard                          // set by gui.Run; the system clipboard
 	version  string                             // set by gui.Run, shown in Settings → Diagnostics
 
 	mu     sync.Mutex
@@ -255,4 +256,10 @@ func asOptInt64(v any) *int64 {
 	}
 	n := asInt64(v)
 	return &n
+}
+
+// clipboard is the system clipboard (Wails' native one, so no WebView permission prompt).
+type clipboard interface {
+	Text() (string, bool)
+	SetText(string) bool
 }

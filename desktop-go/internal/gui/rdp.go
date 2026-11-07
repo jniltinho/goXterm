@@ -133,6 +133,11 @@ func (a *App) rdpDial(cfg rdpconn.Config) (*RdpView, error) {
 			a.emit("rdp:close:"+tabID, msg)
 		}
 	}
+	cfg.OnClipboard = func(text string) { // copied on the remote desktop → the local clipboard
+		if a.clip != nil {
+			a.clip.SetText(text)
+		}
+	}
 	sess, w, h, err := rdpconn.Connect(cfg, onFrame, onReady, onClose)
 	if err != nil {
 		return nil, err
@@ -175,6 +180,20 @@ func (a *App) RdpMouse(tabID, kind string, button, x, y int) error {
 }
 
 // RdpKey sends a scancode key event.
+// RdpSyncClipboard offers the local clipboard's text to the remote desktop (the SPA calls it when the
+// RDP view gets focus, so text copied locally can be pasted there).
+func (a *App) RdpSyncClipboard(tabID string) error {
+	s := a.rdpSession(tabID)
+	if s == nil || a.clip == nil {
+		return nil
+	}
+	text, ok := a.clip.Text()
+	if !ok || text == "" {
+		return nil
+	}
+	return s.SetClipboard(text)
+}
+
 func (a *App) RdpKey(tabID string, down bool, scancode int) error {
 	s := a.rdpSession(tabID)
 	if s == nil {

@@ -43,6 +43,8 @@ type Config struct {
 	// cannot work on Go's crypto/tls (its 1/n-1 CBC record split, which cannot be disabled, makes
 	// 2008 SChannel abort the first CredSSP record); use Std/legacy RDP security for those, or SSL.
 	LegacyTLS bool
+	// OnClipboard, when set, receives text copied on the remote desktop.
+	OnClipboard func(string)
 }
 
 // Rect is a changed region handed to onFrame as a PNG.
@@ -100,6 +102,9 @@ func Connect(cfg Config, onFrame func(Rect), onReady func(), onClose func(error)
 	c.OnClose(func() { sess.markClosed(); onClose(nil) })
 	if onReady != nil {
 		c.OnReady(onReady)
+	}
+	if cfg.OnClipboard != nil {
+		c.OnClipboard(cfg.OnClipboard)
 	}
 	c.OnBitmap(func(bs []client.Bitmap) {
 		for i := range bs {
@@ -177,6 +182,9 @@ func (s *Session) MouseUp(button, x, y int)   { s.c.MouseUp(button, x, y) }
 func (s *Session) Wheel(scroll, x, y int)     { s.c.MouseWheel(scroll, x, y) }
 func (s *Session) KeyDown(scancode int)       { s.c.KeyDown(scancode, "") }
 func (s *Session) KeyUp(scancode int)         { s.c.KeyUp(scancode, "") }
+
+// SetClipboard offers local clipboard text to the remote desktop.
+func (s *Session) SetClipboard(text string) error { return s.c.SetClipboard(text) }
 
 // Close ends the session.
 func (s *Session) Close() error {

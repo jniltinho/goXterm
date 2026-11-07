@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
-import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, type RdpView } from "./api";
+import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, RdpSyncClipboard, type RdpView } from "./api";
 
 const props = defineProps<{ connect: (tabW: number, tabH: number) => Promise<RdpView> }>();
 const emit = defineEmits<{ close: []; state: ["connecting" | "connected" | "stopped"] }>();
@@ -102,6 +102,7 @@ async function start() {
   });
   await RdpStart(tabId);
   c.focus();
+  void RdpSyncClipboard(tabId); // the focus above may have fired before tabId was known
 }
 
 async function reconnect() {
@@ -129,6 +130,8 @@ onBeforeUnmount(() => {
   if (tabId) void RdpDisconnect(tabId);
 });
 
+// Offer what was copied locally to the remote desktop each time the view gets focus.
+function onFocus() { if (tabId && !stopped.value) void RdpSyncClipboard(tabId); }
 function onMove(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "move", 0, x, y); } }
 function onDown(e: MouseEvent) { if (stopped.value) return; canvas.value?.focus(); const [x, y] = pos(e); void RdpMouse(tabId, "down", e.button, x, y); }
 function onUp(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); void RdpMouse(tabId, "up", e.button, x, y); } }
@@ -154,6 +157,7 @@ function onKey(e: KeyboardEvent, down: boolean) {
       @mouseup="onUp"
       @wheel.prevent="onWheel"
       @contextmenu.prevent
+      @focus="onFocus"
       @keydown="onKey($event, true)"
       @keyup="onKey($event, false)"
     ></canvas>

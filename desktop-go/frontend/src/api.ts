@@ -182,3 +182,6 @@ export const RdpMouse = (tabId: string, kind: string, button: number, x: number,
   call<void>("RdpMouse", tabId, kind, button, x, y);
 export const RdpKey = (tabId: string, down: boolean, scancode: number) => call<void>("RdpKey", tabId, down, scancode);
 export const RdpDisconnect = (tabId: string) => call<void>("RdpDisconnect", tabId);
+// Clipboard (text): remote copies go straight to the system clipboard; call RdpSyncClipboard when the
+// view gets focus to offer the local clipboard to the remote desktop.
+export const RdpSyncClipboard = (tabId: string) => call<void>("RdpSyncClipboard", tabId);

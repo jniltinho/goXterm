@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"rustxterm-go/internal/grdp/core"
+	"rustxterm-go/internal/grdp/protocol/cliprdr"
 	"rustxterm-go/internal/grdp/protocol/nla"
 	"rustxterm-go/internal/grdp/protocol/pdu"
 	"rustxterm-go/internal/grdp/protocol/sec"
@@ -22,6 +23,7 @@ type RdpClient struct {
 	pdu     *pdu.Client
 	setting *Setting
 	pending []pendingOn // On() calls made before Login created the pdu layer
+	clip    *cliprdr.Clip
 }
 
 type pendingOn struct {
@@ -30,7 +32,7 @@ type pendingOn struct {
 }
 
 func newRdpClient(s *Setting) *RdpClient {
-	return &RdpClient{setting: s}
+	return &RdpClient{setting: s, clip: &cliprdr.Clip{}}
 }
 
 func bitmapDecompress(bitmap *pdu.BitmapData) []byte {
@@ -104,6 +106,16 @@ func (c *RdpClient) Login(ctx context.Context, host, user, pwd string, width, he
 	c.pending = nil
 
 	c.mcs.SetClientDesktop(uint16(width), uint16(height))
+
+	// Clipboard (text) on the "cliprdr" static virtual channel.
+	c.mcs.AddVirtualChannel(cliprdr.ChannelName, cliprdr.ChannelOptions)
+	c.sec.SetChannelSender(c.mcs)
+	c.clip.Send = func(b []byte) error { _, err := c.sec.SendToChannel(cliprdr.ChannelName, b); return err }
+	c.sec.On("channel", func(name string, data []byte) {
+		if name == cliprdr.ChannelName {
+			c.clip.Receive(data)
+		}
+	})
 
 	c.sec.SetUser(user)
 	c.sec.SetPwd(pwd)
@@ -258,3 +270,9 @@ func (c *RdpClient) Close() {
 		c.tpkt.Close()
 	}
 }
+
+// OnClipboard receives text copied on the remote desktop.
+func (c *RdpClient) OnClipboard(f func(string)) { c.clip.OnText = f }
+
+// SetClipboard offers local text to the remote desktop's clipboard.
+func (c *RdpClient) SetClipboard(s string) error { return c.clip.SetText(s) }

@@ -471,8 +471,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <div class="locked-head"><img :src="icon('key')" class="h-3.5 w-3.5 opacity-70" /> Saved sessions are locked.</div>
             <button class="locked-unlock" @click="unlockError = ''; showUnlock = true">Unlock…</button>
           </div>
-          <div v-else-if="loading" class="p-3 text-xs text-neutral-500">Loading…</div>
-          <div v-else-if="error" class="m-2 border border-amber-400 bg-amber-50 p-2 text-xs text-amber-800">{{ error }}</div>
+          <div v-else-if="loading" class="side-note">Loading…</div>
+          <div v-else-if="error" class="side-err">{{ error }}</div>
           <template v-else>
             <div v-for="(row, i) in rows" :key="i">
               <div
@@ -704,6 +704,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .recent-item:hover { background: var(--k-d7e3f4); }
 .recent-ico { height: 16px; width: 16px; flex: none; }
 
+.side-note { padding: 12px; font-size: 12px; color: var(--k-6b7a8a); }
+.side-err { margin: 8px; padding: 8px; font-size: 12px; border: 1px solid var(--k-f0c38a); background: var(--k-fff4e5); color: var(--k-8a4b00); }
 /* locked sidebar note */
 .locked-note { padding: 10px; }
 .locked-head { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--k-7a6a2a); }

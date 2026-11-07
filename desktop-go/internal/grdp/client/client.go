@@ -103,6 +103,21 @@ func (c *Client) Close() {
 	c.ctl.Close()
 }
 
+// OnClipboard receives text copied on the remote desktop (RDP only).
+func (c *Client) OnClipboard(f func(string)) {
+	if r, ok := c.ctl.(*RdpClient); ok {
+		r.OnClipboard(f)
+	}
+}
+
+// SetClipboard offers local clipboard text to the remote desktop (RDP only).
+func (c *Client) SetClipboard(s string) error {
+	if r, ok := c.ctl.(*RdpClient); ok {
+		return r.SetClipboard(s)
+	}
+	return nil
+}
+
 func (c *Client) OnError(f func(e error)) {
 	c.ctl.On("error", f)
 }

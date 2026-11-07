@@ -76,6 +76,7 @@ func Run(version string, safeGPU bool) error {
 		return d.PromptForSingleSelection()
 	}
 	svc.quit = app.Quit
+	svc.clip = app.Clipboard
 	svc.openPath = func(title string) (string, error) {
 		d := app.Dialog.OpenFile().CanChooseFiles(true).SetTitle(title)
 		if home, err := os.UserHomeDir(); err == nil {

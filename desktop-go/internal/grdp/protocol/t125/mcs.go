@@ -272,6 +272,12 @@ func NewMCSClient(t core.Transport) *MCSClient {
 	return c
 }
 
+// AddVirtualChannel requests a static virtual channel (e.g. "cliprdr") in the client network data;
+// call before connecting.
+func (c *MCSClient) AddVirtualChannel(name string, options uint32) {
+	c.clientNetworkData.AddVirtualChannel(name, options)
+}
+
 func (c *MCSClient) SetClientDesktop(width, height uint16) {
 	c.clientCoreData.DesktopWidth = width
 	c.clientCoreData.DesktopHeight = height
