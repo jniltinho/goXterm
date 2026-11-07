@@ -16,7 +16,8 @@ import (
 // It lists sessions/folders from the Rust store and runs SSH terminals, streaming output to the SPA
 // as Wails events (migrate-gui-to-go-wails phases 4–5).
 type App struct {
-	emit func(name string, data any) // set by gui.Run; emits Wails events to the SPA
+	emit    func(name string, data any) // set by gui.Run; emits Wails events to the SPA
+	version string                      // set by gui.Run, shown in Settings → Diagnostics
 
 	mu     sync.Mutex
 	seq    int

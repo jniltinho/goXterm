@@ -24,7 +24,7 @@ func Run(version string, safeGPU bool) error {
 	if err != nil {
 		return err
 	}
-	svc := &App{}
+	svc := &App{version: version}
 	opts := application.Options{
 		Name:        "rustXterm",
 		Description: "rustXterm desktop",

@@ -44,6 +44,11 @@ export interface Settings {
 }
 export const GetSettings = () => call<Settings>("GetSettings");
 export const SaveSettings = (s: Settings) => call<void>("SaveSettings", s);
+export interface Diag {
+  version: string; dataDir: string; locked: boolean;
+  sessions: number; folders: number; sshTrust: number; certTrust: number;
+}
+export const Diagnostics = () => call<Diag>("Diagnostics");
 
 // Store unlock — Locked() is true until the master password is entered (or the keyring/env unlocks it).
 export const Locked = () => call<boolean>("Locked");

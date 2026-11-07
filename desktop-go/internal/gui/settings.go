@@ -27,8 +27,42 @@ func (a *App) GetSettings() (store.Settings, error) {
 	if s.RemoteMonitoringInterval == 0 {
 		s.RemoteMonitoringInterval = 2
 	}
+	if s.Theme == "" {
+		s.Theme = "system"
+	}
+	if s.UIScale == "" {
+		s.UIScale = "auto"
+	}
 	return s, nil
 }
 
 // SaveSettings writes the global settings back to config.toml.
 func (a *App) SaveSettings(s store.Settings) error { return store.SaveSettings(s) }
+
+// Diag is the read-only info shown in Settings → Diagnostics.
+type Diag struct {
+	Version   string `json:"version"`
+	DataDir   string `json:"dataDir"`
+	Locked    bool   `json:"locked"`
+	Sessions  int    `json:"sessions"`
+	Folders   int    `json:"folders"`
+	SSHTrust  int    `json:"sshTrust"`
+	CertTrust int    `json:"certTrust"`
+}
+
+// Diagnostics returns store counts and paths for the Diagnostics tab.
+func (a *App) Diagnostics() Diag {
+	d := Diag{Version: a.version, DataDir: store.DataDir(), Locked: a.Locked()}
+	if st, err := openStore(); err == nil {
+		defer st.Close()
+		if rows, err := st.Sessions(); err == nil {
+			d.Sessions = len(rows)
+		}
+		if rows, err := st.Folders(); err == nil {
+			d.Folders = len(rows)
+		}
+		d.SSHTrust, _ = st.SSHTrustCount()
+		d.CertTrust, _ = st.CertTrustCount()
+	}
+	return d
+}
