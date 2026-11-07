@@ -9,10 +9,12 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
+import { DeleteSession } from "./api";
 import TerminalView from "./Terminal.vue";
 import FileBrowser from "./FileBrowser.vue";
 import VncCanvas from "./VncView.vue";
 import RdpCanvas from "./RdpView.vue";
+import SessionEditor from "./SessionEditor.vue";
 
 const sessions = ref<Session[]>([]);
 const folders = ref<Folder[]>([]);
@@ -109,9 +111,22 @@ function openVnc(title: string, connect: () => Promise<VncView>) {
   tabs.value = [...tabs.value, { id, title, kind: "vnc", icon: "vnc", connect }];
   active.value = id;
 }
-// newSession / importSessions are the home actions; the editor and importer are the next core step.
-function newSession() { /* TODO: open the session editor (needs store writes, now available) */ }
+// Session editor (create/edit) and the tree context menu.
+const editorOpen = ref(false);
+const editorSessionId = ref<number | null>(null);
+const ctx = ref<{ x: number; y: number; session: Session } | null>(null);
+
+function newSession() { editorSessionId.value = null; editorOpen.value = true; }
 function importSessions() { /* TODO: MobaXterm .mxtsessions / rustXterm import */ }
+function editSession(s: Session) { editorSessionId.value = s.id; editorOpen.value = true; }
+async function onEditorSaved(_id: number) { editorOpen.value = false; await loadData(); }
+async function delSession(s: Session) {
+  if (!confirm(`Delete session "${s.name}"? This cannot be undone.`)) return;
+  try { await DeleteSession(s.id); if (selected.value?.id === s.id) selected.value = null; await loadData(); }
+  catch (e) { error.value = String(e); }
+}
+function openCtx(e: MouseEvent, s: Session) { selected.value = s; ctx.value = { x: e.clientX, y: e.clientY, session: s }; }
+function closeCtx() { ctx.value = null; }
 
 // openSession opens a session in the tab its protocol needs (double-click / Enter).
 function openSession(s: Session) {
@@ -239,9 +254,10 @@ const tabIcon = (t: Tab) => icon(t.icon);
                 class="treerow session"
                 :class="selected?.id === row.session.id ? 'sel' : ''"
                 :style="{ paddingLeft: 6 + row.depth * 14 + 'px' }"
-                :title="'Click to select, double-click to open a terminal'"
+                :title="'Click to select, double-click to open, right-click for actions'"
                 @click="selected = row.session"
                 @dblclick="openSession(row.session)"
+                @contextmenu.prevent="openCtx($event, row.session)"
               >
                 <img :src="sessionIcon(row.session)" class="ico" />
                 <span class="truncate">{{ row.session.name }}</span>
@@ -290,6 +306,26 @@ const tabIcon = (t: Tab) => icon(t.icon);
       <span>{{ sessions.length }} sessions</span><span>·</span><span>{{ tabs.length }} open</span>
       <span class="ml-auto">rustXterm · Go + Wails</span>
     </footer>
+
+    <!-- tree context menu -->
+    <div v-if="ctx" class="ctx-mask" @click="closeCtx" @contextmenu.prevent="closeCtx">
+      <div class="ctx" :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }" @click.stop>
+        <button class="ctx-item" @click="openSession(ctx!.session); closeCtx()"><img :src="icon('ssh')" class="ctx-ico" /> Connect</button>
+        <button class="ctx-item" @click="editSession(ctx!.session); closeCtx()"><img :src="icon('gear')" class="ctx-ico" /> Edit session</button>
+        <button class="ctx-item danger" @click="delSession(ctx!.session); closeCtx()"><span class="ctx-ico ctx-del">✕</span> Delete session</button>
+        <div class="ctx-sep"></div>
+        <button class="ctx-item" @click="newSession(); closeCtx()"><img :src="icon('session-new')" class="ctx-ico" /> New session</button>
+      </div>
+    </div>
+
+    <!-- session editor -->
+    <SessionEditor
+      v-if="editorOpen"
+      :sessionId="editorSessionId"
+      :folders="folders"
+      @saved="onEditorSaved"
+      @close="editorOpen = false"
+    />
   </div>
 </template>
 
@@ -354,5 +390,14 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .dbtn.primary:hover { background: linear-gradient(#55a0e0, #3277c0); }
 .dbtn.primary:disabled { opacity: .55; cursor: default; }
 .dbtn-ico { height: 14px; width: 14px; }
+/* tree context menu */
+.ctx-mask { position: fixed; inset: 0; z-index: 70; }
+.ctx { position: fixed; min-width: 180px; background: #f7f9fb; border: 1px solid #9aa7b4; box-shadow: 0 8px 24px rgba(0,0,0,.28); padding: 3px; }
+.ctx-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 10px; font-size: 13px; background: transparent; border: none; text-align: left; cursor: pointer; color: #1e1e1e; }
+.ctx-item:hover { background: #d7e3f4; }
+.ctx-item.danger:hover { background: #f4d7d7; }
+.ctx-ico { height: 16px; width: 16px; display: inline-flex; align-items: center; justify-content: center; }
+.ctx-del { color: #c0392b; font-weight: 700; }
+.ctx-sep { height: 1px; background: #d6dde4; margin: 3px 0; }
 .app :deep(*), .app { border-radius: 0 !important; }
 </style>

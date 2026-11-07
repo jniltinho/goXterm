@@ -34,6 +34,11 @@ export const Folders = () => call<Folder[]>("Folders");
 export const Locked = () => call<boolean>("Locked");
 export const Unlock = (password: string) => call<void>("Unlock", password);
 
+// Session editing — SaveSession takes the session JSON document (id 0 = new) and returns its id.
+export const SaveSession = (js: string) => call<number>("SaveSession", js);
+export const DeleteSession = (id: number) => call<void>("DeleteSession", id);
+export const SessionJSON = (id: number) => call<string>("SessionJSON", id);
+
 // Terminal (SSH) — output streams as Wails events "term:out:<tabId>" (base64) and "term:close:<tabId>".
 export const Connect = (id: number) => call<string>("Connect", id);
 export const QuickConnect = (host: string, port: number, user: string, password: string) =>
