@@ -66,7 +66,7 @@
 
 ## 11. Tunnels
 
-- [ ] 11.1 Implement the tunnels window (Local/Remote/Dynamic) with per-row start/stop and verify a local forward, a remote forward and a dynamic (SOCKS) proxy each carry traffic, and start-all/stop-all work
+- [x] 11.1 Implement the tunnels window (Local/Remote/Dynamic) with per-row start/stop and verify a local forward, a remote forward and a dynamic (SOCKS) proxy each carry traffic, and start-all/stop-all work — engine in `internal/tunnelconn` (pure Go over x/crypto/ssh: `client.Dial` for local/dynamic, `client.Listen` for remote, SOCKS5 ported from the Rust app), store CRUD on the `tunnels` table, GUI bindings with live `tunnel:state` events and a Tunnels window (list, add/edit, per-row start/stop, start-all/stop-all, loopback-by-default with explicit non-loopback confirmation). Verified live against the Docker lab: local forward and dynamic SOCKS5 both reach the remote sshd (SSH banner through the tunnel), remote forward round-trips bytes from the remote side to a local echo; SOCKS5 parsing and bind-address clamping unit-tested
 
 ## 12. Remote monitoring bar
 

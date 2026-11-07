@@ -28,6 +28,7 @@ type App struct {
 	trust  map[string]chan string      // reqId → pending SSH host-key trust decision
 	pass   map[string]chan passAns     // reqId → pending interactive password entry
 	mon    map[string]chan struct{}    // tabId → stop channel for its remote-monitoring loop
+	tun    map[string]*tunRun          // via+name → running port-forwarding tunnel
 }
 
 // termStream is any byte-stream terminal the SPA drives the same way (SSH/Telnet/Serial); each

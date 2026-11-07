@@ -132,6 +132,21 @@ export const VncDisconnect = (tabId: string) => call<void>("VncDisconnect", tabI
 // Clipboard: server text arrives as "vnc:clipboard:<tab>" events; send local text with VncSendClipboard.
 export const VncSendClipboard = (tabId: string, text: string) => call<void>("VncSendClipboard", tabId, text);
 
+// SSH tunnels (port forwarding) — Local/Remote/Dynamic(SOCKS5) over a saved SSH gateway session.
+// Live state streams as "tunnel:state" events ({via, name, state, error}); loopback unless confirmed.
+export interface Tunnel {
+  name: string; kind: string; via: number;
+  bind_addr: string; bind_port: number; dest_host: string; dest_port: number;
+  exposure_confirmed: boolean; autostart: boolean; running?: boolean;
+}
+export const Tunnels = () => call<Tunnel[]>("Tunnels");
+export const TunnelSave = (js: string) => call<void>("TunnelSave", js);
+export const TunnelDelete = (via: number, name: string) => call<void>("TunnelDelete", via, name);
+export const TunnelStart = (js: string) => call<void>("TunnelStart", js);
+export const TunnelStop = (via: number, name: string) => call<void>("TunnelStop", via, name);
+export const TunnelStartAll = () => call<void>("TunnelStartAll");
+export const TunnelStopAll = () => call<void>("TunnelStopAll");
+
 // RDP — the framebuffer is decoded in Go (vendored grdp) and streamed as per-rectangle PNGs over "rdp:frame:<tab>".
 export interface RdpView { tabId: string; width: number; height: number }
 export const RdpConnect = (id: number) => call<RdpView>("RdpConnect", id);

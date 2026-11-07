@@ -17,6 +17,7 @@ import VncCanvas from "./VncView.vue";
 import RdpCanvas from "./RdpView.vue";
 import SessionEditor from "./SessionEditor.vue";
 import SettingsDialog from "./SettingsDialog.vue";
+import TunnelsDialog from "./TunnelsDialog.vue";
 
 const sessions = ref<Session[]>([]);
 const folders = ref<Folder[]>([]);
@@ -119,6 +120,7 @@ function openVnc(title: string, connect: () => Promise<VncView>) {
 // Session editor (create/edit) and the tree context menu.
 const editorOpen = ref(false);
 const settingsOpen = ref(false);
+const tunnelsOpen = ref(false);
 const editorSessionId = ref<number | null>(null);
 const ctx = ref<{ x: number; y: number; session?: Session; folder?: Folder } | null>(null);
 
@@ -278,6 +280,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
       <img :src="icon('vnc')" class="tbico" title="Open VNC" @click="openVncFor(selected)" :class="selected ? '' : 'off'" />
       <img :src="icon('rdp')" class="tbico" title="Open RDP" @click="openRdpFor(selected)" :class="selected ? '' : 'off'" />
       <span class="mx-1 h-5 w-px bg-black/10"></span>
+      <img :src="icon('tunnel')" class="tbico" title="SSH tunnels (port forwarding)" @click="tunnelsOpen = true" />
+      <span class="mx-1 h-5 w-px bg-black/10"></span>
       <input class="qc" placeholder="Quick connect — user@host[:port]" disabled />
       <span class="ml-auto flex items-center gap-1">
         <img :src="icon('gear')" class="tbico" title="Settings" @click="settingsOpen = true" />
@@ -403,6 +407,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
     <!-- global settings -->
     <SettingsDialog v-if="settingsOpen" @saved="settingsOpen = false" @close="settingsOpen = false" />
+    <TunnelsDialog v-if="tunnelsOpen" :sessions="sessions" @close="tunnelsOpen = false" />
 
     <!-- SSH host-key trust (trust-on-first-use) -->
     <div v-if="trustReq" class="modal-backdrop" style="z-index: 65">
