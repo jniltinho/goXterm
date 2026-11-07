@@ -1,7 +1,7 @@
 base/
 docs/prints/
-target/
 dist/
+target/
 dist-rebuild/
 .env
 .env.*
@@ -10,3 +10,13 @@ dist-rebuild/
 lab/.generated/
 .vagrant/
 lab/vagrant/**/.vagrant/
+
+# Go app (built in Docker; see Makefile)
+.cache/
+frontend/node_modules/
+frontend/public/icons/
+frontend/public/fonts/
+# the embedded SPA is rebuilt by `make frontend` (a fresh checkout gets a placeholder from `make embed-stub`)
+internal/gui/dist/
+# archived Rust build output
+archive/rust/target/

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Screenshot sweep of the Go app on Linux (task 13.1): every screen in one skin, driven with xdotool
-# on Xvfb. Runs inside the QA container (toolchain image on the lab network, /w = desktop-go, a QA
+# on Xvfb. Runs inside the QA container (toolchain image on the lab network, /w = the repository, a QA
 # store with the lab sessions and the throwaway master password in $RXT_QA_PASS):
 #   docker exec -e RXT_QA_PASS=… rxt-qa sh /w/build/qa/prints.sh light|dark /w/.cache/prints/light
 # Coordinates are for the 1280×800 window at (60,50) on a 1400×900 screen and a 320 px sidebar.
