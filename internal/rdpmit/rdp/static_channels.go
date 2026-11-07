@@ -1,0 +1,37 @@
+// rustxterm addition (not in upstream go-rdp): caller-supplied TLS settings and static virtual
+// channels, so a client outside this package can run its own channel (e.g. cliprdr) and decide
+// certificate trust during the handshake.
+
+package rdp
+
+import (
+	"crypto/tls"
+	"fmt"
+)
+
+// SetTLSClientConfig makes StartTLS and NLA use cfg (cloned) instead of the built-in settings.
+// Set it before Connect.
+func (c *Client) SetTLSClientConfig(cfg *tls.Config) { c.tlsConfig = cfg }
+
+// AddStaticChannel requests the static virtual channel name with CHANNEL_DEF options; recv gets
+// every chunk the server sends on it (CHANNEL_PDU_HEADER included). Call it before Connect.
+func (c *Client) AddStaticChannel(name string, options uint32, recv func([]byte)) {
+	if c.channelOptions == nil {
+		c.channelOptions = map[string]uint32{}
+		c.channelHandlers = map[string]func([]byte){}
+	}
+	if _, ok := c.channelHandlers[name]; !ok {
+		c.channels = append(c.channels, name)
+	}
+	c.channelOptions[name] = options
+	c.channelHandlers[name] = recv
+}
+
+// SendStaticChannel writes one channel chunk (CHANNEL_PDU_HEADER included) on the named channel.
+func (c *Client) SendStaticChannel(name string, chunk []byte) error {
+	id, ok := c.channelIDMap[name]
+	if !ok || id == 0 {
+		return fmt.Errorf("static channel %q was not joined", name)
+	}
+	return c.mcsLayer.Send(c.userID, id, chunk)
+}

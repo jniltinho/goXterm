@@ -8,6 +8,8 @@ TestLabFTPSImplicit
 TestLabKeyAuth
 TestLabLocalForward
 TestLabRDP
+TestLabRDPNLAOffer
+TestLabRDPRejectedCertificate
 TestLabRemoteForward
 TestLabSFTP
 TestLabVNC

@@ -16,14 +16,15 @@ import (
 const mod = "rustxterm-go/"
 
 // allowed lists, per package (path under the module), the module packages it may import. Packages
-// under internal/grdp import within grdp freely. Anything not listed here is refused.
+// under internal/rdpmit (the vendored go-rdp) import within rdpmit only. Anything not listed here is
+// refused.
 var allowed = map[string][]string{
 	"main":                {"cmd"},
 	"cmd":                 {"internal/control", "internal/gui", "internal/store"},
 	"internal/gui":        {"internal/*"}, // the GUI composes the core
 	"internal/ftpconn":    {"internal/fsentry"},
 	"internal/sftpconn":   {"internal/fsentry", "internal/sshconn"},
-	"internal/rdpconn":    {"internal/grdp/*"},
+	"internal/rdpconn":    {"internal/rdpmit/*"},
 	"internal/store":      {"internal/secret"},
 	"internal/control":    {},
 	"internal/fsentry":    {},
@@ -91,9 +92,9 @@ func TestLayers(t *testing.T) {
 	}
 	sort.Strings(pkgs)
 	for _, pkg := range pkgs {
-		grdp := strings.HasPrefix(pkg, "internal/grdp/")
+		vendored := strings.HasPrefix(pkg, "internal/rdpmit/")
 		rules, known := allowed[pkg]
-		if !known && !grdp {
+		if !known && !vendored {
 			t.Errorf("%s: new package — add its allowed imports to archtest (keep the core independent of the GUI)", pkg)
 			continue
 		}
@@ -107,7 +108,7 @@ func TestLayers(t *testing.T) {
 				continue
 			}
 			target := strings.TrimPrefix(im, mod)
-			ok := grdp && strings.HasPrefix(target, "internal/grdp/")
+			ok := vendored && strings.HasPrefix(target, "internal/rdpmit/")
 			for _, r := range rules {
 				ok = ok || match(r, target)
 			}

@@ -18,9 +18,10 @@ type RdpView struct {
 }
 
 // RdpConnect opens an RDP session for a saved session, honoring its stored RDP options (domain,
-// allow_legacy_tls, allow_standard_security). Security mapping for pure Go: standard security → Std;
-// legacy TLS (old 2008-era servers) → SSL, because NLA over TLS 1.0 is unreachable on Go's crypto/tls
-// (see rdpconn.Config.LegacyTLS); otherwise NLA over TLS 1.2+.
+// allow_legacy_tls, allow_standard_security). Security mapping for pure Go: standard security → Std
+// (which falls back to the CredSSP-or-TLS offer: standard RDP security itself is not implemented, see
+// rdpconn.Std); legacy TLS (old 2008-era servers) → SSL, because NLA over TLS 1.0 is unreachable on
+// Go's crypto/tls (see rdpconn.Config.LegacyTLS); otherwise NLA over TLS 1.2+.
 func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	m, password, err := sessionRawByID(sessionID)
 	if err != nil {
@@ -43,7 +44,7 @@ func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	}
 	user := asString(m["user"])
 	if d := asString(rdp["domain"]); d != "" && !strings.ContainsAny(user, `\/@`) {
-		user = d + `\` + user // grdp splits DOMAIN\user; UPN (user@domain) is passed as-is
+		user = d + `\` + user // NLA splits DOMAIN\user and user@domain
 	}
 	w, h := rdpSize(rdp["resolution"], tabW, tabH)
 	// No saved password: ask (with "Save password"). It travels only inside the TLS channel, after the
