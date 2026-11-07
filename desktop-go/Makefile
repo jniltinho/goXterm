@@ -11,7 +11,7 @@ DOCKER     := docker run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp
 GO_ENV     := -e GOFLAGS=-buildvcs=false -e GOCACHE=/src/.cache/go-build -e GOMODCACHE=/src/.cache/mod -e CGO_ENABLED=1
 RUN         = $(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)
 
-.PHONY: embed-stub prints image tidy check layers test frontend build appimage windows macos dist-all clean
+.PHONY: bench embed-stub prints image tidy check layers test frontend build appimage windows macos dist-all clean
 
 image:            ## build toolchain image (Go + GTK/WebKitGTK + SQLCipher)
 	docker build -q -t $(IMAGE) -f build/linux.Dockerfile build
@@ -84,6 +84,14 @@ prints: build    ## screenshots of every screen in Light and Dark → ../docs/pr
 	docker start rxt-qa >/dev/null
 	for s in light dark; do docker exec -e RXT_QA_PASS rxt-qa sh /w/build/qa/prints.sh $$s /w/.cache/prints/$$s || exit 1; \
 	  mkdir -p ../docs/prints/go-linux/$$s && cp .cache/prints/$$s/*.png ../docs/prints/go-linux/$$s/; done
+
+# Benchmark (13.2): the Go app against a Rust release binary (RUST_BIN, e.g. the v0.8.0 Linux asset)
+# in one clean container on Xvfb → .cache/bench/results.md. Needs `make build`.
+RUST_BIN ?= .cache/bench/rustxterm-0.8.0-x86_64
+bench: build      ## cold start, terminal throughput and input latency vs the Rust app
+	docker build -q -t $(IMAGE)-bench -f build/bench/Dockerfile build/bench
+	$(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)-bench sh build/bench/run.sh \
+	  /src/dist/$(BIN)-$(VERSION)-linux-amd64 /src/$(RUST_BIN) /src/.cache/bench/out
 
 clean:
 	rm -rf dist .cache

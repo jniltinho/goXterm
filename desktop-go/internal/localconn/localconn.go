@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -42,7 +44,29 @@ func defaultShell() string {
 		}
 		return "powershell.exe"
 	}
+	if sh := passwdShell("/etc/passwd", os.Getuid()); sh != "" {
+		return sh // the login shell, as the Rust app (a GUI start often has no $SHELL)
+	}
 	return "/bin/sh"
+}
+
+// passwdShell is the login shell of uid in a passwd file, when it exists and is executable.
+func passwdShell(path string, uid int) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	want := strconv.Itoa(uid)
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Split(line, ":") // name:pw:uid:gid:gecos:home:shell
+		if len(f) == 7 && f[2] == want {
+			if fi, err := os.Stat(f[6]); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+				return f[6]
+			}
+			return ""
+		}
+	}
+	return ""
 }
 
 // Start launches the shell in a PTY and streams its output to onData until it exits, then calls
