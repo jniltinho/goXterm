@@ -39,7 +39,7 @@
 
 ## 5. SSH + terminal
 
-- [ ] 5.1 Implement SSH (`x/crypto/ssh`) with host-key verification matching the Rust prompt behavior and verify connect, known-host accept, and unknown/changed-key prompt in the lab
+- [x] 5.1 Implement SSH (`x/crypto/ssh`) with host-key verification matching the Rust prompt behavior and verify connect, known-host accept, and unknown/changed-key prompt in the lab — TOFU host-key trust (known_hosts + ssh_trust, "Unknown host key" dialog accept-once/accept-and-save), plus password/key/agent/keyboard-interactive auth and an interactive password prompt; verified against the lab and real servers
 - [x] 5.2 Wire the xterm.js terminal to the SSH channel/PTY and verify input/output, resize and Ctrl+C (0x03) reach the remote without firing app shortcuts
 
 ## 6. SFTP + file transfer
@@ -57,12 +57,12 @@
 
 ## 9. RDP
 
-- [ ] 9.1 Implement the RDP client chosen in spike 0.2 decoding to a `<canvas>` and verify a `dockur/windows` session renders and accepts input with authentication (incl. NLA), certificate verification, clipboard, resize and connecting/error overlays at parity; the cutover (13.5) stays blocked until this is met
+- [~] 9.1 Implement the RDP client chosen in spike 0.2 decoding to a `<canvas>` and verify a `dockur/windows` session renders and accepts input with authentication (incl. NLA), certificate verification, clipboard, resize and connecting/error overlays at parity; the cutover (13.5) stays blocked until this is met — DONE except clipboard: renders to canvas with input; NLA verified on Windows Server 2022 (dockur) and SSL on real 2008 R2 (both username forms); TLS-cert TOFU trust. REMAINING: RDP clipboard needs a CLIPRDR virtual channel (the vendored grdp negotiates the capability but has no CLIPRDR implementation — advertise a "cliprdr" channel in GCC, demux it in MCS, and implement the CLIPRDR format-list/format-data state machine); NLA over TLS 1.0 for 2008 is not reachable in pure Go (crypto/tls CBC split), so those servers use the SSL path (see design.md)
 
 ## 10. Serial, Telnet, local shell
 
-- [ ] 10.1 Implement local shell and Telnet and verify each opens a working terminal tab against the lab
-- [ ] 10.2 Implement Serial (`go.bug.st/serial`) with the fake/loopback device and verify open/read/write in the lab
+- [~] 10.1 Implement local shell and Telnet and verify each opens a working terminal tab against the lab — Telnet done (stdlib IAC negotiation, shared terminal, negotiation unit test); local shell (PTY "+" tab) is the remaining piece
+- [x] 10.2 Implement Serial (`go.bug.st/serial`) with the fake/loopback device and verify open/read/write in the lab — config read from the session, mode-mapping unit test, and a pty loopback test exchanging bytes both ways on a real device node
 
 ## 11. Tunnels
 
@@ -70,7 +70,7 @@
 
 ## 12. Remote monitoring bar
 
-- [ ] 12.1 Implement the remote-monitoring bar (host, CPU+sparkline, memory, up/down, uptime, per-disk, scroll, close) with warning/danger thresholds and verify it appears on a monitored SSH tab and closes per-tab in light/dark/system
+- [~] 12.1 Implement the remote-monitoring bar (host, CPU+sparkline, memory, up/down, uptime, per-disk, scroll, close) with warning/danger thresholds and verify it appears on a monitored SSH tab and closes per-tab in light/dark/system — bar done and verified live against the lab sshd (host, CPU%, memory, net up/down, uptime, per-disk over an extra SSH exec channel, deltas computed in Go, parser unit-tested); REMAINING: CPU sparkline and warning/danger threshold colouring
 
 ## 13. Cross-platform verification, benchmark and parity gate
 
