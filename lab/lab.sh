@@ -17,8 +17,6 @@ up)
     ;;
 down) compose down -v --remove-orphans ;;
 status) compose ps ;;
-test)
-    RXT_DOCKER_NET=host CARGO_TARGET_DIR=target/lab exec "$root/scripts/cargo-docker.sh" cargo xtask lab test
-    ;;
+test) exec make -C "$root" lab-test ;;
 *) echo "usage: lab/lab.sh up|down|status|test" >&2; exit 2 ;;
 esac

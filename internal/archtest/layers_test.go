@@ -58,7 +58,8 @@ func TestLayers(t *testing.T) {
 			return err
 		}
 		name := d.Name()
-		if d.IsDir() && (name == ".cache" || name == "frontend" || name == "dist" || name == "build" || strings.HasPrefix(name, ".") && path != root) {
+		if d.IsDir() && (name == ".cache" || name == "frontend" || name == "dist" || name == "build" ||
+			name == "archive" || name == "target" || name == "assets" || name == "docs" || name == "openspec" || name == "lab" || strings.HasPrefix(name, ".") && path != root) {
 			return filepath.SkipDir
 		}
 		if d.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
