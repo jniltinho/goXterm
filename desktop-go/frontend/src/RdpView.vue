@@ -4,7 +4,7 @@ import { Events } from "@wailsio/runtime";
 import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, type RdpView } from "./api";
 
 const props = defineProps<{ connect: (tabW: number, tabH: number) => Promise<RdpView> }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; state: ["connecting" | "connected" | "stopped"] }>();
 
 const root = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -64,6 +64,7 @@ function unsubscribe() {
 }
 
 async function start() {
+  emit("state", "connecting");
   stopped.value = null;
   status.value = "Connecting…";
   let view: RdpView;
@@ -71,6 +72,7 @@ async function start() {
     view = await props.connect(Math.floor(root.value?.clientWidth ?? 0), Math.floor(root.value?.clientHeight ?? 0));
   } catch (e) {
     status.value = "";
+    emit("state", "stopped");
     stopped.value = { reason: String(e) };
     await nextTick();
     overlay.value?.focus();
@@ -90,9 +92,10 @@ async function start() {
     img.src = "data:image/png;base64," + d.png;
     status.value = "";
   });
-  offReady = Events.On("rdp:ready:" + tabId, () => (status.value = ""));
+  offReady = Events.On("rdp:ready:" + tabId, () => { status.value = ""; emit("state", "connected"); });
   offClose = Events.On("rdp:close:" + tabId, async (ev: { data: unknown }) => {
     status.value = "";
+    emit("state", "stopped");
     stopped.value = { reason: String(ev.data ?? "") };
     await nextTick();
     overlay.value?.focus();

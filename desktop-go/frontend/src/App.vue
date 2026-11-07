@@ -144,18 +144,33 @@ async function doUnlock() {
 
 // openTerm opens a terminal tab (SSH, Telnet or Serial — all stream term:out/term:close). monitor
 // enables the remote-monitoring bar (SSH only).
-function openTerm(title: string, icon: string, connect: () => Promise<string>, monitor = false) {
+// Per-tab connection state (reported by each view) and the session URL, for the tab's status dot and
+// the status bar ("ssh://root@host:22 — Connected", Rust parity).
+type TabState = "connecting" | "connected" | "stopped";
+const tabState = ref<Record<string, TabState>>({});
+const tabUrl = ref<Record<string, string>>({});
+const STATE_LABEL: Record<TabState, string> = { connecting: "Connecting", connected: "Connected", stopped: "Disconnected" };
+function sessionUrl(s: Session) {
+  return `${s.protocol}://${s.user ? s.user + "@" : ""}${s.host}${s.port ? ":" + s.port : ""}`;
+}
+function newTab(url: string) {
   const id = "tab" + ++seq;
+  tabState.value[id] = "connecting";
+  if (url) tabUrl.value[id] = url;
+  return id;
+}
+function openTerm(title: string, icon: string, connect: () => Promise<string>, monitor = false, url = "") {
+  const id = newTab(url);
   tabs.value = [...tabs.value, { id, title, kind: "ssh", icon, connect, monitor }];
   active.value = id;
 }
-function openFiles(title: string, icon: string, connect: () => Promise<RemoteSession>) {
-  const id = "tab" + ++seq;
+function openFiles(title: string, icon: string, connect: () => Promise<RemoteSession>, url = "") {
+  const id = newTab(url);
   tabs.value = [...tabs.value, { id, title, kind: "files", icon, connect }];
   active.value = id;
 }
-function openVnc(title: string, connect: () => Promise<VncView>) {
-  const id = "tab" + ++seq;
+function openVnc(title: string, connect: () => Promise<VncView>, url = "") {
+  const id = newTab(url);
   tabs.value = [...tabs.value, { id, title, kind: "vnc", icon: "vnc", connect }];
   active.value = id;
 }
@@ -230,25 +245,27 @@ function closeCtx() { ctx.value = null; }
 function openSession(s: Session) {
   pushRecent(s.id);
   switch (s.protocol) {
-    case "telnet": openTerm(s.name, "terminal", () => TelnetConnect(s.id)); break;
-    case "serial": openTerm(s.name, "plug", () => SerialConnect(s.id)); break;
+    case "telnet": openTerm(s.name, "terminal", () => TelnetConnect(s.id), false, sessionUrl(s)); break;
+    case "serial": openTerm(s.name, "plug", () => SerialConnect(s.id), false, "serial://" + s.host); break;
     case "rdp": openRdpFor(s); break;
     case "vnc": openVncFor(s); break;
     case "sftp": openSftpFor(s); break;
     case "ftp": case "ftps": openFtpFor(s); break;
-    default: openTerm(s.name, "ssh", () => Connect(s.id), true); break; // ssh
+    default: openTerm(s.name, "ssh", () => Connect(s.id), true, sessionUrl(s)); break; // ssh
   }
 }
-function openSftpFor(s: Session | null) { if (s) openFiles("SFTP: " + s.name, "sftp", () => SftpConnect(s.id)); }
-function openFtpFor(s: Session | null) { if (s) openFiles("FTP: " + s.name, "ftp", () => FtpConnect(s.id, "explicit")); }
-function openVncFor(s: Session | null) { if (s) openVnc("VNC: " + s.name, () => VncConnect(s.id)); }
-function openRdp(title: string, connect: (w: number, h: number) => Promise<RdpView>) {
-  const id = "tab" + ++seq;
+function openSftpFor(s: Session | null) { if (s) openFiles("SFTP: " + s.name, "sftp", () => SftpConnect(s.id), sessionUrl({ ...s, protocol: "sftp" })); }
+function openFtpFor(s: Session | null) { if (s) openFiles("FTP: " + s.name, "ftp", () => FtpConnect(s.id, "explicit"), sessionUrl(s)); }
+function openVncFor(s: Session | null) { if (s) openVnc("VNC: " + s.name, () => VncConnect(s.id), sessionUrl(s)); }
+function openRdp(title: string, connect: (w: number, h: number) => Promise<RdpView>, url = "") {
+  const id = newTab(url);
   tabs.value = [...tabs.value, { id, title, kind: "rdp", icon: "rdp", connect }];
   active.value = id;
 }
-function openRdpFor(s: Session | null) { if (s) openRdp("RDP: " + s.name, (w, h) => RdpConnect(s.id, w, h)); }
+function openRdpFor(s: Session | null) { if (s) openRdp("RDP: " + s.name, (w, h) => RdpConnect(s.id, w, h), sessionUrl(s)); }
 function closeTab(id: string) {
+  delete tabState.value[id];
+  delete tabUrl.value[id];
   const i = tabs.value.findIndex((t) => t.id === id);
   tabs.value = tabs.value.filter((t) => t.id !== id);
   if (active.value === id) active.value = tabs.value[Math.max(0, i - 1)]?.id ?? "";
@@ -262,7 +279,7 @@ type Row =
 const collapsed = ref<Set<number>>(new Set());
 function toggleFolder(id: number) {
   const next = new Set(collapsed.value);
-  next.has(id) ? next.delete(id) : next.add(id);
+  if (!next.delete(id)) next.add(id);
   collapsed.value = next;
 }
 
@@ -331,7 +348,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
         <button class="menu-t" :class="menu === 'terminal' ? 'on' : ''" @click.stop="toggleMenu('terminal')">Terminal</button>
         <div v-if="menu === 'terminal'" class="menu-d">
           <button class="menu-i" @click="runMenu(() => newSession())"><img :src="icon('session-new')" class="menu-ico" /> New session</button>
-          <button class="menu-i" @click="runMenu(() => openTerm('Local terminal', 'terminal', () => LocalShell()))"><img :src="icon('terminal')" class="menu-ico" /> Local terminal</button>
+          <button class="menu-i" @click="runMenu(() => openTerm('Local terminal', 'terminal', () => LocalShell(), false, 'local://'))"><img :src="icon('terminal')" class="menu-ico" /> Local terminal</button>
           <div class="menu-sep"></div>
           <button class="menu-i" @click="runMenu(() => Quit())"><img :src="icon('exit')" class="menu-ico" /> Exit</button>
         </div>
@@ -371,8 +388,8 @@ const tabIcon = (t: Tab) => icon(t.icon);
     </nav>
     <header class="toolbar flex items-stretch gap-0.5 px-1.5 py-1" :class="ui.toolbarCaptions ? 'cap' : ''">
       <button class="tbtn" title="New session" @click="newSession()"><img :src="icon('session-new')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">New</span></button>
-      <button class="tbtn" title="Local terminal" @click="openTerm('Local terminal', 'terminal', () => LocalShell())"><img :src="icon('terminal')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Local</span></button>
-      <button class="tbtn" :class="selected ? '' : 'off'" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true)"><img :src="icon('ssh')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SSH</span></button>
+      <button class="tbtn" title="Local terminal" @click="openTerm('Local terminal', 'terminal', () => LocalShell(), false, 'local://')"><img :src="icon('terminal')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">Local</span></button>
+      <button class="tbtn" :class="selected ? '' : 'off'" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id), true, sessionUrl(selected))"><img :src="icon('ssh')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SSH</span></button>
       <button class="tbtn" :class="selected ? '' : 'off'" title="Open SFTP file browser" @click="openSftpFor(selected)"><img :src="icon('sftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">SFTP</span></button>
       <button class="tbtn" :class="selected ? '' : 'off'" title="Open FTP/FTPS file browser" @click="openFtpFor(selected)"><img :src="icon('ftp')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">FTP</span></button>
       <button class="tbtn" :class="selected ? '' : 'off'" title="Open VNC" @click="openVncFor(selected)"><img :src="icon('vnc')" class="tbico" /><span v-if="ui.toolbarCaptions" class="tbcap">VNC</span></button>
@@ -440,16 +457,17 @@ const tabIcon = (t: Tab) => icon(t.icon);
         <div v-if="tabs.length" class="tabbar flex items-stretch">
           <button v-for="(t, i) in tabs" :key="t.id" class="tab flex items-center gap-1.5" :class="t.id === active ? 'tab-active' : ''" @click="active = t.id">
             <img :src="tabIcon(t)" class="h-3.5 w-3.5" />
-            <span class="max-w-[160px] truncate"><span v-if="ui.showTabNumbers" class="tab-n">{{ i + 1 }}</span>{{ t.title }}</span>
+            <span class="tab-dot" :class="tabState[t.id] ?? 'connecting'" :title="STATE_LABEL[tabState[t.id] ?? 'connecting']"></span>
+            <span class="max-w-[180px] truncate"><template v-if="ui.showTabNumbers">{{ i + 1 }}. </template>{{ t.title }}</span>
             <span v-if="ui.showCloseButtons" class="tab-x" @click.stop="closeTab(t.id)">×</span>
           </button>
         </div>
         <div class="relative min-h-0 flex-1">
           <template v-for="t in tabs" :key="t.id">
-            <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" :monitor="t.monitor" @close="closeTab(t.id)" class="absolute inset-0 p-1" />
-            <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
-            <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
-            <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" class="absolute inset-0" />
+            <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" :monitor="t.monitor" @close="closeTab(t.id)" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0 p-1" />
+            <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
+            <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
+            <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
           </template>
           <div v-if="!tabs.length" class="home">
             <div class="home-brand"><img :src="icon('logo')" class="home-logo" @error="($event.target as HTMLImageElement).src = icon('session')" /><span>rustXterm</span></div>
@@ -471,8 +489,11 @@ const tabIcon = (t: Tab) => icon(t.icon);
     </div>
 
     <footer class="statusbar flex items-center gap-3 px-2">
-      <span>{{ sessions.length }} sessions</span><span>·</span><span>{{ tabs.length }} open</span>
-      <span class="ml-auto">rustXterm · Go + Wails</span>
+      <span>Ready</span>
+      <span class="ml-auto">
+        <template v-if="active && tabUrl[active]">{{ tabUrl[active] }} — {{ STATE_LABEL[tabState[active] ?? "connecting"] }}</template>
+      </span>
+      <span class="sb-tabs">{{ tabs.length }} tab(s)</span>
     </footer>
 
     <!-- tree context menu -->
@@ -583,9 +604,12 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tabbar { background: #1b2129; border-bottom: 1px solid #2a3340; }
 .tab { padding: 4px 8px; font-size: 12px; color: #9fb0c0; background: #222a33; border-right: 1px solid #2a3340; max-width: 220px; }
 .tab-active { color: #e6edf3; background: #0b0e11; }
-.tab-n { display: inline-block; margin-right: 5px; padding: 0 4px; font-size: 10px; color: #0b0e11; background: #6aa0da; border-radius: 2px; }
 .tab-x { margin-left: 2px; padding: 0 4px; color: #7f8ea0; }
 .tab-x:hover { color: #fff; background: #c0392b; }
+.tab-dot { width: 8px; height: 8px; border-radius: 50% !important; flex: none; background: #d4a72c; }
+.tab-dot.connected { background: #3fb950; }
+.tab-dot.stopped { background: #e05561; }
+.sb-tabs { min-width: 56px; text-align: right; }
 .statusbar { height: 22px; font-size: 11px; color: #5a6b7b; background: #e7ecf1; border-top: 1px solid #c9d1d9; }
 /* home (shown behind the unlock dialog and whenever no tab is open) */
 .home { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: #eef1f4; color: #2b3a4a; }

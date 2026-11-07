@@ -6,6 +6,7 @@ import {
 } from "./api";
 
 const props = defineProps<{ connect: () => Promise<RemoteSession> }>();
+const emit = defineEmits<{ state: ["connecting" | "connected" | "stopped"] }>();
 
 const localPath = ref("/");
 const localEntries = ref<Entry[]>([]);
@@ -45,7 +46,8 @@ onMounted(async () => {
     tabId = s.tabId;
     remotePath.value = s.home || ".";
     await loadRemote();
-  } catch (e) { remoteErr.value = String(e); }
+    emit("state", "connected");
+  } catch (e) { remoteErr.value = String(e); emit("state", "stopped"); }
 });
 onBeforeUnmount(() => { if (tabId) void RemoteDisconnect(tabId); });
 

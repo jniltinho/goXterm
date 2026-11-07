@@ -62,7 +62,10 @@ async function del(t: Tunnel) {
   try { await TunnelDelete(t.via, t.name); await refresh(); } catch (e) { err.value = String(e); }
 }
 async function toggle(t: Tunnel) {
-  try { t.running ? await TunnelStop(t.via, t.name) : await TunnelStart(JSON.stringify(t)); }
+  try {
+    if (t.running) await TunnelStop(t.via, t.name);
+    else await TunnelStart(JSON.stringify(t));
+  }
   catch (e) { err.value = String(e); }
   await refresh();
 }

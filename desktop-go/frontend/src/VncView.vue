@@ -4,6 +4,7 @@ import { Events } from "@wailsio/runtime";
 import { VncStart, VncPointer, VncKey, VncDisconnect, VncSendClipboard, type VncView } from "./api";
 
 const props = defineProps<{ connect: () => Promise<VncView> }>();
+const emit = defineEmits<{ state: ["connecting" | "connected" | "stopped"] }>();
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 const status = ref("Connecting…");
@@ -47,9 +48,11 @@ onMounted(async () => {
     view = await props.connect();
   } catch (e) {
     status.value = String(e);
+    emit("state", "stopped");
     return;
   }
   tabId = view.tabId;
+  emit("state", "connected");
   const c = canvas.value!;
   c.width = view.width || 1024;
   c.height = view.height || 768;
@@ -63,6 +66,7 @@ onMounted(async () => {
   });
   offClose = Events.On("vnc:close:" + tabId, (ev: { data: unknown }) => {
     status.value = "[disconnected] " + String(ev.data ?? "");
+    emit("state", "stopped");
   });
   offClip = Events.On("vnc:clipboard:" + tabId, (ev: { data: unknown }) => {
     try { void navigator.clipboard.writeText(String(ev.data ?? "")); } catch { /* no permission */ }

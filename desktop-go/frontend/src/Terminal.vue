@@ -12,7 +12,7 @@ import { renderBanner } from "./banner";
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
 // monitor shows the remote-monitoring bar (SSH only).
 const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; state: ["connecting" | "connected" | "stopped"] }>();
 
 const metrics = vref<Metrics | null>(null);
 const cpuHistory = vref<number[]>([]);
@@ -52,6 +52,7 @@ const whenAttached = (f: () => void) => (attached ? f() : pending.push(f));
 // answers to (Ctrl+D also closes, as an alias of Return).
 function showStopped(why: string) {
   stopped = true;
+  emit("state", "stopped");
   const red = "\x1b[31m", muted = "\x1b[90m", key = "\x1b[35m", rst = "\x1b[0m";
   const rule = red + "-".repeat(Math.max(1, (term.cols || 60) - 1)) + rst;
   const nl = term.buffer.active.cursorX > 0 ? "\r\n" : "";
@@ -130,6 +131,7 @@ async function attach() {
   if (a?.banner) term.write(renderBanner(a.banner, term.cols, dark));
   if (a?.early) term.write(b64(a.early));
   attached = true;
+  emit("state", "connected");
   const queued = pending;
   pending = [];
   for (const f of queued) f();
@@ -156,10 +158,12 @@ async function restart() {
   stopped = false;
   term.reset();
   term.writeln("\x1b[90mReconnecting…\x1b[0m");
+  emit("state", "connecting");
   try {
     tabId = await props.connect();
   } catch (e) {
     term.writeln("\r\n\x1b[31m" + String(e) + "\x1b[0m");
+    emit("state", "stopped");
     stopped = true;
     return;
   }
@@ -227,6 +231,7 @@ onMounted(async () => {
     tabId = await props.connect();
   } catch (e) {
     term.writeln("\r\n\x1b[31m" + String(e) + "\x1b[0m");
+    emit("state", "stopped");
     return;
   }
   wireEvents();
