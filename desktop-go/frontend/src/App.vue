@@ -23,6 +23,32 @@ const sidebarCollapsed = ref(false);
 function toggleMenu(name: string) { menu.value = menu.value === name ? "" : name; }
 function runMenu(fn: () => void) { menu.value = ""; fn(); }
 function aboutApp() { alert("rustXterm — native terminal & remote session manager (Go + Wails)."); }
+
+// Global keyboard shortcuts. Chord combos (Ctrl+Shift+…, Ctrl+Tab) work anywhere; single keys
+// (Enter/F2/Delete) only when focus is not in a text field or the terminal, so terminal input is never
+// hijacked (Ctrl+C etc. reach the remote).
+function inEditable() {
+  const el = document.activeElement as HTMLElement | null;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+}
+function cycleTab(dir: number) {
+  if (!tabs.value.length) return;
+  const i = tabs.value.findIndex((t) => t.id === active.value);
+  active.value = tabs.value[(i + dir + tabs.value.length) % tabs.value.length].id;
+}
+function onKey(e: KeyboardEvent) {
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key.toLowerCase();
+  if (mod && e.shiftKey && k === "n") { e.preventDefault(); newSession(); return; }
+  if (mod && e.key === "Tab") { e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); return; }
+  if (mod && e.shiftKey && k === "w") { e.preventDefault(); if (active.value) closeTab(active.value); return; }
+  if (mod && e.key === ",") { e.preventDefault(); settingsOpen.value = true; return; }
+  if (inEditable()) return;
+  if (!selected.value) return;
+  if (e.key === "Enter") { e.preventDefault(); openSession(selected.value); }
+  else if (e.key === "F2") { e.preventDefault(); renameSession(selected.value); }
+  else if (e.key === "Delete") { e.preventDefault(); delSession(selected.value); }
+}
 import { Events } from "@wailsio/runtime";
 import TerminalView from "./Terminal.vue";
 import FileBrowser from "./FileBrowser.vue";
@@ -92,6 +118,7 @@ onMounted(async () => {
   Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passQ.value = [...passQ.value, ev.data as PassReq]; });
   await loadUI();
   window.addEventListener("click", (e) => { if (!(e.target as HTMLElement).closest(".menubar")) menu.value = ""; });
+  window.addEventListener("keydown", onKey);
   try { locked.value = await Locked(); } catch { locked.value = true; }
   if (locked.value) { loading.value = false; return; }
   await loadData();

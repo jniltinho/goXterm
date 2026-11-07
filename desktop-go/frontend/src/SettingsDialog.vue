@@ -8,10 +8,15 @@ const tab = ref<"general" | "terminal" | "ssh" | "display" | "shortcuts" | "secu
 
 // Keyboard shortcuts / gestures reference (read-only for now).
 const shortcuts = [
-  ["Double-click a session", "Open in its protocol"],
+  ["Ctrl+Shift+N", "New session"],
+  ["Ctrl+Tab / Ctrl+Shift+Tab", "Next / previous tab"],
+  ["Ctrl+Shift+W", "Close the active tab"],
+  ["Ctrl+,", "Open Settings"],
   ["Enter (session selected)", "Open the selected session"],
+  ["F2 (session selected)", "Rename the selected session"],
+  ["Delete (session selected)", "Delete the selected session"],
+  ["Double-click a session", "Open in its protocol"],
   ["Right-click a session/folder", "Context menu (connect, edit, rename, delete)"],
-  ["Right-click toolbar New", "Create a session"],
   ["Ctrl+Shift+C / Ctrl+Shift+V", "Copy / paste in the terminal"],
   ["In a stopped tab: Return / R", "Close the tab / restart the session"],
 ];
