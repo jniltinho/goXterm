@@ -59,9 +59,16 @@ func (s *Store) SaveSession(js string) (int64, error) {
 	}
 	name, _ := m["name"].(string)
 	host, _ := m["host"].(string)
-	var folder any // NULL unless set
-	if f, ok := m["folder"]; ok && f != nil {
-		folder = jsonInt(f)
+	var folder any // NULL (the root) unless a real folder id is set; 0 or a non-number is the root
+	if f := jsonInt(m["folder"]); f > 0 {
+		folder = f
+	} else if m["folder"] != nil { // keep the stored document readable by Rust (folder: Option<FolderId>)
+		m["folder"] = nil
+		b, err := json.Marshal(m)
+		if err != nil {
+			return 0, err
+		}
+		js = string(b)
 	}
 	id := jsonInt(m["id"])
 

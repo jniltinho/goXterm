@@ -51,7 +51,18 @@ func Start(shell string, cols, rows int, onData func([]byte), onClose func(error
 	if shell == "" {
 		shell = defaultShell()
 	}
-	return StartCommand(shell, nil, "", cols, rows, onData, onClose)
+	return StartCommand(shell, nil, StartDir(), cols, rows, onData, onClose)
+}
+
+// StartDir is the local terminal's first folder: the user's home (HOME, USERPROFILE on Windows) as
+// in Rust, not the app's working directory ("/" when started from Finder or a launcher).
+func StartDir() string {
+	if h, err := os.UserHomeDir(); err == nil {
+		if fi, err := os.Stat(h); err == nil && fi.IsDir() {
+			return h
+		}
+	}
+	return ""
 }
 
 // StartCommand runs path with args (in dir when set) on a PTY, like Start.

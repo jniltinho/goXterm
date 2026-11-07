@@ -1,0 +1,45 @@
+/* Light skin — the Rust app's light tokens (crates/core/src/theme.rs): Windows 10 classic. The default
+   (also before Settings load), so it sits on :root. */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --surface: #ffffff;
+  --panel: #f0f0f0;
+  --toolbar: #ffffff;
+  --input: #ffffff;
+  --text: #000000;
+  --text-muted: #5a5a5a;
+  --text-disabled: #a0a0a0;
+  --accent: #0078d4;
+  --border: #adadad;
+  --border-subtle: #dadada;
+  --selection: #0078d4;
+  --selection-text: #ffffff;
+  --hover: #e5f1fb;
+  --pressed: #cce4f7;
+  --focus: #0078d4;
+  --danger: #c42b1c;
+  --warning: #9d5d00;
+  --success: #107c10;
+  --tab-active: #ffffff;
+  --tab-inactive: #f0f0f0;
+  --outline: #0078d4;
+  --k-367a46: #367a46;
+  --k-3f8b50: #3f8b50;
+  --k-3fb950: #3fb950;
+  --k-459657: #459657;
+  --k-64b074: #64b074;
+  --k-7a6a2a: #7a6a2a;
+  --k-8a4b00: #8a4b00;
+  --k-d4a72c: #d4a72c;
+  --k-f0c38a: #f0c38a;
+  --k-f4d7d7: #f4d7d7;
+  --k-fff4e5: #fff4e5;
+  --font-ui: "Noto Sans", sans-serif;
+  --title-bg: transparent;
+  --title-fg: var(--text);
+  --title-weight: 400;
+  --tab-top: transparent;
+  --tile-on: var(--pressed);
+  --tile-line: var(--accent);
+}

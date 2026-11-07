@@ -59,10 +59,14 @@ windows: image frontend ## Windows amd64 (WebView2, CGO-free) → dist/
 	$(RUN) sh -c 'CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags production -trimpath \
 	  -ldflags "$(LDFLAGS) -H windowsgui" -o dist/$(BIN)-$(VERSION)-windows-amd64.exe .'
 
-macos: image frontend ## macOS amd64+arm64 (purego, CGO-free) → dist/
+# shortcut: the universal app carries only the Go linker ad-hoc slice signatures; Developer ID
+# signing + notarization is task 13.3.
+macos: image frontend ## macOS amd64+arm64 + universal "rustXterm (Go).app" zip (purego, CGO-free) → dist/
 	$(RUN) sh -c 'for a in amd64 arm64; do CGO_ENABLED=0 GOOS=darwin GOARCH=$$a go build -tags "production purego" \
 	  -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BIN)-$(VERSION)-darwin-$$a . || exit 1; done'
-	@echo "macOS per-arch binaries in dist/. Universal join (lipo) + .app bundle + signing/notarization: task 13.3"
+	$(RUN) go run ./build/macapp -version $(VERSION) -icon frontend/public/icons/logo.png \
+	  -out dist/$(BIN)-$(VERSION)_macos_universal.zip dist/$(BIN)-$(VERSION)-darwin-amd64 dist/$(BIN)-$(VERSION)-darwin-arm64
+	@echo 'Unsigned universal app: xattr -dr com.apple.quarantine "rustXterm (Go).app"' 
 
 dist-all: appimage windows macos ## Linux binary + AppImage, Windows .exe, macOS per-arch — all in dist/
 

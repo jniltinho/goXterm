@@ -9,6 +9,7 @@ import {
 import { SCHEMES, MONO_FONTS } from "./schemes";
 import { COMMANDS, DEFAULT_SHORTCUTS, shortcutValid } from "./commands";
 import Dropdown, { type Option } from "./Dropdown.vue";
+import { SKINS } from "./themes";
 
 const emit = defineEmits<{ saved: []; close: []; import: []; unlock: []; "import-toml": []; "export-toml": [] }>();
 const icon = (n: string) => `./icons/${n}.png`;
@@ -60,7 +61,7 @@ const fontOptions = computed<Option<string>[]>(() => [
   ...fontNames.value.map((f, i): Option<string> => [f, f, { sep: i === 0 }]),
 ]);
 const CURSORS: Option<string>[] = [["block", "Block"], ["underline", "Underline"], ["beam", "Beam"]];
-const SKINS: Option<string>[] = [["light", "Light"], ["dark", "Dark"], ["system", "System"]];
+const SKIN_OPTIONS: Option<string>[] = [...SKINS.map((k): Option<string> => [k.id, k.label]), ["system", "System"]];
 const SCALES: Option<string>[] = [["auto", "Auto"], ["100", "100%"], ["125", "125%"], ["150", "150%"], ["200", "200%"]];
 const fontValue = computed({
   get: () => (!s.value?.terminal.fontFamily || s.value.terminal.fontFamily === "monospace" ? "" : s.value.terminal.fontFamily),
@@ -216,7 +217,7 @@ watch(tab, async (t) => {
           <!-- Display -->
           <template v-else-if="tab === 'display'">
             <section class="grp"><div class="grp-h">Appearance</div><div class="grp-b">
-              <div class="line"><label>Skin</label><Dropdown v-model="s.theme" :options="SKINS" :width="90" /></div>
+              <div class="line"><label>Skin</label><Dropdown v-model="s.theme" :options="SKIN_OPTIONS" :width="120" /></div>
             </div></section>
             <section class="grp"><div class="grp-h">Toolbar and tabs</div><div class="grp-b">
               <label class="chk"><input v-model="s.toolbarCaptions" type="checkbox" /> Toolbar captions</label>
@@ -321,17 +322,17 @@ watch(tab, async (t) => {
 <style scoped>
 .st-backdrop { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; }
 .st { width: 800px; height: 560px; max-width: calc(100% - 16px); max-height: calc(100% - 16px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); color: var(--text); font-size: 12px; }
-.st-title { height: 24px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 8px; border-bottom: 1px solid var(--border-subtle); }
+.st-title { height: 24px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 8px; border-bottom: 1px solid var(--border-subtle); background: var(--title-bg); color: var(--title-fg); font-weight: var(--title-weight); }
 .st-x { width: 20px; height: 20px; background: transparent; border: none; cursor: pointer; position: relative; }
 .st-x:hover { background: var(--hover); }
-.st-x::before, .st-x::after { content: ""; position: absolute; left: 4px; right: 4px; top: 9px; height: 1.2px; background: var(--text); transform: rotate(45deg); }
+.st-x::before, .st-x::after { content: ""; position: absolute; left: 4px; right: 4px; top: 9px; height: 1.2px; background: var(--title-fg); transform: rotate(45deg); }
 .st-x::after { transform: rotate(-45deg); }
 .st-main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 8px 0; }
 .st-tabs { display: flex; flex-wrap: wrap; position: relative; z-index: 1; }
 .st-tab { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: -1px; cursor: pointer; }
 .st-tab img { width: 24px; height: 24px; }
 .st-tab:hover { background: var(--hover); }
-.st-tab.on { background: var(--panel); border-bottom-color: var(--panel); }
+.st-tab.on { background: var(--panel); border-bottom-color: var(--panel); box-shadow: inset 0 2px 0 var(--tab-top); }
 .st-page { flex: 1; min-height: 0; overflow-y: auto; margin-top: -1px; padding: 8px; background: var(--panel); border: 1px solid var(--border); }
 .st-foot { flex: none; display: flex; justify-content: center; padding: 8px; }
 .ok { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 80px; height: 30px; padding: 0 12px; font-size: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--border); cursor: pointer; }

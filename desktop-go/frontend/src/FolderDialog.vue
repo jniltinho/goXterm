@@ -47,7 +47,7 @@ const ok = () => { if (name.value.trim()) emit("ok", name.value.trim(), pick.val
 <style scoped>
 .fd-backdrop { position: fixed; inset: 0; z-index: 85; display: flex; align-items: center; justify-content: center; }
 .fd { width: 492px; background: var(--panel); border: 1px solid var(--border); color: var(--text); font-size: 12px; }
-.fd-title { padding: 3px 8px; border-bottom: 1px solid var(--border-subtle); }
+.fd-title { padding: 3px 8px; border-bottom: 1px solid var(--border-subtle); background: var(--title-bg); color: var(--title-fg); font-weight: var(--title-weight); }
 .fd-body { padding: 8px 14px 12px; }
 .fd-label { display: block; margin: 6px 0 3px; }
 .fd-in { width: 100%; height: 22px; padding: 0 4px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }

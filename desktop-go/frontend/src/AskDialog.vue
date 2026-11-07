@@ -43,7 +43,7 @@ function answer(ok: boolean) {
 <style scoped>
 .ask-backdrop { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; }
 .ask { width: 400px; max-width: calc(100% - 32px); background: var(--panel); border: 1px solid var(--border); color: var(--text); font-size: 12px; }
-.ask-title { padding: 3px 8px; border-bottom: 1px solid var(--border-subtle); }
+.ask-title { padding: 3px 8px; border-bottom: 1px solid var(--border-subtle); background: var(--title-bg); color: var(--title-fg); font-weight: var(--title-weight); }
 .ask-body { padding: 8px 10px 10px; }
 .ask-msg { margin: 0 0 6px; white-space: pre-wrap; }
 .ask-in { width: 100%; height: 22px; padding: 0 4px; font-size: 12px; color: var(--text); background: var(--input); border: 1px solid var(--border); outline: none; }

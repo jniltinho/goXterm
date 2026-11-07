@@ -1,3 +1,4 @@
+import { effectiveSkin } from "./themes";
 // Terminal colour schemes: the Rust catalog (crates/core/src/theme.rs TerminalScheme::builtin), same
 // names and colours, so config.toml's terminal.scheme means the same thing in both apps. An empty
 // scheme follows the UI theme (rustxterm-light / rustxterm-dark), as the Rust app does.
@@ -25,10 +26,9 @@ export const SCHEMES: Record<string, S> = {
   xterm: s("e5e5e5", "000000", "e5e5e5", "4d4d4d", "000000 cd0000 00cd00 cdcd00 0000ee cd00cd 00cdcd e5e5e5 7f7f7f ff0000 00ff00 ffff00 5c5cff ff00ff 00ffff ffffff"),
 };
 
-/** Whether the UI currently shows the Dark skin (explicit, or System with a dark OS). */
+/** Whether the UI currently draws a dark skin (explicit, or System with a dark OS). */
 export function uiDark(): boolean {
-  const t = document.documentElement.dataset.theme;
-  return t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  return effectiveSkin().dark;
 }
 
 /** The scheme name in effect: the configured one, or the UI theme's default when unset/unknown. */

@@ -574,7 +574,7 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
 <style scoped>
 .ed-backdrop { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; }
 .ed { width: 900px; height: 600px; max-width: calc(100% - 16px); max-height: calc(100% - 16px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); color: var(--text); font-size: 12px; }
-.ed-title { height: 24px; flex: none; display: flex; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); }
+.ed-title { height: 24px; flex: none; display: flex; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); background: var(--title-bg); color: var(--title-fg); font-weight: var(--title-weight); }
 .ed-main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 16px; }
 
 /* session-type tiles */
@@ -582,14 +582,8 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
 .tile { position: relative; width: 56px; height: 56px; padding: 0; background: transparent; border: 1px solid transparent; color: var(--text); font-size: 12px; cursor: pointer; }
 .tile img { position: absolute; left: 11px; top: 4px; width: 32px; height: 32px; }
 .tile span { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; }
-.tile:hover { background: var(--hover); border-color: var(--accent); }
-.tile.on { background: var(--pressed); border-color: var(--accent); }
-:root[data-theme="dark"] .tile:hover, :root[data-theme="dark"] .tile.on { border-color: var(--border); }
-:root[data-theme="dark"] .tile.on { background: var(--selection); }
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="system"] .tile:hover, :root[data-theme="system"] .tile.on { border-color: var(--border); }
-  :root[data-theme="system"] .tile.on { background: var(--selection); }
-}
+.tile:hover { background: var(--hover); border-color: var(--tile-line); }
+.tile.on { background: var(--tile-on); border-color: var(--tile-line); }
 
 .ed-body { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 12px; }
 .choose { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; color: var(--text-muted); font-size: 16px; }
@@ -607,10 +601,11 @@ const message = computed(() => error.value || (typed.value ? problem.value : "")
 
 /* icon tabs joined to the panel */
 .tabs { display: flex; flex: none; margin-top: 16px; position: relative; z-index: 1; }
-.tab { display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: -1px; cursor: pointer; }
-.tab img { width: 16px; height: 16px; }
+/* same tab look as the Settings window (one pattern for every tabbed dialog) */
+.tab { display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px; font-size: 12px; color: var(--text); background: var(--toolbar); border: 1px solid var(--border); margin-right: -1px; cursor: pointer; }
+.tab img { width: 24px; height: 24px; }
 .tab:hover { background: var(--hover); }
-.tab.on { background: var(--panel); border-bottom-color: var(--panel); }
+.tab.on { background: var(--panel); border-bottom-color: var(--panel); box-shadow: inset 0 2px 0 var(--tab-top); }
 .panel { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: center; margin-top: -1px; padding: 12px; background: var(--panel); border: 1px solid var(--border); }
 .page { flex: 1; align-self: stretch; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .big { flex: none; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: var(--input); border: 1px solid var(--border); }

@@ -56,7 +56,7 @@ const target = (s: Record<string, unknown>) =>
 <style scoped>
 .im-backdrop { position: fixed; inset: 0; z-index: 85; display: flex; align-items: center; justify-content: center; }
 .im { width: 560px; max-width: calc(100% - 32px); background: var(--panel); border: 1px solid var(--border); color: var(--text); font-size: 12px; }
-.im-title { padding: 3px 8px; border-bottom: 1px solid var(--border-subtle); }
+.im-title { padding: 3px 8px; border-bottom: 1px solid var(--border-subtle); background: var(--title-bg); color: var(--title-fg); font-weight: var(--title-weight); }
 .im-body { padding: 8px 12px 12px; }
 .im-path { font-size: 11px; color: var(--text-muted); word-break: break-all; }
 .im-body p { margin: 6px 0; }

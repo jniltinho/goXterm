@@ -148,7 +148,7 @@ const arrow = (t: Tunnel) =>
 <style scoped>
 .st-backdrop { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(20,28,38,.3); }
 .st { width: 560px; max-width: 92%; background: var(--k-f2f4f7); border: 1px solid var(--k-9aa7b4); box-shadow: 0 16px 44px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.25); color: var(--k-1e1e1e); }
-.st-title { font-size: 12px; font-weight: 700; color: var(--k-33465a); background: linear-gradient(var(--k-e9eef3), var(--k-dbe3ea)); border-bottom: 1px solid var(--k-c2ccd6); padding: 7px 12px; }
+.st-title { font-size: 12px; border-bottom: 1px solid var(--border-subtle); padding: 3px 8px; background: var(--title-bg); color: var(--title-fg); font-weight: var(--title-weight); }
 .st-body { padding: 14px 16px; min-height: 160px; max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background: var(--k-f7f9fb); }
 .st-err { color: var(--k-c0392b); font-size: 12px; }
 .st-note { font-size: 12px; color: var(--k-7a8794); }

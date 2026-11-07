@@ -316,3 +316,26 @@ func TestPolicyAndKnownUsers(t *testing.T) {
 		t.Fatalf("users %v %v", u, err)
 	}
 }
+
+func TestSaveSessionBadFolderIsRoot(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "lab-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir, "lab-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	// The UI once sent a click event as the folder ({"isTrusted":true}); it must land at the root.
+	for _, js := range []string{`{"id":0,"name":"a","host":"h","folder":{"isTrusted":true}}`, `{"id":0,"name":"b","host":"h","folder":0}`} {
+		id, err := s.SaveSession(js)
+		if err != nil {
+			t.Fatalf("%s: %v", js, err)
+		}
+		var doc string
+		if err := s.db.QueryRow(`SELECT json FROM sessions WHERE id=? AND folder IS NULL`, id).Scan(&doc); err != nil || !strings.Contains(doc, `"folder":null`) {
+			t.Fatalf("%s stored as %q (%v)", js, doc, err)
+		}
+	}
+}

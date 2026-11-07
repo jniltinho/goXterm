@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/user"
 	"strings"
+
+	"rustxterm-go/internal/localconn"
 )
 
 // Session banner: the info box a terminal tab shows when it connects (parity with the Rust app's
@@ -151,7 +153,10 @@ func (a *App) localBanner(shell string) *Banner {
 		who = u.Username
 	}
 	host, _ := os.Hostname()
-	cwd, _ := os.Getwd()
+	cwd := localconn.StartDir()
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
 	return &Banner{Title: a.bannerTitle(), Hint: bannerHint, Lines: []BannerLine{
 		{Kind: "head", Text: "Local terminal on ", Target: who + "@" + host},
 		{Kind: "muted", Text: "Shell:  " + shell},

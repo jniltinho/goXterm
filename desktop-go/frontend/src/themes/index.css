@@ -1,0 +1,5 @@
+/* Skins: one file per skin (data-theme on <html>, set by themes/index.ts), then the legacy aliases. */
+@import "./light.css";
+@import "./dark.css";
+@import "./xp.css";
+@import "./legacy.css";

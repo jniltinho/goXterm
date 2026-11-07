@@ -40,7 +40,7 @@ async function loadUI() {
       sidePage.value = s.sidebarPage === "sftp" ? "sftp" : "sessions";
       layoutLoaded = true;
     }
-    document.documentElement.dataset.theme = s.theme || "system"; // Skin: theme.css picks the palette
+    applySkin(s.theme); // Skin: themes/<skin>.css picks the palette
     window.dispatchEvent(new CustomEvent("rxt-settings", { detail: s })); // open terminals follow
   } catch { /* defaults */ }
 }
@@ -98,6 +98,7 @@ import FileBrowser from "./FileBrowser.vue";
 import VncCanvas from "./VncView.vue";
 import RdpCanvas from "./RdpView.vue";
 import SessionEditor from "./SessionEditor.vue";
+import { applySkin } from "./themes";
 import SettingsDialog from "./SettingsDialog.vue";
 import SftpPanel from "./SftpPanel.vue";
 import AskDialog from "./AskDialog.vue";
@@ -415,7 +416,14 @@ async function confirmImport() {
   }
 }
 function editSession(s: Session) { editorSessionId.value = s.id; editorOpen.value = true; }
-async function onEditorSaved(_id: number) { editorOpen.value = false; await loadData(); }
+// Rust: OK on a new session saves and connects it; an edited session is only saved.
+async function onEditorSaved(id: number) {
+  const isNew = editorSessionId.value === null;
+  editorOpen.value = false;
+  await loadData();
+  const s = isNew ? sessions.value.find((x) => x.id === id) : undefined;
+  if (s) openSession(s);
+}
 async function delSession(s: Session) {
   if (!(await askConfirm("Delete session", `Delete the saved session "${s.name}"? Open tabs stay open.`, "Delete"))) return;
   try { await DeleteSession(s.id); if (selected.value?.id === s.id) selected.value = null; await loadData(); }
@@ -766,7 +774,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <button class="home-gear" title="Settings" @click="settingsOpen = true"><img :src="icon('settings')" /></button>
             <div class="home-brand"><img :src="icon('logo')" class="home-logo" /><span>rustXterm</span></div>
             <div class="home-actions">
-              <button class="home-btn" @click="newSession"><img :src="icon('session-new')" class="home-btn-ico" /> New session</button>
+              <button class="home-btn" @click="newSession()"><img :src="icon('session-new')" class="home-btn-ico" /> New session</button>
               <button class="home-btn" @click="importSessions"><img :src="icon('open')" class="home-btn-ico" /> Import sessions</button>
             </div>
             <div v-if="recentSessions.length" class="recent">
@@ -998,7 +1006,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 /* dialogs (Rust: flat windows, panel fill, 1 px border, no shadow or dimming) */
 .modal-backdrop { position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: transparent; }
 .dialog { width: 422px; background: var(--panel); border: 1px solid var(--border); color: var(--text); }
-.dialog-title { font-size: 12px; color: var(--text); background: var(--panel); border-bottom: 1px solid var(--border-subtle); padding: 3px 8px; }
+.dialog-title { font-size: 12px; border-bottom: 1px solid var(--border-subtle); padding: 3px 8px; background: var(--title-bg); color: var(--title-fg); font-weight: var(--title-weight); }
 .dialog-body { padding: 8px 10px 10px; }
 .dialog-sub { font-size: 12px; margin-bottom: 4px; }
 .dialog-label { display: block; font-size: 12px; margin-bottom: 2px; }
