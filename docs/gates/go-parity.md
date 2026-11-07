@@ -5,7 +5,7 @@ Every row names its evidence. The gate passes when the sign-off below is filled 
 the release artifacts to Go and archive the Rust app) may start.
 
 - Date: 2026-11-07. Branch `migrate-gui-to-go-wails` (PR #1).
-- **Sign-off owner: _pending — the maintainer signs here (name, date)._**
+- **Sign-off: Nilton OS (maintainer), 2026-11-07** — approved and merged PR #1 ("vou aprovar o mr", "aprovei"), with this record and its known gaps.
 
 ## Screen inventory and themes
 
