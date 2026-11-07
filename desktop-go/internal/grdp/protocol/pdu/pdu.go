@@ -104,9 +104,11 @@ func NewPDULayer(t core.Transport) *PDULayer {
 					RAIL_LEVEL_DOCKED_LANGBAR_SUPPORTED,
 			},
 			CAPSETTYPE_LARGE_POINTER: &LargePointerCapability{1},
-			CAPSETTYPE_SURFACE_COMMANDS: &SurfaceCommandsCapability{
-				CmdFlags: SURFCMDS_SET_SURFACE_BITS | SURFCMDS_STREAM_SURFACE_BITS | SURFCMDS_FRAME_MARKER,
-			},
+			// cmdFlags 0: we do NOT support surface commands, so modern servers (Win8+) fall back to
+			// legacy bitmap-update PDUs (interleaved RLE), which grdp decodes. Advertising SET/STREAM
+			// surface bits made modern servers send codec-encoded surface bits (RemoteFX/NSCodec/
+			// planar) that grdp cannot decode, producing colour garbage on the desktop.
+			CAPSETTYPE_SURFACE_COMMANDS: &SurfaceCommandsCapability{CmdFlags: 0},
 			CAPSSETTYPE_FRAME_ACKNOWLEDGE: &FrameAcknowledgeCapability{2},
 		},
 	}
