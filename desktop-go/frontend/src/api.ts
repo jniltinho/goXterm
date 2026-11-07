@@ -187,7 +187,7 @@ export const LocalHome = () => call<string>("LocalHome");
 export const LocalList = (dir: string) => call<Entry[]>("LocalList", dir);
 
 // VNC — the framebuffer is decoded in Go and streamed as per-rectangle PNGs over "vnc:frame:<tab>".
-export interface VncView { tabId: string; width: number; height: number; name: string }
+export interface VncView { tabId: string; width: number; height: number; name: string; viewOnly?: boolean }
 export const VncConnect = (id: number) => call<VncView>("VncConnect", id);
 export const HasVncDemo = () => call<boolean>("HasVncDemo");
 export const ConnectVncDemo = () => call<VncView>("ConnectVncDemo");
@@ -196,6 +196,7 @@ export const VncPointer = (tabId: string, buttonMask: number, x: number, y: numb
   call<void>("VncPointer", tabId, buttonMask, x, y);
 export const VncKey = (tabId: string, down: boolean, keysym: number) => call<void>("VncKey", tabId, down, keysym);
 export const VncDisconnect = (tabId: string) => call<void>("VncDisconnect", tabId);
+export const VncSetPaused = (tabId: string, paused: boolean) => call<void>("VncSetPaused", tabId, paused);
 // Clipboard: server text arrives as "vnc:clipboard:<tab>" events; send local text with VncSendClipboard.
 export const VncSendClipboard = (tabId: string, text: string) => call<void>("VncSendClipboard", tabId, text);
 

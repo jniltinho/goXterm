@@ -351,7 +351,7 @@ const ctx = ref<{ x: number; y: number; session?: Session; folder?: Folder; root
 
 // SSH host-key trust prompt (TOFU): the backend emits "ssh:trust" for an unknown key and blocks.
 // Prompts queue so concurrent connections (e.g. the SSH terminal and its SFTP pane) each get one.
-type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string; kind?: "tls"; changed?: boolean };
+type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string; kind?: "tls"; changed?: boolean; previous?: string };
 const trustQ = ref<TrustReq[]>([]);
 const trustReq = computed(() => trustQ.value[0] ?? null);
 function respondTrust(decision: "once" | "save" | "reject") {
@@ -768,7 +768,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
               class="absolute inset-0"
             />
             <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
-            <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
+            <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :active="t.id === active" :connect="t.connect" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
             <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" @state="(st) => (tabState[t.id] = st)" class="absolute inset-0" />
           </template>
           <!-- Home (Rust home.rs): gear top-right, logo 64 + title 32 px at 22 % height, 200x30 buttons, recents -->
@@ -875,6 +875,11 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <p v-else-if="trustReq.kind === 'tls'" class="dialog-sub">The TLS certificate of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not trusted by this system. No credentials are sent until you accept.</p>
           <p v-else class="dialog-sub">The SSH host key of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not known. No credentials are sent until you accept.</p>
           <div class="fp-head"><img :src="icon(trustReq.kind === 'tls' ? 'lock' : 'key')" class="dbtn-ico" /> {{ trustReq.kind === "tls" ? `Certificate "${trustReq.algorithm}" SHA-256 fingerprint` : `${trustReq.algorithm} key fingerprint` }}</div>
+          <template v-if="trustReq.previous">
+            <div class="fp-head">Saved before</div>
+            <div class="fp">SHA256:{{ trustReq.previous }}</div>
+            <div class="fp-head">Presented now</div>
+          </template>
           <div class="fp">{{ trustReq.fingerprint }}</div>
           <p class="dialog-sub">Accept only if it matches the fingerprint published by the server administrator.</p>
           <div class="dialog-actions">

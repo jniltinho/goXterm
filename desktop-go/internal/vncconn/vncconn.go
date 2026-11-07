@@ -30,7 +30,14 @@ type Config struct {
 	Host     string
 	Port     int
 	Password string
+	// Dial, when set, opens the stream instead of a direct TCP connection — e.g. a direct-tcpip
+	// channel of an SSH connection ("Connect through an SSH gateway"), so no local port is opened.
+	Dial func(network, addr string) (net.Conn, error)
 }
+
+// MaxDimension caps the framebuffer a server may declare (Bounded remote desktop resources): a
+// hostile 65535×65535 desktop would need 16 GiB.
+const MaxDimension = 16384
 
 // Session is an open VNC connection.
 type Session struct {
@@ -44,6 +51,9 @@ type Session struct {
 	height int
 	closed bool
 	onCut  func(string) // ServerCutText → local clipboard
+
+	paused  bool // hidden tab: no update requests are sent
+	pending bool // an incremental request is owed for when the tab shows again
 }
 
 // OnCutText registers a callback for server clipboard text (ServerCutText). Set it before Start.
@@ -59,7 +69,13 @@ const (
 // size and name, onFrame for each changed rectangle, and onClose when the loop ends.
 func Connect(cfg Config, onInit func(w, h int, name string), onFrame func(Rect), onClose func(error)) (*Session, error) {
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port))
-	c, err := net.DialTimeout("tcp", addr, 15*time.Second)
+	var c net.Conn
+	var err error
+	if cfg.Dial != nil {
+		c, err = cfg.Dial("tcp", addr)
+	} else {
+		c, err = net.DialTimeout("tcp", addr, 15*time.Second)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +98,34 @@ func Connect(cfg Config, onInit func(w, h int, name string), onFrame func(Rect),
 
 // Start requests the first (full) framebuffer update; call it after subscribing to frame events.
 func (s *Session) Start() error { return s.requestUpdate(false) }
+
+// SetPaused stops asking for framebuffer updates while the tab is hidden and resumes when it shows,
+// with the update owed since (the server sends nothing unrequested).
+func (s *Session) SetPaused(paused bool) error {
+	s.mu.Lock()
+	s.paused = paused
+	owed := !paused && s.pending
+	if owed {
+		s.pending = false
+	}
+	s.mu.Unlock()
+	if owed {
+		return s.requestUpdate(true)
+	}
+	return nil
+}
+
+// requestNext asks for the next incremental update unless the tab is hidden (then it is owed).
+func (s *Session) requestNext() error {
+	s.mu.Lock()
+	if s.paused {
+		s.pending = true
+		s.mu.Unlock()
+		return nil
+	}
+	s.mu.Unlock()
+	return s.requestUpdate(true)
+}
 
 func (s *Session) handshake(password string) (int, int, string, error) {
 	// ProtocolVersion
@@ -164,6 +208,9 @@ func (s *Session) handshake(password string) (int, int, string, error) {
 	if err := s.setEncodings([]int32{encCopyRect, encRaw, encDesktopSize}); err != nil {
 		return 0, 0, "", err
 	}
+	if si.Width == 0 || si.Height == 0 || si.Width > MaxDimension || si.Height > MaxDimension {
+		return 0, 0, "", fmt.Errorf("vnc: server declares a %d×%d desktop (limit %d)", si.Width, si.Height, MaxDimension)
+	}
 	return int(si.Width), int(si.Height), string(nameBuf), nil
 }
 
@@ -230,7 +277,7 @@ func (s *Session) loop(onFrame func(Rect), onClose func(error)) {
 			if err = s.readFramebufferUpdate(onFrame); err != nil {
 				goto done
 			}
-			if err = s.requestUpdate(true); err != nil {
+			if err = s.requestNext(); err != nil {
 				goto done
 			}
 		case 1: // SetColourMapEntries
@@ -268,6 +315,9 @@ func (s *Session) readFramebufferUpdate(onFrame func(Rect)) error {
 		if err := binary.Read(s.r, binary.BigEndian, &h); err != nil {
 			return err
 		}
+		if h.Enc != encDesktopSize && !s.fits(int(h.X), int(h.Y), int(h.W), int(h.H)) {
+			return fmt.Errorf("vnc: rectangle %dx%d at %d,%d lies outside the desktop", h.W, h.H, h.X, h.Y)
+		}
 		switch h.Enc {
 		case encRaw:
 			if err := s.readRaw(int(h.X), int(h.Y), int(h.W), int(h.H)); err != nil {
@@ -278,6 +328,9 @@ func (s *Session) readFramebufferUpdate(onFrame func(Rect)) error {
 				return err
 			}
 		case encDesktopSize:
+			if h.W == 0 || h.H == 0 || h.W > MaxDimension || h.H > MaxDimension {
+				return fmt.Errorf("vnc: server resizes to %d×%d (limit %d)", h.W, h.H, MaxDimension)
+			}
 			s.resize(int(h.W), int(h.H))
 			continue // no pixel data; whole screen will be resent
 		default:
@@ -290,6 +343,14 @@ func (s *Session) readFramebufferUpdate(onFrame func(Rect)) error {
 		}
 	}
 	return nil
+}
+
+// fits reports whether a rectangle lies inside the current framebuffer, so a hostile size can never
+// make readRaw allocate more than the desktop itself.
+func (s *Session) fits(x, y, w, h int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return x+w <= s.width && y+h <= s.height
 }
 
 func (s *Session) readRaw(x, y, w, h int) error {

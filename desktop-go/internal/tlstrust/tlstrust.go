@@ -28,6 +28,7 @@ type Question struct {
 	Fingerprint string
 	Subject     string // the certificate's common name (or full subject)
 	Changed     bool   // a different certificate was pinned for this host before
+	Previous    string // that pinned fingerprint, when Changed
 }
 
 // Ask returns whether to continue and whether to pin the certificate; an error refuses it.
@@ -57,7 +58,7 @@ func Verifier(host, pinned string, ask Ask, save func(fingerprint string)) func(
 		if subject == "" {
 			subject = leaf.Subject.String()
 		}
-		pin, err := ask(Question{Fingerprint: fp, Subject: subject, Changed: pinned != ""})
+		pin, err := ask(Question{Fingerprint: fp, Subject: subject, Changed: pinned != "", Previous: pinned})
 		if err != nil {
 			return err
 		}

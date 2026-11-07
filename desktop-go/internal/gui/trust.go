@@ -75,7 +75,7 @@ func (a *App) tlsVerifier(host string, port int) func(tls.ConnectionState) error
 	}
 	ask := func(q tlstrust.Question) (bool, error) {
 		d, err := a.askTrust(map[string]any{"host": host, "port": port, "kind": "tls", "algorithm": q.Subject,
-			"fingerprint": "SHA256:" + q.Fingerprint, "changed": q.Changed})
+			"fingerprint": "SHA256:" + q.Fingerprint, "changed": q.Changed, "previous": q.Previous})
 		if err != nil || (d != "once" && d != "save") {
 			return false, fmt.Errorf("certificate not trusted for %s:%d (%s)", host, port, q.Fingerprint)
 		}

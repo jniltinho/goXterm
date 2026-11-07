@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ordered } from "./ordered";
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { releaseCombo, isRelease } from "./release";
+import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
-import { VncStart, VncPointer, VncKey, VncDisconnect, VncSendClipboard, type VncView } from "./api";
+import { VncStart, VncPointer, VncKey, VncDisconnect, VncSendClipboard, VncSetPaused, type VncView } from "./api";
 const input = ordered(); // pointer and key events reach the session in order
 
-const props = defineProps<{ connect: () => Promise<VncView> }>();
+const props = defineProps<{ connect: () => Promise<VncView>; active?: boolean }>();
 const emit = defineEmits<{ state: ["connecting" | "connected" | "stopped"] }>();
 
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -54,6 +55,7 @@ onMounted(async () => {
     return;
   }
   tabId = view.tabId;
+  viewOnly = !!view.viewOnly;
   emit("state", "connected");
   const c = canvas.value!;
   c.width = view.width || 1024;
@@ -74,8 +76,11 @@ onMounted(async () => {
     try { void navigator.clipboard.writeText(String(ev.data ?? "")); } catch { /* no permission */ }
   });
   await VncStart(tabId);
+  if (props.active === false) void VncSetPaused(tabId, true);
   c.focus();
 });
+// A hidden tab asks for no framebuffer updates; showing it again resumes them.
+watch(() => props.active, (on) => { if (tabId) void VncSetPaused(tabId, on === false); });
 
 onBeforeUnmount(() => {
   offFrame?.();
@@ -84,31 +89,48 @@ onBeforeUnmount(() => {
   if (tabId) void VncDisconnect(tabId);
 });
 
+let viewOnly = false; // the session sends no input (the backend refuses it too)
+const held = new Set<number>();
+let release: Awaited<ReturnType<typeof releaseCombo>> = null;
+void releaseCombo().then((c) => (release = c));
 function onMove(e: MouseEvent) {
+  if (viewOnly) return;
   const [x, y] = pos(e);
   input(() => VncPointer(tabId, buttons, x, y));
 }
 function onDown(e: MouseEvent) {
   canvas.value?.focus();
+  if (viewOnly) return;
   buttons |= 1 << e.button; // 0 left,1 middle,2 right
   const [x, y] = pos(e);
   input(() => VncPointer(tabId, buttons, x, y));
 }
 function onUp(e: MouseEvent) {
+  if (viewOnly) return;
   buttons &= ~(1 << e.button);
   const [x, y] = pos(e);
   input(() => VncPointer(tabId, buttons, x, y));
 }
 function onWheel(e: WheelEvent) {
+  if (viewOnly) return;
   const [x, y] = pos(e);
   const bit = e.deltaY < 0 ? 8 : 16; // wheel up / down
   input(() => VncPointer(tabId, buttons | bit, x, y));
   input(() => VncPointer(tabId, buttons, x, y));
 }
 function onKey(e: KeyboardEvent, down: boolean) {
+  if (viewOnly) return;
+  if (down && isRelease(e, release)) { // keyboard release: focus back to the app, nothing more is sent
+    e.preventDefault();
+    for (const k of held) input(() => VncKey(tabId, false, k));
+    held.clear();
+    canvas.value?.blur();
+    return;
+  }
   const k = keysym(e);
   if (k === null) return;
   e.preventDefault();
+  if (down) held.add(k); else held.delete(k);
   input(() => VncKey(tabId, down, k));
 }
 </script>

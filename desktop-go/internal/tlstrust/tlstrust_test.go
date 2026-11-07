@@ -48,7 +48,7 @@ func TestVerifierPinsAndAsks(t *testing.T) {
 	if err != nil || saved != fp || asked.Subject != "lab-rdp" || asked.Changed {
 		t.Fatalf("first use: err=%v saved=%q asked=%+v", err, saved, asked)
 	}
-	if err := Verifier("rdp", "00:11", func(q Question) (bool, error) { asked = q; return false, errors.New("no") }, nil)(cs); err == nil || !asked.Changed {
+	if err := Verifier("rdp", "00:11", func(q Question) (bool, error) { asked = q; return false, errors.New("no") }, nil)(cs); err == nil || !asked.Changed || asked.Previous != "00:11" {
 		t.Fatalf("changed certificate not reported: %v %+v", err, asked)
 	}
 	if err := Verifier("rdp", "", refuse, nil)(tls.ConnectionState{}); err == nil {

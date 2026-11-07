@@ -4,10 +4,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 
+	"rustxterm-go/internal/sshconn"
 	"rustxterm-go/internal/vncconn"
 )
 
@@ -17,9 +19,38 @@ type VncView struct {
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
 	Name   string `json:"name"`
+	// ViewOnly: the session sends no pointer or key events (the view also ignores them).
+	ViewOnly bool `json:"viewOnly"`
 }
 
-// VncConnect opens a VNC session for a saved session (its saved password is the VNC password).
+// vncTarget is how a VNC session reaches its server: an optional SSH gateway (direct-tcpip on that
+// connection, no local port) and whether input is sent.
+type vncTarget struct {
+	dial     func(network, addr string) (net.Conn, error)
+	done     func() // closes the gateway connection with the session
+	viewOnly bool
+}
+
+// vncGateway opens the session's SSH gateway ("Connect through an SSH gateway"), with the same host
+// key trust and password prompt as an SSH tab.
+func (a *App) vncGateway(via map[string]any) (*vncTarget, error) {
+	host, user := asString(via["host"]), asString(via["user"])
+	port := int(asInt64(via["port"]))
+	if port == 0 {
+		port = 22
+	}
+	client, err := sshconn.DialClient(sshconn.Config{
+		Host: host, Port: port, User: user, KeyFile: asString(via["key_file"]), UseAgent: true,
+		AskPassword: a.askPassword(host, user), AskPassphrase: a.askPassphrase, HostKey: a.sshHostKeyCallback(host, port),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("SSH gateway %s: %w", host, err)
+	}
+	return &vncTarget{dial: client.Dial, done: func() { _ = client.Close() }}, nil
+}
+
+// VncConnect opens a VNC session for a saved session (its saved password is the VNC password),
+// directly or through its SSH gateway, view-only when the session says so.
 func (a *App) VncConnect(sessionID int64) (*VncView, error) {
 	sv, password, err := a.sessionForFiles(sessionID)
 	if err != nil {
@@ -32,6 +63,18 @@ func (a *App) VncConnect(sessionID int64) (*VncView, error) {
 	if port == 0 {
 		port = 5900
 	}
+	m, _, err := sessionRawByID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	opts := subMap(m, "vnc")
+	target := &vncTarget{}
+	if via := subMap(opts, "via_ssh"); asString(via["host"]) != "" {
+		if target, err = a.vncGateway(via); err != nil {
+			return nil, err
+		}
+	}
+	target.viewOnly = asBool(opts["view_only"])
 	// No saved password: ask (with "Save password"), and keep it only once the server accepted it.
 	var saver *passwordSaver
 	if password == "" {
@@ -42,7 +85,10 @@ func (a *App) VncConnect(sessionID int64) (*VncView, error) {
 		}
 		password = pw
 	}
-	view, err := a.vncDial(sv.Host, port, password)
+	view, err := a.vncDial(sv.Host, port, password, target)
+	if err != nil && target.done != nil {
+		target.done()
+	}
 	if err == nil && saver != nil {
 		_ = saver.commit() // a failed save only means the next connection asks again
 	}
@@ -68,10 +114,10 @@ func (a *App) ConnectVncDemo() (*VncView, error) {
 			port = p
 		}
 	}
-	return a.vncDial(host, port, password)
+	return a.vncDial(host, port, password, &vncTarget{})
 }
 
-func (a *App) vncDial(host string, port int, password string) (*VncView, error) {
+func (a *App) vncDial(host string, port int, password string, target *vncTarget) (*VncView, error) {
 	a.mu.Lock()
 	a.seq++
 	tabID := "v" + strconv.Itoa(a.seq)
@@ -88,7 +134,11 @@ func (a *App) vncDial(host string, port int, password string) (*VncView, error) 
 	onClose := func(err error) {
 		a.mu.Lock()
 		delete(a.vnc, tabID)
+		delete(a.vncViewOnly, tabID)
 		a.mu.Unlock()
+		if target.done != nil {
+			target.done()
+		}
 		msg := ""
 		if err != nil {
 			msg = err.Error()
@@ -98,7 +148,7 @@ func (a *App) vncDial(host string, port int, password string) (*VncView, error) 
 		}
 	}
 	var view *VncView
-	sess, err := vncconn.Connect(vncconn.Config{Host: host, Port: port, Password: password},
+	sess, err := vncconn.Connect(vncconn.Config{Host: host, Port: port, Password: password, Dial: target.dial},
 		func(w, h int, name string) { view = &VncView{TabID: tabID, Width: w, Height: h, Name: name} },
 		onFrame, onClose)
 	if err != nil {
@@ -114,10 +164,17 @@ func (a *App) vncDial(host string, port int, password string) (*VncView, error) 
 		a.vnc = map[string]*vncconn.Session{}
 	}
 	a.vnc[tabID] = sess
+	if target.viewOnly {
+		if a.vncViewOnly == nil {
+			a.vncViewOnly = map[string]bool{}
+		}
+		a.vncViewOnly[tabID] = true
+	}
 	a.mu.Unlock()
 	if view == nil {
 		view = &VncView{TabID: tabID}
 	}
+	view.ViewOnly = target.viewOnly
 	return view, nil
 }
 
@@ -141,7 +198,7 @@ func (a *App) VncStart(tabID string) error {
 
 // VncPointer sends a mouse event (buttonMask bit0=left,1=middle,2=right,3=wheelUp,4=wheelDown).
 func (a *App) VncPointer(tabID string, buttonMask, x, y int) error {
-	s := a.vncSession(tabID)
+	s := a.vncInput(tabID)
 	if s == nil {
 		return nil
 	}
@@ -150,7 +207,7 @@ func (a *App) VncPointer(tabID string, buttonMask, x, y int) error {
 
 // VncKey sends a key event (X keysym).
 func (a *App) VncKey(tabID string, down bool, keysym int) error {
-	s := a.vncSession(tabID)
+	s := a.vncInput(tabID)
 	if s == nil {
 		return nil
 	}
@@ -167,6 +224,25 @@ func (a *App) VncDisconnect(tabID string) error {
 		return nil
 	}
 	return s.Close()
+}
+
+// vncInput is the session to send input to: none for a view-only session.
+func (a *App) vncInput(tabID string) *vncconn.Session {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.vncViewOnly[tabID] {
+		return nil
+	}
+	return a.vnc[tabID]
+}
+
+// VncSetPaused stops framebuffer update requests while the tab is hidden and resumes when shown.
+func (a *App) VncSetPaused(tabID string, paused bool) error {
+	s := a.vncSession(tabID)
+	if s == nil {
+		return nil
+	}
+	return s.SetPaused(paused)
 }
 
 func (a *App) vncSession(tabID string) *vncconn.Session {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ordered } from "./ordered";
+import { releaseCombo, isRelease } from "./release";
 import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
 import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, RdpSyncClipboard, type RdpView } from "./api";
@@ -138,11 +139,23 @@ function onMove(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); in
 function onDown(e: MouseEvent) { if (stopped.value) return; canvas.value?.focus(); const [x, y] = pos(e); input(() => RdpMouse(tabId, "down", e.button, x, y)); }
 function onUp(e: MouseEvent) { if (!stopped.value) { const [x, y] = pos(e); input(() => RdpMouse(tabId, "up", e.button, x, y)); } }
 function onWheel(e: WheelEvent) { if (!stopped.value) { const [x, y] = pos(e); input(() => RdpMouse(tabId, "wheel", e.deltaY < 0 ? 120 : -120, x, y)); } }
+// Keys sent down and not yet up, released on the remote side when the keyboard is released.
+const held = new Set<number>();
+let release: Awaited<ReturnType<typeof releaseCombo>> = null;
+void releaseCombo().then((c) => (release = c));
 function onKey(e: KeyboardEvent, down: boolean) {
   if (stopped.value) return;
+  if (down && isRelease(e, release)) { // keyboard release: focus back to the app, nothing more is sent
+    e.preventDefault();
+    for (const sc of held) input(() => RdpKey(tabId, false, sc));
+    held.clear();
+    canvas.value?.blur();
+    return;
+  }
   const sc = SC[e.code];
   if (sc === undefined) return;
   e.preventDefault();
+  if (down) held.add(sc); else held.delete(sc);
   input(() => RdpKey(tabId, down, sc));
 }
 </script>
