@@ -77,8 +77,17 @@ function b64(b64: string): Uint8Array {
   return u;
 }
 
+// Terminal color schemes (xterm.js theme) selectable in Settings.
+const SCHEMES: Record<string, Record<string, string>> = {
+  xterm: { background: "#0b0e11", foreground: "#d4d4d4", cursor: "#9ece6a", selectionBackground: "#2a3f52" },
+  dark: { background: "#1e1e1e", foreground: "#d4d4d4", cursor: "#ffffff", selectionBackground: "#264f78" },
+  light: { background: "#ffffff", foreground: "#1e1e1e", cursor: "#000000", selectionBackground: "#add6ff" },
+  "solarized-dark": { background: "#002b36", foreground: "#839496", cursor: "#93a1a1", selectionBackground: "#073642" },
+  "solarized-light": { background: "#fdf6e3", foreground: "#657b83", cursor: "#586e75", selectionBackground: "#eee8d5" },
+};
+
 onMounted(async () => {
-  const tp = { fontFamily: "DejaVu Sans Mono", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000 };
+  const tp = { fontFamily: "DejaVu Sans Mono", fontSize: 13, cursorShape: "beam", cursorBlink: true, scrollbackLines: 10000, scheme: "xterm" };
   try { Object.assign(tp, (await GetSettings()).terminal); } catch { /* defaults */ }
   const cursorStyle = tp.cursorShape === "block" ? "block" : tp.cursorShape === "underline" ? "underline" : "bar";
   term = new Terminal({
@@ -87,7 +96,7 @@ onMounted(async () => {
     cursorBlink: tp.cursorBlink,
     cursorStyle,
     scrollback: tp.scrollbackLines || 10000,
-    theme: { background: "#0b0e11", foreground: "#d4d4d4", cursor: "#9ece6a", selectionBackground: "#2a3f52" },
+    theme: SCHEMES[tp.scheme] || SCHEMES.xterm,
   });
   fit = new FitAddon();
   term.loadAddon(fit);
