@@ -3,90 +3,67 @@
 <defs><filter id="shadow" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.07"/></filter><marker id="a-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#7c3aed"/></marker><marker id="a-start-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#7c3aed"/></marker><marker id="a-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/></marker><marker id="a-start-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/></marker><marker id="a-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0891b2"/></marker><marker id="a-start-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0891b2"/></marker><marker id="a-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0d9488"/></marker><marker id="a-start-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0d9488"/></marker><marker id="a-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#16a34a"/></marker><marker id="a-start-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#16a34a"/></marker><marker id="a-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#d97706"/></marker><marker id="a-start-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#d97706"/></marker><marker id="a-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#ea580c"/></marker><marker id="a-start-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#ea580c"/></marker><marker id="a-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#e11d48"/></marker><marker id="a-start-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#e11d48"/></marker><marker id="a-pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#db2777"/></marker><marker id="a-start-pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#db2777"/></marker><marker id="a-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker><marker id="a-start-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker></defs>
 <rect x="1" y="1" width="1398" height="1154" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
 <path d="M36 101 H1364" stroke="#e2e8f0"/>
-<path d="M188,228 L188,260" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M188,342 L188,374" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M188,428 L188,460" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M188,514 L188,546" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M188,628 L188,664" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)"/>
-<path d="M636,350.0 L676,350.0" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-violet)"/>
-<path d="M798,377 L798,417" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-violet)"/>
-<path d="M798,471 L798,511" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-violet)"/>
-<path d="M600,614 L600,642 L358,642 L358,848.0 L648,848.0" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-violet)"/>
-<path d="M798,781 L798,821" fill="none" stroke="#0891b2" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-cyan)"/>
-<path d="M920,848.0 L946,848.0 L946,234.5 L964,234.5" fill="none" stroke="#d97706" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-amber)"/>
-<path d="M1059,399 L1059,325" fill="none" stroke="#0d9488" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-teal)"/>
-<path d="M1269,325 L1269,399" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)"/>
+<rect x="28" y="250" width="1344" height="380" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<rect x="42" y="264" width="126" height="36" rx="8" fill="#2563eb" stroke="#2563eb" stroke-width="0"/>
+<text x="105.0" y="288" font-size="15" fill="#ffffff" text-anchor="middle" font-weight="700">Unlock</text>
+<path d="M514,348 L560,348" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-violet)"/>
+<path d="M514,529 L560,529" fill="none" stroke="#16a34a" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-green)"/>
+<path d="M980,440 L1026,440" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)"/>
+<rect x="28" y="660" width="1344" height="300" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="1"/>
+<rect x="42" y="674" width="126" height="36" rx="8" fill="#0891b2" stroke="#0891b2" stroke-width="0"/>
+<text x="105.0" y="698" font-size="15" fill="#ffffff" text-anchor="middle" font-weight="700">Database</text>
+<path d="M1191,612 L1191,640 L444,640 L444,678" fill="none" stroke="#0891b2" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-cyan)"/>
+<path d="M704,738 L750,738" fill="none" stroke="#0d9488" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-teal)"/>
+<path d="M750,880 L704,880" fill="none" stroke="#ea580c" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-orange)"/>
 <text x="36" y="49" font-size="24" fill="#0f172a" text-anchor="start" font-weight="700">Settings and encrypted store</text>
-<text x="36" y="79" font-size="14" fill="#475569" text-anchor="start">Non-secret settings in TOML; everything else in an SQLCipher database unlocked by a key envelope</text>
-<text x="36" y="143" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Settings • highest precedence first</text>
-<rect x="36" y="174" width="304" height="54" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="203" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">CLI flags</text>
-<rect x="36" y="260" width="304" height="82" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="289" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">Environment</text>
-<text x="54" y="318" font-size="13" fill="#0f172a" text-anchor="start">RXT_* / --env-file .env</text>
-<rect x="36" y="374" width="304" height="54" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="403" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">config.toml</text>
-<rect x="36" y="460" width="304" height="54" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="489" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">built-in defaults</text>
-<rect x="36" y="546" width="304" height="82" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="575" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Denylist</text>
-<text x="54" y="604" font-size="14" fill="#0f172a" text-anchor="start">Secret-like keys are refused.</text>
-<rect x="36" y="664" width="304" height="82" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="693" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Basic settings</text>
-<text x="54" y="722" font-size="14" fill="#0f172a" text-anchor="start">Theme, log level, data dir, …</text>
-<rect x="376" y="144" width="554" height="131" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="394" y="173" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700" font-family="DejaVu Sans Mono, monospace">keys.v1 • JSON key envelope</text>
-<text x="394" y="202" font-size="13" fill="#0f172a" text-anchor="start" font-family="DejaVu Sans Mono, monospace">version</text>
-<text x="394" y="226.5" font-size="13" fill="#0f172a" text-anchor="start" font-family="DejaVu Sans Mono, monospace">kdf {alg: argon2id, m_kib, t, p, salt}</text>
-<text x="394" y="251.0" font-size="13" fill="#0f172a" text-anchor="start" font-family="DejaVu Sans Mono, monospace">wraps: [ master (mandatory), keyring (optional) ]</text>
-<rect x="386" y="323" width="250" height="54" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="404" y="352" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Master password</text>
-<rect x="676" y="323" width="244" height="54" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="694" y="352" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Argon2id</text>
-<rect x="676" y="417" width="244" height="54" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="694" y="446" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">KEK</text>
-<rect x="386" y="511" width="534" height="103" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="404" y="540" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">XChaCha20-Poly1305</text>
-<text x="404" y="569" font-size="14" fill="#0f172a" text-anchor="start">Fresh 24-byte nonce; master wrap unwraps the random</text>
-<text x="404" y="590.0" font-size="14" fill="#0f172a" text-anchor="start">database key.</text>
-<rect x="386" y="678" width="534" height="103" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
-<text x="404" y="707" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Optional desktop keyring wrap</text>
-<text x="404" y="736" font-size="14" fill="#0f172a" text-anchor="start">Random key held in Secret Service via oo7 D-Bus; never file</text>
-<text x="404" y="757.0" font-size="14" fill="#0f172a" text-anchor="start">backends. XChaCha20-Poly1305 unwraps the same database key.</text>
-<rect x="648" y="821" width="272" height="54" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
-<text x="666" y="850" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">Random database key</text>
-<rect x="964" y="144" width="400" height="181" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
-<text x="982" y="173" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">SQLCipher database</text>
-<text x="982" y="202" font-size="14" fill="#0f172a" text-anchor="start">AES-256 page encryption</text>
-<text x="982" y="228.0" font-size="14" fill="#0f172a" text-anchor="start">cipher_memory_security=ON; WAL; mode 0600</text>
-<text x="982" y="254.0" font-size="14" fill="#0f172a" text-anchor="start">Sessions, folders, tunnels, credentials,</text>
-<text x="982" y="275.0" font-size="14" fill="#0f172a" text-anchor="start">trust records, audit, history</text>
-<text x="982" y="301.0" font-size="14" fill="#0f172a" text-anchor="start">Unlocked by the random database key</text>
-<rect x="964" y="399" width="190" height="126" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2" filter="url(#shadow)"/>
-<text x="982" y="428" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">INI bookmark</text>
-<text x="982" y="451" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">import</text>
-<text x="982" y="480" font-size="14" fill="#0f172a" text-anchor="start">Sessions only;</text>
-<text x="982" y="501.0" font-size="14" fill="#0f172a" text-anchor="start">never passwords</text>
-<rect x="1174" y="399" width="190" height="126" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
-<text x="1192" y="428" font-size="16" fill="#0f172a" text-anchor="start" font-weight="700">TOML export</text>
-<text x="1192" y="457" font-size="14" fill="#0f172a" text-anchor="start">No credentials</text>
-<rect x="964" y="561" width="400" height="103" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
-<text x="982" y="590" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Migrations</text>
-<text x="982" y="619" font-size="14" fill="#0f172a" text-anchor="start">Via user_version, in one transaction after</text>
-<text x="982" y="640.0" font-size="14" fill="#0f172a" text-anchor="start">an encrypted backup.</text>
-<rect x="964" y="696" width="400" height="82" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
-<text x="982" y="725" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">5 rolling backups</text>
-<text x="982" y="754" font-size="14" fill="#0f172a" text-anchor="start">Each paired with its envelope</text>
-<rect x="376" y="915" width="554" height="82" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="394" y="944" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Atomic envelope replacement</text>
-<text x="394" y="973" font-size="14" fill="#0f172a" text-anchor="start">write temp → fsync → rename → fsync dir</text>
-<rect x="36" y="1037" width="1328" height="82" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="1066" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Memory and recovery</text>
-<text x="54" y="1095" font-size="14" fill="#0f172a" text-anchor="start">Secrets in memory use secrecy/zeroize types. Forgotten master password = unrecoverable by design.</text>
-<rect x="437.3" y="833.0" width="125.39999999999999" height="30" rx="15" fill="#ffffff" stroke="#7c3aed" stroke-width="1"/>
-<text x="500" y="852.0" font-size="13" fill="#0f172a" text-anchor="middle">master unwrap</text>
-<rect x="1023.6" y="347" width="70.8" height="30" rx="15" fill="#ffffff" stroke="#0d9488" stroke-width="1"/>
-<text x="1059" y="366" font-size="13" fill="#0f172a" text-anchor="middle">import</text>
-<rect x="1233.6" y="347" width="70.8" height="30" rx="15" fill="#ffffff" stroke="#2563eb" stroke-width="1"/>
-<text x="1269" y="366" font-size="13" fill="#0f172a" text-anchor="middle">export</text>
+<text x="36" y="79" font-size="14" fill="#475569" text-anchor="start">Rust-compatible formats read and written in pure Go by internal/store (no cgo, no SQLCipher library)</text>
+<rect x="36" y="126" width="1328" height="96" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
+<text x="54" y="155" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">config.toml  (config folder)</text>
+<text x="54" y="184" font-size="14" fill="#0f172a" text-anchor="start">Non-secret settings: skin, terminal, SSH refresh interval, sidebar, shortcuts, agent_control. Linux: ~/.config/rustxterm/; macOS ~/Library/Application Support/rustxterm/;</text>
+<text x="54" y="205" font-size="14" fill="#0f172a" text-anchor="start">Windows %APPDATA%\rustxterm\</text>
+<rect x="184" y="268" width="330" height="160" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
+<text x="202" y="297" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Master password</text>
+<text x="202" y="326" font-size="14" fill="#0f172a" text-anchor="start">Typed at start (or RXT_MASTER_PASSWORD</text>
+<text x="202" y="347" font-size="14" fill="#0f172a" text-anchor="start">for the CLI). Cannot be recovered.</text>
+<rect x="184" y="446" width="330" height="166" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
+<text x="202" y="475" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">System keyring (optional)</text>
+<text x="202" y="504" font-size="14" fill="#0f172a" text-anchor="start">Random 32-byte wrapping key as</text>
+<text x="202" y="525" font-size="14" fill="#0f172a" text-anchor="start">rustxterm-db-&lt;hex&gt;: Secret Service,</text>
+<text x="202" y="546" font-size="14" fill="#0f172a" text-anchor="start">macOS Keychain or Windows Credential</text>
+<text x="202" y="567" font-size="14" fill="#0f172a" text-anchor="start">Manager.</text>
+<rect x="560" y="268" width="420" height="344" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
+<text x="578" y="297" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">keys.v1 envelope (data folder)</text>
+<text x="578" y="326" font-size="14" fill="#0f172a" text-anchor="start">JSON, version 1.</text>
+<text x="578" y="347" font-size="14" fill="#0f172a" text-anchor="start">kdf: argon2id, 256 MiB, 3 passes, 1 lane, random</text>
+<text x="578" y="368" font-size="14" fill="#0f172a" text-anchor="start">salt.</text>
+<text x="578" y="389" font-size="14" fill="#0f172a" text-anchor="start">master wrap: Argon2id(password) →</text>
+<text x="578" y="410" font-size="14" fill="#0f172a" text-anchor="start">XChaCha20-Poly1305 seal of the database key.</text>
+<text x="578" y="431" font-size="14" fill="#0f172a" text-anchor="start">keyring wrap (optional): the keyring key →</text>
+<text x="578" y="452" font-size="14" fill="#0f172a" text-anchor="start">XChaCha20-Poly1305 seal of the same key.</text>
+<text x="578" y="473" font-size="14" fill="#0f172a" text-anchor="start">Written atomically (tmp + rename).</text>
+<rect x="1026" y="268" width="330" height="344" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
+<text x="1044" y="297" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">256-bit database key</text>
+<text x="1044" y="326" font-size="14" fill="#0f172a" text-anchor="start">Opened from either wrap; the keyring</text>
+<text x="1044" y="347" font-size="14" fill="#0f172a" text-anchor="start">wrap is tried first, silently. Changing</text>
+<text x="1044" y="368" font-size="14" fill="#0f172a" text-anchor="start">the master password rewraps it; the</text>
+<text x="1044" y="389" font-size="14" fill="#0f172a" text-anchor="start">data is not re-encrypted.</text>
+<rect x="184" y="678" width="520" height="264" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
+<text x="202" y="707" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">rustxterm.db  (SQLCipher 4)</text>
+<text x="202" y="736" font-size="14" fill="#0f172a" text-anchor="start">4096-byte pages, AES-256-CBC with a per-page IV, HMAC-SHA512, 80</text>
+<text x="202" y="757" font-size="14" fill="#0f172a" text-anchor="start">reserved bytes per page. HMAC key: PBKDF2-HMAC-SHA512 (2</text>
+<text x="202" y="778" font-size="14" fill="#0f172a" text-anchor="start">iterations, salt ^ 0x3a). Tables: sessions, folders, tunnels,</text>
+<text x="202" y="799" font-size="14" fill="#0f172a" text-anchor="start">credentials, ssh_trust, cert_trust, policies, audit, history.</text>
+<rect x="750" y="678" width="606" height="120" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2" filter="url(#shadow)"/>
+<text x="768" y="707" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Read</text>
+<text x="768" y="736" font-size="14" fill="#0f172a" text-anchor="start">Pages decrypted in Go into a short-lived plaintext image (0600, removed on</text>
+<text x="768" y="757" font-size="14" fill="#0f172a" text-anchor="start">Close), opened with modernc.org/sqlite.</text>
+<rect x="750" y="818" width="606" height="124" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#shadow)"/>
+<text x="768" y="847" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Write</text>
+<text x="768" y="876" font-size="14" fill="#0f172a" text-anchor="start">Re-encrypt the image, verify it decrypts to the same bytes, keep</text>
+<text x="768" y="897" font-size="14" fill="#0f172a" text-anchor="start">rustxterm.db.bak, then atomic rename.</text>
+<rect x="36" y="990" width="1328" height="110" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+<text x="54" y="1019" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Compatibility</text>
+<text x="54" y="1048" font-size="14" fill="#0f172a" text-anchor="start">Same formats as the archived Rust app (rxt-store): a store the Rust app created opens in place, with no migration, and the official sqlcipher 4.6.1 opens a store created by</text>
+<text x="54" y="1069" font-size="14" fill="#0f172a" text-anchor="start">the Go app. A forgotten master password is unrecoverable by design.</text>
+<text x="36" y="1132" font-size="13" fill="#475569" text-anchor="start">Credentials leave the store only as saved / absent in the CLI, MCP and sidebar</text>
 </svg>

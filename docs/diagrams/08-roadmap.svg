@@ -3,102 +3,86 @@
 <defs><filter id="shadow" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.07"/></filter><marker id="a-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#7c3aed"/></marker><marker id="a-start-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#7c3aed"/></marker><marker id="a-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/></marker><marker id="a-start-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/></marker><marker id="a-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0891b2"/></marker><marker id="a-start-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0891b2"/></marker><marker id="a-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0d9488"/></marker><marker id="a-start-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#0d9488"/></marker><marker id="a-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#16a34a"/></marker><marker id="a-start-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#16a34a"/></marker><marker id="a-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#d97706"/></marker><marker id="a-start-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#d97706"/></marker><marker id="a-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#ea580c"/></marker><marker id="a-start-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#ea580c"/></marker><marker id="a-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#e11d48"/></marker><marker id="a-start-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#e11d48"/></marker><marker id="a-pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#db2777"/></marker><marker id="a-start-pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#db2777"/></marker><marker id="a-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker><marker id="a-start-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker></defs>
 <rect x="1" y="1" width="1598" height="1002" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
 <path d="M36 101 H1564" stroke="#e2e8f0"/>
-<path d="M199,151 L469,151" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M509,151 L779,151" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M819,151 L1089,151" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M1129,151 L1399,151" fill="none" stroke="#334155" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-slate)"/>
-<path d="M179,171 L179,218" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)"/>
-<path d="M489,171 L489,218" fill="none" stroke="#0d9488" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-teal)"/>
-<path d="M799,171 L799,218" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-violet)"/>
-<path d="M1109,171 L1109,218" fill="none" stroke="#db2777" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-pink)"/>
-<path d="M1419,171 L1419,218" fill="none" stroke="#d97706" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-amber)"/>
+<rect x="28" y="120" width="1544" height="220" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="1"/>
+<rect x="42" y="134" width="200" height="36" rx="8" fill="#334155" stroke="#334155" stroke-width="0"/>
+<text x="142.0" y="158" font-size="15" fill="#ffffff" text-anchor="middle" font-weight="700">Rust app (archived)</text>
+<rect x="28" y="370" width="1544" height="300" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1"/>
+<rect x="42" y="384" width="200" height="36" rx="8" fill="#16a34a" stroke="#16a34a" stroke-width="0"/>
+<text x="142.0" y="408" font-size="15" fill="#ffffff" text-anchor="middle" font-weight="700">Go + Wails (done)</text>
+<path d="M495,525 L513,525" fill="none" stroke="#16a34a" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-green)"/>
+<path d="M760,525 L778,525" fill="none" stroke="#16a34a" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-green)"/>
+<path d="M1026,525 L1044,525" fill="none" stroke="#16a34a" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-green)"/>
+<path d="M1291,525 L1309,525" fill="none" stroke="#16a34a" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-green)"/>
+<rect x="28" y="700" width="1544" height="270" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+<rect x="42" y="714" width="126" height="36" rx="8" fill="#2563eb" stroke="#2563eb" stroke-width="0"/>
+<text x="105.0" y="738" font-size="15" fill="#ffffff" text-anchor="middle" font-weight="700">Next</text>
 <text x="36" y="49" font-size="24" fill="#0f172a" text-anchor="start" font-weight="700">Roadmap</text>
-<text x="36" y="79" font-size="14" fill="#475569" text-anchor="start">Delivered by verified milestones; each milestone commits and pushes after its verification batch</text>
-<circle cx="179" cy="151" r="20" fill="#2563eb"/>
-<text x="179" y="156" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">M1</text>
-<rect x="36" y="218" width="286" height="232" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="249" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">M1 • Usable SSH</text>
-<rect x="54" y="269" width="55.2" height="28" rx="14" fill="#16a34a" stroke="#16a34a" stroke-width="0"/>
-<text x="81.6" y="288" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">DONE</text>
-<text x="54" y="329" font-size="15" fill="#0f172a" text-anchor="start">Workspace, platform-linux,</text>
-<text x="54" y="353" font-size="15" fill="#0f172a" text-anchor="start">themes, tabs, terminal, SSH</text>
-<text x="54" y="377" font-size="15" fill="#0f172a" text-anchor="start">auth / host keys / jump /</text>
-<text x="54" y="401" font-size="15" fill="#0f172a" text-anchor="start">tunnels, SFTP side panel,</text>
-<text x="54" y="425" font-size="15" fill="#0f172a" text-anchor="start">Docker lab</text>
-<circle cx="489" cy="151" r="20" fill="#0d9488"/>
-<text x="489" y="156" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">M2</text>
-<rect x="346" y="218" width="286" height="232" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2" filter="url(#shadow)"/>
-<text x="364" y="249" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">M2 • Files + desktops</text>
-<rect x="364" y="269" width="55.2" height="28" rx="14" fill="#16a34a" stroke="#16a34a" stroke-width="0"/>
-<text x="391.6" y="288" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">DONE</text>
-<text x="364" y="329" font-size="15" fill="#0f172a" text-anchor="start">FTP/FTPS, dual-pane</text>
-<text x="364" y="353" font-size="15" fill="#0f172a" text-anchor="start">SFTP/FTP, native RDP and</text>
-<text x="364" y="377" font-size="15" fill="#0f172a" text-anchor="start">VNC with limits, release</text>
-<text x="364" y="401" font-size="15" fill="#0f172a" text-anchor="start">pipeline</text>
-<circle cx="799" cy="151" r="20" fill="#7c3aed"/>
-<text x="799" y="156" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">M3</text>
-<rect x="656" y="218" width="286" height="232" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="674" y="249" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">M3 • Encrypted store</text>
-<rect x="674" y="269" width="55.2" height="28" rx="14" fill="#16a34a" stroke="#16a34a" stroke-width="0"/>
-<text x="701.6" y="288" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">DONE</text>
-<text x="674" y="329" font-size="15" fill="#0f172a" text-anchor="start">TOML/.env, SQLCipher, key</text>
-<text x="674" y="353" font-size="15" fill="#0f172a" text-anchor="start">envelope, master password,</text>
-<text x="674" y="377" font-size="15" fill="#0f172a" text-anchor="start">credentials, trust records,</text>
-<text x="674" y="401" font-size="15" fill="#0f172a" text-anchor="start">INI import, export</text>
-<circle cx="1109" cy="151" r="20" fill="#db2777"/>
-<text x="1109" y="156" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">M4</text>
-<rect x="966" y="218" width="286" height="232" rx="10" fill="#fdf2f8" stroke="#db2777" stroke-width="2" filter="url(#shadow)"/>
-<text x="984" y="249" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">M4 • Agent control</text>
-<rect x="984" y="269" width="55.2" height="28" rx="14" fill="#16a34a" stroke="#16a34a" stroke-width="0"/>
-<text x="1011.6" y="288" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">DONE</text>
-<text x="984" y="329" font-size="15" fill="#0f172a" text-anchor="start">Control socket,</text>
-<text x="984" y="353" font-size="15" fill="#0f172a" text-anchor="start">authorization boundary,</text>
-<text x="984" y="377" font-size="15" fill="#0f172a" text-anchor="start">CLI, MCP, audit, approvals</text>
-<text x="984" y="401" font-size="15" fill="#0f172a" text-anchor="start">UI, E2E UI tests</text>
-<circle cx="1419" cy="151" r="20" fill="#d97706"/>
-<text x="1419" y="156" font-size="14" fill="#ffffff" text-anchor="middle" font-weight="700">M5</text>
-<rect x="1276" y="218" width="286" height="232" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
-<text x="1294" y="249" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">M5 • Release v0.1.0</text>
-<rect x="1294" y="269" width="109.8" height="28" rx="14" fill="#d97706" stroke="#d97706" stroke-width="0"/>
-<text x="1348.9" y="288" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">IN PROGRESS</text>
-<text x="1294" y="329" font-size="15" fill="#0f172a" text-anchor="start">Docker dist, glibc 2.31,</text>
-<text x="1294" y="353" font-size="15" fill="#0f172a" text-anchor="start">AppImage, distro matrix,</text>
-<text x="1294" y="377" font-size="15" fill="#0f172a" text-anchor="start">guard in CI; tag v0.1.0</text>
-<rect x="36" y="498" width="1528" height="42" rx="10" fill="#7c3aed" stroke="#7c3aed" stroke-width="0"/>
-<text x="56" y="526" font-size="18" fill="#ffffff" text-anchor="start" font-weight="700">Next • planned OpenSpec changes</text>
-<rect x="36" y="576" width="480" height="184" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="607" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">UI parity &amp; AAA+ polish</text>
-<rect x="54" y="627" width="109.8" height="28" rx="14" fill="#d97706" stroke="#d97706" stroke-width="0"/>
-<text x="108.9" y="646" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">IN PROGRESS</text>
-<text x="54" y="687" font-size="15" fill="#0f172a" text-anchor="start">Menu bar, toolbar, vertical sidebar tabs,</text>
-<text x="54" y="711" font-size="15" fill="#0f172a" text-anchor="start">session editor, multi-page settings, bundled</text>
-<text x="54" y="735" font-size="15" fill="#0f172a" text-anchor="start">fonts, HiDPI icons</text>
-<rect x="560" y="576" width="480" height="133" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="578" y="607" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">Telnet sessions</text>
-<rect x="578" y="627" width="78.6" height="28" rx="14" fill="#7c3aed" stroke="#7c3aed" stroke-width="0"/>
-<text x="617.3" y="646" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">PLANNED</text>
-<text x="578" y="685" font-size="13" fill="#475569" text-anchor="start" font-family="DejaVu Sans Mono, monospace">add-telnet-sessions</text>
-<rect x="1084" y="576" width="480" height="133" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
-<text x="1102" y="607" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">Serial sessions</text>
-<rect x="1102" y="627" width="78.6" height="28" rx="14" fill="#7c3aed" stroke="#7c3aed" stroke-width="0"/>
-<text x="1141.3" y="646" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">PLANNED</text>
-<text x="1102" y="685" font-size="13" fill="#475569" text-anchor="start" font-family="DejaVu Sans Mono, monospace">add-serial-sessions</text>
-<rect x="36" y="796" width="480" height="169" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2" filter="url(#shadow)"/>
-<text x="54" y="827" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">XDMCP sessions</text>
-<rect x="54" y="847" width="78.6" height="28" rx="14" fill="#7c3aed" stroke="#7c3aed" stroke-width="0"/>
-<text x="93.3" y="866" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">PLANNED</text>
-<text x="54" y="907" font-size="15" fill="#0f172a" text-anchor="start">External Xvnc in a VNC tab</text>
-<text x="54" y="941.05" font-size="13" fill="#475569" text-anchor="start" font-family="DejaVu Sans Mono, monospace">add-xdmcp-sessions</text>
-<rect x="560" y="796" width="480" height="169" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="2" filter="url(#shadow)"/>
-<text x="578" y="827" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">rlogin / rsh / rexec</text>
-<rect x="578" y="847" width="78.6" height="28" rx="14" fill="#7c3aed" stroke="#7c3aed" stroke-width="0"/>
-<text x="617.3" y="866" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">PLANNED</text>
-<text x="578" y="907" font-size="15" fill="#0f172a" text-anchor="start">Legacy; off by default</text>
-<text x="578" y="941.05" font-size="13" fill="#475569" text-anchor="start" font-family="DejaVu Sans Mono, monospace">add-rsh-sessions</text>
-<rect x="1084" y="796" width="480" height="160" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
-<text x="1102" y="827" font-size="18" fill="#0f172a" text-anchor="start" font-weight="700">Later</text>
-<rect x="1102" y="847" width="78.6" height="28" rx="14" fill="#7c3aed" stroke="#7c3aed" stroke-width="0"/>
-<text x="1141.3" y="866" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">PLANNED</text>
-<text x="1102" y="907" font-size="15" fill="#0f172a" text-anchor="start">Local shell (pty), Mosh; macOS/Windows platform</text>
-<text x="1102" y="931" font-size="15" fill="#0f172a" text-anchor="start">adapters</text>
+<text x="36" y="79" font-size="14" fill="#475569" text-anchor="start">From the Rust/egui app to the Go + Wails app, and what comes next</text>
+<rect x="250" y="138" width="424" height="184" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+<text x="268" y="167" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">v0.1.0</text>
+<text x="268" y="196" font-size="14" fill="#0f172a" text-anchor="start">SSH, SFTP, FTP/FTPS, RDP, VNC, encrypted store,</text>
+<text x="268" y="217" font-size="14" fill="#0f172a" text-anchor="start">agent control, distribution</text>
+<rect x="694" y="138" width="424" height="184" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+<text x="712" y="167" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">v0.2 – v0.8</text>
+<text x="712" y="196" font-size="14" fill="#0f172a" text-anchor="start">UI refinement, Telnet, Serial, local shell, Windows</text>
+<text x="712" y="217" font-size="14" fill="#0f172a" text-anchor="start">and macOS ports, WSL, RDP Standard Security,</text>
+<text x="712" y="238" font-size="14" fill="#0f172a" text-anchor="start">diagnostics</text>
+<rect x="1138" y="138" width="424" height="184" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+<text x="1156" y="167" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Archived</text>
+<text x="1156" y="196" font-size="14" fill="#0f172a" text-anchor="start">read-only in archive/rust/; v0.8.0 is the last Rust</text>
+<text x="1156" y="217" font-size="14" fill="#0f172a" text-anchor="start">release</text>
+<rect x="250" y="400" width="245" height="250" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
+<text x="268" y="429" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">M1 – M3</text>
+<text x="268" y="458" font-size="13" fill="#0f172a" text-anchor="start">scaffold, pure-Go store, SSH +</text>
+<text x="268" y="479" font-size="13" fill="#0f172a" text-anchor="start">xterm.js, SFTP and FTP/FTPS</text>
+<rect x="515" y="400" width="245" height="250" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
+<text x="533" y="429" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">M4 – M8</text>
+<text x="533" y="458" font-size="13" fill="#0f172a" text-anchor="start">VNC, pure-Go RDP, Serial,</text>
+<text x="533" y="479" font-size="13" fill="#0f172a" text-anchor="start">Telnet, local shell,</text>
+<text x="533" y="500" font-size="13" fill="#0f172a" text-anchor="start">monitoring, tunnels</text>
+<rect x="780" y="400" width="245" height="250" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
+<text x="798" y="429" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">M9 – M11</text>
+<text x="798" y="458" font-size="13" fill="#0f172a" text-anchor="start">CLI store reads, control</text>
+<text x="798" y="479" font-size="13" fill="#0f172a" text-anchor="start">transport, stdio MCP server</text>
+<rect x="1046" y="400" width="245" height="250" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
+<text x="1064" y="429" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">M12 – M25</text>
+<text x="1064" y="458" font-size="13" fill="#0f172a" text-anchor="start">GUI parity, skins, MultiExec,</text>
+<text x="1064" y="479" font-size="13" fill="#0f172a" text-anchor="start">import, Windows, macOS</text>
+<text x="1064" y="500" font-size="13" fill="#0f172a" text-anchor="start">universal, benchmark</text>
+<rect x="1311" y="400" width="245" height="250" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
+<text x="1329" y="429" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Parity gate</text>
+<text x="1329" y="458" font-size="13" fill="#0f172a" text-anchor="start">13.4 signed off 2026-11-07;</text>
+<text x="1329" y="479" font-size="13" fill="#0f172a" text-anchor="start">13.5: releases switch to Go</text>
+<text x="1329" y="500" font-size="13" fill="#0f172a" text-anchor="start">(v0.9.0), Rust archived</text>
+<rect x="184" y="718" width="217" height="234" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
+<text x="202" y="747" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Agent control</text>
+<text x="202" y="776" font-size="13" fill="#0f172a" text-anchor="start">live operations, policy</text>
+<text x="202" y="797" font-size="13" fill="#0f172a" text-anchor="start">checks, approvals; macOS</text>
+<text x="202" y="818" font-size="13" fill="#0f172a" text-anchor="start">and Windows transports</text>
+<text x="202" y="839" font-size="13" fill="#0f172a" text-anchor="start">(3.3)</text>
+<rect x="415" y="718" width="217" height="234" rx="10" fill="#fff1f2" stroke="#e11d48" stroke-width="2" filter="url(#shadow)"/>
+<text x="433" y="747" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Web trust boundary</text>
+<text x="433" y="776" font-size="13" fill="#0f172a" text-anchor="start">loopback-only backend,</text>
+<text x="433" y="797" font-size="13" fill="#0f172a" text-anchor="start">origin check, per-launch</text>
+<text x="433" y="818" font-size="13" fill="#0f172a" text-anchor="start">token (3.4)</text>
+<rect x="645" y="718" width="217" height="234" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
+<text x="663" y="747" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Coexistence</text>
+<text x="663" y="776" font-size="13" fill="#0f172a" text-anchor="start">file locking and</text>
+<text x="663" y="797" font-size="13" fill="#0f172a" text-anchor="start">identities next to the</text>
+<text x="663" y="818" font-size="13" fill="#0f172a" text-anchor="start">Rust app (2.3)</text>
+<rect x="876" y="718" width="217" height="234" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
+<text x="894" y="747" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">HiDPI and dialogs</text>
+<text x="894" y="776" font-size="13" fill="#0f172a" text-anchor="start">DPR matrix (4.5); approval</text>
+<text x="894" y="797" font-size="13" fill="#0f172a" text-anchor="start">dialogs, credential vault</text>
+<text x="894" y="818" font-size="13" fill="#0f172a" text-anchor="start">(4.6)</text>
+<rect x="1107" y="718" width="217" height="234" rx="10" fill="#f0fdfa" stroke="#0d9488" stroke-width="2" filter="url(#shadow)"/>
+<text x="1125" y="747" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Platforms</text>
+<text x="1125" y="776" font-size="13" fill="#0f172a" text-anchor="start">screenshot sweep on macOS</text>
+<text x="1125" y="797" font-size="13" fill="#0f172a" text-anchor="start">and Windows (13.1); Rust</text>
+<text x="1125" y="818" font-size="13" fill="#0f172a" text-anchor="start">rollback cycle (13.6)</text>
+<rect x="1337" y="718" width="217" height="234" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+<text x="1355" y="747" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">New sessions</text>
+<text x="1355" y="776" font-size="13" fill="#0f172a" text-anchor="start">XDMCP and rsh / rlogin</text>
+<text x="1355" y="797" font-size="13" fill="#0f172a" text-anchor="start">(planned OpenSpec changes)</text>
+<text x="36" y="990" font-size="13" fill="#475569" text-anchor="start">Task ids refer to openspec/changes/migrate-gui-to-go-wails/tasks.md</text>
 </svg>
