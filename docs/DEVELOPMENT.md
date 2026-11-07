@@ -5,12 +5,12 @@ How to build, test and contribute to rustXterm. Project rules live in [`AGENTS.m
 
 - [Prerequisites](#prerequisites)
 - [Repository layout](#repository-layout)
-- [Docker workflow](#docker-workflow)
-- [Common tasks](#common-tasks)
-- [Snapshots and screenshots](#snapshots-and-screenshots)
+- [Make targets](#make-targets)
+- [Frontend](#frontend)
 - [Protocol lab](#protocol-lab)
-- [Running the GUI locally](#running-the-gui-locally)
-- [Release process](#release-process)
+- [Screenshots, prints and benchmark](#screenshots-prints-and-benchmark)
+- [Running the app locally](#running-the-app-locally)
+- [CI and release process](#ci-and-release-process)
 - [OpenSpec workflow](#openspec-workflow)
 - [Coding rules](#coding-rules)
 - [Parallel agents](#parallel-agents)
@@ -18,9 +18,11 @@ How to build, test and contribute to rustXterm. Project rules live in [`AGENTS.m
 
 ## Prerequisites
 
-- Docker (with Compose and BuildKit) and git. `make` is optional.
-- Nothing else. Do **not** install a Rust toolchain, Zig, Node or system libraries on the host: builds,
-  lints and tests run only in the pinned toolchain image (`Dockerfile`, target `toolchain`).
+- Docker (with Compose), git and `make`.
+- Nothing else. Do **not** install Go, Node, GTK or WebKitGTK on the host: every Go command runs in the
+  `rustxterm-go-linux` image (built from `build/linux.Dockerfile` by `make image`: Ubuntu 24.04, Go, GTK 4
+  and WebKitGTK 6.0 headers, appimagetool), and the frontend builds in `node:24`. The containers run as
+  your UID with the repository mounted at `/src`; Go's build and module caches live in `.cache/`.
 
 After cloning, enable the pre-push publication guard once:
 
@@ -31,166 +33,133 @@ git config core.hooksPath .githooks
 ## Repository layout
 
 ```
-apps/rustxterm/     single binary: GUI, CLI subcommands, `mcp`, `--self-test`
-crates/             one crate per concern (see layers below)
-xtask/              developer tasks (`cargo xtask ...`)
-lab/                Docker protocol lab, keyring test, optional Vagrant VMs
-packaging/          AppImage and tarball packaging used by the `dist` Docker target
-scripts/            cargo-docker.sh (toolchain wrapper), distro-matrix.sh
-vendor/             vendored third-party crates (own lints, see vendor/README.md)
+main.go             entry point: hands over to cmd/
+cmd/                Cobra command line: no subcommand opens the window; sessions, folders, tunnels, version, mcp
+internal/gui/       the only package that imports Wails: window, bound service, events, embedded SPA (dist/)
+internal/*conn/     one package per protocol (ssh, sftp, ftp, rdp, vnc, telnet, serial, local, wsl, tunnel)
+internal/store/     SQLCipher store, keys.v1 envelope, settings, credentials, trust, policies
+internal/…          secret (Secret Service), tlstrust, control (agent socket), mobaini, fsentry, archtest
+frontend/           Vue 3 + Tailwind SPA (Vite Plus, xterm.js); skins in src/themes/
+build/              linux.Dockerfile, linux/ (AppImage files), macapp/, guard/, qa/ (prints), bench/
+assets/             icons and fonts (every file listed in ATTRIBUTION.md)
+lab/                Docker protocol lab, expected lab tests, keyring and agent checks, optional Vagrant VMs
 openspec/           proposals, designs, specs and task lists
 docs/               documentation, diagrams, screenshots, gate receipts
-assets/             icons and fonts (every file listed in ATTRIBUTION.md)
+archive/rust/       the archived Rust/egui app (read-only, not built or tested)
 ```
 
-The workspace is layered; a crate may depend only on crates in lower layers, and `cargo xtask layers`
-enforces it.
+Package import rules are in the [documentation index](README.md#architecture) and enforced by
+`make layers`.
 
-| Layer | Crates |
+![Architecture: Go packages and the GUI boundary](diagrams/01-architecture-layers.png)
+
+## Make targets
+
+Every target runs in Docker. `VERSION` defaults to the exact `v*` tag of `HEAD` without the `v`, else
+`dev`; artifacts go to `dist/`.
+
+| Make | Does |
 |---|---|
-| L0 | `rxt-core`, `rxt-platform` (contracts only, no IO) |
-| L1 | `rxt-platform-linux`, `rxt-store`, `rxt-term` |
-| L2 | `rxt-ssh`, `rxt-sftp`, `rxt-ftp`, `rxt-rdp`, `rxt-vnc`, `rxt-telnet`, `rxt-serial` (one crate per protocol) |
-| L3 | `rxt-engine` (session manager, command registry, authorization boundary, control server) |
-| L4 | `rxt-ui` (egui), `rxt-agent` (CLI and MCP, no egui) |
-| app | `apps/rustxterm` (wires `rxt-platform-linux` in) |
+| `make image` | Build the `rustxterm-go-linux` toolchain image |
+| `make tidy` | `go mod tidy` |
+| `make check` | `gofmt -l` (fails on unformatted files) and `go vet ./...` |
+| `make test` | `go test ./...` (unit tests; lab tests skip without the lab) |
+| `make layers` | `go test ./internal/archtest`: import rules and skin token parity |
+| `make embed-stub` | Placeholder `internal/gui/dist/index.html` so compile-only targets work on a fresh checkout |
+| `make frontend` | Copy icons and fonts into `frontend/public/`, then `npm ci` and `vp build --mode desktop` into `internal/gui/dist` |
+| `make build` | Frontend + `dist/rustxterm-go-VERSION-linux-amd64` (CGO, GTK 4 / WebKitGTK 6.0) |
+| `make appimage` | `dist/rustxterm-go-VERSION-x86_64.AppImage` (system GTK / WebKitGTK) |
+| `make windows` | `dist/rustxterm-go-VERSION-windows-amd64.exe` (WebView2, CGO-free) |
+| `make macos` | `dist/rustxterm-go-VERSION-darwin-{amd64,arm64}` and `dist/rustxterm-go-VERSION_macos_universal.zip` (purego, CGO-free; `build/macapp` builds the universal `rustXterm (Go).app`) |
+| `make dist-all` | `appimage`, `windows` and `macos` |
+| `make guard` | Publication guard (`go run ./build/guard`); `GUARD_ARGS=--ci` as CI runs it, `--artifact PATH` to scan a release file |
+| `make lab-test` | Go `TestLab*` tests against the running lab (host network) |
+| `make prints` | Screenshot sweep of every screen in Light and Dark into `docs/prints/go-linux/` |
+| `make bench` | Cold start, terminal throughput and input latency against a Rust release binary |
+| `make clean` | Delete `dist/` and `.cache/` without asking |
 
-![Architecture: crate layers](diagrams/01-architecture-layers.png)
+The guard checks that no commit touches `base/` or `docs/prints/`, that no file in the tree, the history
+or a release artifact is a copy of a file under `base/` or holds a real absolute home path, and that every
+icon, image, font and test fixture has an [ATTRIBUTION.md](../ATTRIBUTION.md) row.
 
-Protocol and store crates use the `platform` contracts, never `platform-linux` directly, so other OS
-adapters can be added later. Every UI action is a `Command` handled by the engine.
+## Frontend
 
-## Docker workflow
-
-`scripts/cargo-docker.sh` runs cargo (or any command) in the toolchain image, building the image on first
-use. The repository is mounted at `/work`, the container runs as your UID, and `HOME` and `CARGO_HOME`
-live under `target/`, so nothing is written outside the checkout. Without arguments it runs
-`cargo build --workspace`.
+The SPA in `frontend/` is Vue 3 + Tailwind CSS, built with Vite Plus (`vp`). `make frontend` builds it
+into `internal/gui/dist`, which the binary embeds (`//go:embed`); the Go side never serves files from
+disk. Bindings are called by name through `@wailsio/runtime` (`frontend/src/api.ts`). CI lints it with:
 
 ```sh
-scripts/cargo-docker.sh cargo test -p rxt-ssh
-scripts/cargo-docker.sh bash          # interactive shell
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -w /src/frontend node:24 \
+  sh -c 'npm ci --no-audit --no-fund && npx vp check --no-fmt'
 ```
 
-| Variable | Default | Effect |
-|---|---|---|
-| `CARGO_TARGET_DIR` | `target/docker` | Build directory inside the checkout. Parallel agents use `target/agent-<name>`; the lab uses `target/lab`. |
-| `RXT_MOUNT_BASE` | `0` | `base/` is masked with an empty tmpfs; `1` mounts it read-only. Only for `cargo xtask guard`. |
-| `RXT_MOUNT_PRINTS` | `0` | `docs/prints/` is masked; `1` bind-mounts it writable. Only for `cargo xtask prints`. |
-| `RXT_DOCKER_NET` | `bridge` | Container network; `host` lets tests reach the lab on `127.0.0.1`. |
-| `RXT_DOCKER_CPUS` | unset | `--cpus` limit, e.g. `4` for gate measurements on the 4-core reference. |
-| `CARGO_INCREMENTAL` | `0` | Incremental compilation; off by default to save disk. |
-| `RXT_TOOLCHAIN_IMAGE` | `rustxterm-toolchain:dev` | Image tag to use. |
-
-`RUST_LOG`, `INSTA_UPDATE` and `UPDATE_SNAPSHOTS` are passed through. After changing the `Dockerfile`,
-rebuild the image with `make toolchain`.
-
-### Published build cache
-
-Building the `toolchain`, `windows-toolchain` and `appimage-tools` stages downloads about 150 Ubuntu
-packages from the dated `snapshot.ubuntu.com` mirror, which can take most of an hour from CI runners.
-The stages are therefore published, with inline build cache, as
-`docker.io/jniltinho/rustxterm-{toolchain,windows-toolchain,appimage-tools}:snapshot-20261001`
-(the tag names the apt snapshot date), and `ci.yml` / `release.yml` list them in `cache-from`. The
-Dockerfile stays the source of truth: when it changes, BuildKit simply rebuilds the changed stages.
-After changing a tool stage or the snapshot date, republish with a new tag and update the workflows:
-
-```sh
-for t in toolchain windows-toolchain appimage-tools; do
-  docker buildx build --builder default --target $t --cache-to type=inline \
-    --tag docker.io/jniltinho/rustxterm-$t:snapshot-YYYYMMDD --push .
-done
-```
-
-## Common tasks
-
-The root `Makefile` wraps everything above; `make help` lists the targets. Each target calls
-`scripts/cargo-docker.sh` or `docker`, never a host cargo.
-
-| Make | Equivalent |
-|---|---|
-| `make build` / `make release` | `cargo build --workspace [--release]` |
-| `make test` | `cargo test --workspace --locked` |
-| `make test-ui` | `cargo test -p rxt-ui --locked` (kittest UI and snapshot tests) |
-| `make snapshots` | `UPDATE_SNAPSHOTS=1 cargo test -p rxt-ui` |
-| `make fmt` / `make fmt-check` | `cargo fmt --all [--check]` |
-| `make clippy` | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
-| `make check` | fmt-check, clippy, test, layers, scenarios (the CI `checks` job minus guard and deny) |
-| `make layers` | `cargo xtask layers` |
-| `make scenarios` | `cargo xtask scenarios` (every spec scenario maps to a test) |
-| `make guard` | `RXT_MOUNT_BASE=1 cargo xtask guard` (run before every push) |
-| `make guard-ci` | `cargo xtask guard --ci` (as CI runs it, without `base/`) |
-| `make deny` | `cargo deny check` with the pinned, SHA-256 checked binary CI uses (cached in `target/tools/`) |
-| `make dist [VERSION=X.Y.Z]` | `docker build --target dist --output type=local,dest=dist/ .` |
-| `make dist-check` | `cargo xtask dist-check dist` |
-| `make matrix` | `scripts/distro-matrix.sh dist` |
-| `make lab-up` / `lab-test` / `lab-down` | `lab/lab.sh up` / `test` / `down` |
-| `make prints` | `RXT_MOUNT_PRINTS=1 cargo xtask prints` |
-| `make shell` | interactive shell in the toolchain container |
-| `make clean` | deletes `target/` (all build dirs, cargo home, tools) and `dist/`, without asking |
-
-`DIST=path` changes the artifact directory of `dist`, `dist-check`, `matrix` and `clean`.
-
-`cargo xtask` subcommands: `layers`, `guard [--ci] [--artifact PATH]...`, `dist-check DIR`,
-`lab test` (use `lab/lab.sh test`, which adds the host network), `prints`, `scenarios`,
-`windows-receipt` and `msi-normalize`.
-
-## Snapshots and screenshots
-
-`rxt-ui` renders every screen and dialog offscreen in Light and Dark with egui kittest on wgpu. In the
-container wgpu uses Mesa lavapipe (software Vulkan), which the toolchain image installs for tests.
-
-- Snapshots live in `crates/*/tests/snapshots/` and are compared on every `cargo test`. After an
-  intended UI change run `make snapshots`, review the changed PNGs and commit them.
-- `make prints` writes every screen at 1x and 2x to `docs/prints/rustxterm/`. `docs/prints/` is
-  local-only and never committed.
-- The published [screenshot gallery](screenshots/README.md) is a curated copy of prints from
-  `docs/prints/rustxterm/` into `docs/screenshots/` (fictional data only).
+Skins are CSS files in `frontend/src/themes/` registered in `index.ts`; a new skin must define every
+token the others define (`make layers`).
 
 ## Protocol lab
 
-A disposable Docker Compose lab (sshd, bastion + internal host, vsftpd FTP/FTPS, xrdp, TigerVNC). Every
-port binds `127.0.0.1`, and all credentials are fictional (`alice` / `lab-alice-pass`, key-only `bob`,
-...; see [lab/README.md](../lab/README.md)). Never point tests at real servers.
+A disposable Docker Compose lab (sshd, bastion + internal host, vsftpd FTP/FTPS, xrdp, TigerVNC, telnetd,
+echo). Every port binds `127.0.0.1`, and all credentials are fictional (`alice` / `lab-alice-pass`,
+key-only `bob`, ...; see [lab/README.md](../lab/README.md)). Never point tests at real servers.
 
 ```sh
 lab/lab.sh up      # build images, generate lab/.generated/, wait for healthchecks
-lab/lab.sh test    # cargo xtask lab test with RXT_DOCKER_NET=host and CARGO_TARGET_DIR=target/lab
+make lab-test      # or lab/lab.sh test
 lab/lab.sh down
 ```
 
-- Lab tests are `#[ignore]`d and run with `--ignored`. The executed test names must equal
-  `lab/expected-tests.txt`; add a line whenever you add or rename a lab test.
-- Keyring: `lab/keyring/run.sh` runs the Secret Service tests of `rxt-platform-linux` in a throwaway
-  dbus + gnome-keyring container.
-- Agent socket: `lab/agent/uid-test.sh` checks that another UID cannot use the control socket.
-- Windows receipts (manual, never in CI or `expected-tests.txt`): `lab/vagrant/windows/` is an evaluation
-  Windows Server box for RDP with NLA/CredSSP; the commands and results are recorded in
-  [gates/m2.md](gates/m2.md). Accept Microsoft's evaluation terms yourself. `lab/vagrant/debian/` is a
-  minimal sshd VM.
+- Lab tests are Go tests named `TestLab*` that skip unless the lab variables are set (`RXT_SSH_LAB=1`;
+  `RXT_SSH_KEY_TEST=1` for the key test); `make lab-test` sets them, the lab addresses and bob's generated
+  key, runs them on the host network and writes `.cache/lab-test.log`.
+- The tests that pass must equal [`lab/expected-tests.txt`](../lab/expected-tests.txt) exactly: add a
+  line whenever you add or rename a lab test.
+- CI runs the same lab in the `lab` job of `ci.yml`.
 
-## Running the GUI locally
+![Docker protocol test lab](diagrams/07-test-lab.png)
 
-Build in Docker, run the binary on the host (it needs your X11/Wayland session and a Vulkan or OpenGL
-driver; Mesa is fine). Never install toolchains on the host to do this.
+## Screenshots, prints and benchmark
+
+- `make prints` drives the Linux build on Xvfb with xdotool (`build/qa/prints.sh`) and captures 30
+  screens per skin (Light and Dark, 1400×900 screen with the 1280×800 window at offset 60,50) into
+  `docs/prints/go-linux/<skin>/`. It needs the QA container `rxt-qa` (the toolchain image on the lab
+  network with a QA store of lab sessions) and the store's throwaway master password in `RXT_QA_PASS`.
+  `docs/prints/` is local-only and never committed.
+- The published [screenshot gallery](screenshots/README.md) is a curated subset of those prints, cropped
+  to the window (`convert -crop 1280x800+60+50`) and compressed, with fictional data only. Every file in
+  `docs/screenshots/` is covered by its ATTRIBUTION.md row.
+- `make bench` runs `build/bench/run.sh` in a clean container on Xvfb against a Rust release binary
+  (`RUST_BIN`, default `.cache/bench/rustxterm-0.8.0-x86_64`) and writes `.cache/bench/results.md`. The
+  recorded numbers are in the [parity record](gates/go-parity.md#benchmark-132).
+
+## Running the app locally
+
+Build in Docker, run the binary on the host (it needs GTK 4 and WebKitGTK 6.0 and your X11 or Wayland
+session):
 
 ```sh
-make dist VERSION=0.0.0-dev
-./dist/rustxterm-0.0.0-dev-x86_64            # portable binary, glibc 2.31 baseline
-./dist/rustxterm-0.0.0-dev-x86_64 --self-test
+make build
+./dist/rustxterm-go-dev-linux-amd64                # the window
+./dist/rustxterm-go-dev-linux-amd64 sessions list  # the CLI
 ```
 
-For a faster loop, `make release` builds `target/docker/release/rustxterm`, linked against the
-toolchain image's glibc (Ubuntu 24.04); it runs on hosts with that glibc or newer. To keep test data away
-from your real sessions, point `RXT_DATA_DIR` at a scratch directory.
+To keep test data away from your real sessions, point `XDG_CONFIG_HOME` and `XDG_DATA_HOME` at scratch
+directories. `--safe-gpu` (or `RXT_SAFE_GPU=1`) turns off webview GPU acceleration.
 
-## Release process
+## CI and release process
 
-See [release.md](release.md). In short: set the workspace version in `Cargo.toml`, refresh `Cargo.lock`
-in Docker, wait for `ci` to pass on `main`, then push a `vX.Y.Z` tag. Tags matching `v*` trigger
-`.github/workflows/release.yml`, the only workflow that builds and publishes binaries; `ci.yml` only
-checks. A local dry run is `make dist VERSION=0.0.0-test DIST=dist/test`, `make dist-check DIST=dist/test`,
-`make matrix DIST=dist/test`.
+`.github/workflows/ci.yml` runs on `main` and pull requests and never publishes binaries:
+
+| Job | Runs |
+|---|---|
+| `checks` | `make check test layers`, `make guard GUARD_ARGS=--ci` (full history), frontend `vp check` |
+| `lab` | `lab/lab.sh up`, `make embed-stub lab-test`, lab logs on failure, `lab/lab.sh down` |
+| `build` | `make build windows macos` (every release target still builds) |
+
+Releases are built only by `.github/workflows/release-go.yml` on `v*.*.*` tags, and only for a commit
+whose `ci` run is green; see [release.md](release.md). Go versions continue the Rust numbering (v0.9.0
+onward).
+
+![Build and release pipeline](diagrams/06-build-release.png)
 
 ## OpenSpec workflow
 
@@ -215,39 +184,36 @@ its commands and results as a receipt in [`docs/gates/`](gates/).
 
 ## Coding rules
 
-- `unsafe` is forbidden (`unsafe_code = "forbid"`); `unwrap`, `expect`, `todo!`, `unimplemented!` and
-  `dbg!` are denied by clippy outside tests.
-- Code, comments, CLI messages, docs and OpenSpec artifacts are in English.
-- Respect the layers; no protocol or store crate depends on `platform-linux` or the UI.
-- Every screen supports light, dark and system themes through theme tokens; no hard-coded colors.
-- `base/` (local scratch and reference material) and `docs/prints/` are local-only, git-ignored: never add them to Git, Docker build
-  contexts (`.dockerignore`) or artifacts.
-- Every new icon, image, font or fixture gets a row in [ATTRIBUTION.md](../ATTRIBUTION.md).
+- `gofmt` and `go vet` clean (`make check`); code, comments, CLI messages, docs and OpenSpec artifacts in
+  English.
+- Respect the layering: protocol and core packages never import `internal/gui` or Wails, and protocol
+  packages stay independent of each other. A new package needs its row in `internal/archtest`.
+- Keep the Rust app's stored formats (store, settings, known hosts, keyring entries) unchanged so
+  existing data keeps loading.
+- Every screen supports every skin through the theme tokens; no hard-coded colors.
+- `base/` (local scratch and reference material) and `docs/prints/` are local-only and git-ignored: never
+  add them to Git, Docker build contexts or artifacts.
+- Every new icon, image, font or fixture (`testdata/`, `fixtures/`) gets a row in
+  [ATTRIBUTION.md](../ATTRIBUTION.md); vendored code keeps its license next to it, and no copyleft.
 - Tests use the lab or small VMs with fictional credentials, never real servers or real secrets.
-- Run `make guard` before every push; the pre-push hook (`git config core.hooksPath .githooks`) runs it
-  for you. Docs must not contain absolute home paths.
+- Run `make guard` before every push; the pre-push hook runs it for you. Docs must not contain absolute
+  home paths.
 
 ## Parallel agents
 
-- Each agent owns a disjoint set of crates and does not edit others' files.
-- Each agent builds with its own target directory: `CARGO_TARGET_DIR=target/agent-<name>`, so builds do
-  not block each other. Use the shared `target/docker` when disk is tight.
-- `make fmt-check` and `make clippy` cover the whole workspace and can fail on another agent's work in
-  progress; scope with `-p <crate>` through the wrapper while others are mid-change.
+- Each agent owns a disjoint set of packages, works in its own git worktree and does not edit others'
+  files.
 - One agent integrates, runs the milestone verification batch and commits.
 
 ## Troubleshooting
 
-- **Disk full**: each target directory holds tens of GB. Remove stale ones (`rm -rf target/agent-*`,
-  `target/lab`), or everything with `make clean`. Reclaim Docker space with `docker builder prune` (and
-  `docker image prune` for old toolchain images). Keep `CARGO_INCREMENTAL=0`.
-- **Lab port conflicts**: the lab uses 127.0.0.1 ports 2222, 2223, 2121, 2990, 13389, 5901 and
-  30000-30019. Stop whatever holds them (or a stale lab: `lab/lab.sh down`), then `lab/lab.sh up`. The
-  Vagrant VMs use other ports (2322, 53389) to avoid clashes.
-- **Lab tests cannot connect**: run them through `lab/lab.sh test` (host network), not plain
-  `cargo test`.
-- **Snapshot diffs on another machine**: snapshots are rendered with lavapipe inside the toolchain
-  image; always regenerate them through `make snapshots`, never with a host GPU.
-- **Guard fails on `base/`**: `cargo xtask guard` needs `RXT_MOUNT_BASE=1` (`make guard`); in CI use
-  `make guard-ci`.
-- **Stale toolchain image** after a `Dockerfile` change: `make toolchain`.
+- **`pattern all:dist: no matching files found`** on a fresh checkout: run `make embed-stub` (or `make frontend`)
+  before Go-only targets such as `go vet`.
+- **Lab port conflicts**: the lab uses 127.0.0.1 ports 2222, 2223, 2121, 2990, 13389, 5901, 2323, 2007 and
+  30000-30019. Stop whatever holds them (or a stale lab: `lab/lab.sh down`), then `lab/lab.sh up`.
+- **Lab tests skipped or cannot connect**: run them through `make lab-test` (host network, lab variables set),
+  not plain `make test`.
+- **Guard fails on `base/` digests in CI**: CI has no `base/`; use `make guard GUARD_ARGS=--ci` there.
+- **Stale toolchain image** after a `build/linux.Dockerfile` change: `make image`.
+- **Disk full**: `make clean` removes `dist/` and `.cache/`; reclaim Docker space with
+  `docker builder prune`.
