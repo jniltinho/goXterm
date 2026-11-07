@@ -25,3 +25,6 @@ func Connect(string) (net.Conn, error) { return nil, errUnsupported }
 
 // IsNotRunning reports whether err means there is no running instance to connect to.
 func IsNotRunning(err error) bool { return errors.Is(err, errUnsupported) }
+
+// Live reports whether a control socket exists (always false until this platform's transport lands).
+func Live() bool { return false }

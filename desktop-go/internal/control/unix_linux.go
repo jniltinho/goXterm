@@ -124,6 +124,17 @@ var errNotRunning = errors.New("no running instance with agent control enabled")
 // IsNotRunning reports whether err means there is no running instance to connect to.
 func IsNotRunning(err error) bool { return errors.Is(err, errNotRunning) }
 
+// Live reports whether a control socket exists, without connecting to it (so it does not take a
+// listening instance). Used by the MCP server to choose the live vs offline tool set.
+func Live() bool {
+	dir, err := RuntimeDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.Lstat(filepath.Join(dir, socketName))
+	return err == nil
+}
+
 // peerUID reads the connected peer's UID via SO_PEERCRED.
 func peerUID(c *net.UnixConn) (uint32, error) {
 	raw, err := c.SyscallConn()

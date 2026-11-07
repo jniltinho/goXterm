@@ -179,3 +179,32 @@ func WriteMessage(w io.Writer, v any) error {
 	}
 	return WriteFrame(w, data)
 }
+
+// Call connects to the running instance, sends one request and returns its response (one request per
+// connection, as the server expects). A refused client still gets its denied reason even if the
+// server closed before our write finished, so the answer is read before a write error is reported.
+// IsNotRunning(err) is true when there is no instance to reach.
+func Call(req Request) (Response, error) {
+	dir, err := RuntimeDir()
+	if err != nil {
+		return Response{}, err
+	}
+	c, err := Connect(dir)
+	if err != nil {
+		return Response{}, err
+	}
+	defer c.Close()
+	writeErr := WriteMessage(c, req)
+	var resp Response
+	ok, readErr := ReadMessage(c, &resp)
+	if ok && readErr == nil {
+		return resp, nil
+	}
+	if writeErr != nil {
+		return Response{}, writeErr
+	}
+	if readErr != nil {
+		return Response{}, readErr
+	}
+	return Response{}, fmt.Errorf("control channel closed without a response")
+}
