@@ -198,3 +198,84 @@ func TestChangePasswordAndKeyringToggle(t *testing.T) {
 	}
 	s.Close()
 }
+
+func newStore(t *testing.T) *Store {
+	t.Helper()
+	dir := t.TempDir()
+	if err := Create(dir, "lab-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir, "lab-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return s
+}
+
+// Export → import into an empty store keeps folders (with icons), sessions (fields, folder) and
+// tunnels (re-pointed); the Rust tests' format, version, credential and local-entry rules hold.
+func TestTOMLRoundTripAndRules(t *testing.T) {
+	src := newStore(t)
+	prod, _ := src.SaveFolder(0, "Production", nil)
+	db, _ := src.SaveFolder(0, "Databases", &prod)
+	_ = src.SetFolderIcon(db, "folder-green")
+	app, err := src.SaveSession(`{"id":0,"name":"app","protocol":"ssh","host":"app.example","port":2022,"user":"alice","folder":` + itoa(db) +
+		`,"ssh":{"key_file":"~/.ssh/id_ed25519","keepalive_secs":30,"jump_hosts":[{"host":"bastion.example","port":2200,"user":"bob"}]},"terminal":{"font_size":12.5,"scheme":null}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := src.SaveTunnel(`{"name":"db","kind":"remote","via":` + itoa(app) + `,"bind_addr":"0.0.0.0","bind_port":15432,"dest_host":"db.internal","dest_port":5432}`); err != nil {
+		t.Fatal(err)
+	}
+	text, err := src.ExportTOML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(text, "format = \"rustxterm-export\"\nversion = 1\n") || strings.Contains(text, "null") ||
+		!strings.Contains(text, "port = 2022\n") || !strings.Contains(text, "font_size = 12.5") {
+		t.Fatalf("export:\n%s", text)
+	}
+
+	dst := newStore(t)
+	n, local, err := dst.ImportTOML(text)
+	if err != nil || n != 1 || local != 0 {
+		t.Fatalf("import: %d %d %v", n, local, err)
+	}
+	ss, _ := dst.Sessions()
+	fs, _ := dst.Folders()
+	ts, _ := dst.Tunnels()
+	if len(ss) != 1 || len(fs) != 2 || len(ts) != 1 {
+		t.Fatalf("after import: %d sessions %d folders %d tunnels", len(ss), len(fs), len(ts))
+	}
+	got := ss[0]
+	var dbID int64
+	for _, f := range fs {
+		if f["name"] == "Databases" {
+			dbID = f["id"].(int64)
+			if f["icon"] != "folder-green" {
+				t.Fatalf("icon %v", f["icon"])
+			}
+		}
+	}
+	jumps, _ := got["ssh"].(map[string]any)["jump_hosts"].([]any)
+	if got["folder"] != dbID || got["port"] != float64(2022) || len(jumps) != 1 || ts[0]["via"] != got["id"] {
+		t.Fatalf("session %v tunnel %v", got, ts[0])
+	}
+
+	for _, bad := range []string{"format = \"other\"\nversion = 1\n", "format = \"rustxterm-export\"\nversion = 2\n", "not toml ["} {
+		if _, _, err := dst.ImportTOML(bad); err == nil {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+	n, local, err = dst.ImportTOML("format = \"rustxterm-export\"\nversion = 1\n[[sessions]]\nname = \"me\"\nprotocol = \"local\"\n" +
+		"[[sessions]]\nname = \"a\"\nhost = \"a.example\"\npassword = \"FICTIONAL\"\n")
+	if err != nil || n != 1 || local != 1 {
+		t.Fatalf("local/credential: %d %d %v", n, local, err)
+	}
+	var js string
+	_ = dst.db.QueryRow(`SELECT json FROM sessions WHERE name='a'`).Scan(&js)
+	if strings.Contains(js, "FICTIONAL") {
+		t.Fatalf("credential kept: %s", js)
+	}
+}

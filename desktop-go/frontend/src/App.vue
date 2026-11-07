@@ -13,7 +13,7 @@ import { SetMultiExec, SelectMultiExec, WslConnect, SetFolderIcon, MoveSession }
 import FolderDialog from "./FolderDialog.vue";
 import { commandFor, shortcutMap, DEFAULT_SHORTCUTS } from "./commands";
 import ImportDialog from "./ImportDialog.vue";
-import { ImportMobaPick, ImportMobaApply, type ImportPreview } from "./api";
+import { ImportMobaPick, ImportMobaApply, ImportTOMLPick, ExportTOMLPick, ExportTOMLWrite, type ImportPreview, type ExportPlan } from "./api";
 import { SaveSettings } from "./api";
 import { DeleteSession, DuplicateSession, SaveFolder, DeleteFolder, SshTrustRespond, SshPasswordRespond, GetSettings, Quit } from "./api";
 
@@ -382,6 +382,22 @@ const importing = ref(false);
 async function importSessions() {
   if (locked.value) { unlockError.value = ""; showUnlock.value = true; return; }
   try { importPreview.value = await ImportMobaPick(); } catch (e) { void showInfo("Import MobaXterm.ini", `Cannot import: ${e}`); }
+}
+// rustXterm TOML (Rust Action::ImportToml / ExportToml + StoreDialog::Export confirmation).
+const exportPlan = ref<ExportPlan | null>(null);
+async function importToml() {
+  try { const msg = await ImportTOMLPick(); if (msg) { status.value = msg; await loadData(); } }
+  catch (e) { void showInfo("Notice", String(e)); }
+}
+async function exportToml() {
+  try { exportPlan.value = await ExportTOMLPick(); } catch (e) { void showInfo("Notice", String(e)); }
+}
+async function confirmExport() {
+  const p = exportPlan.value;
+  exportPlan.value = null;
+  if (!p) return;
+  try { await ExportTOMLWrite(p.path); status.value = `Exported ${p.sessions} session(s) to ${p.path}.`; }
+  catch (e) { status.value = `Could not export to ${p.path}: ${e}`; }
 }
 async function confirmImport() {
   const p = importPreview.value;
@@ -806,6 +822,20 @@ const tabIcon = (t: Tab) => icon(t.icon);
       </div>
     </div>
 
+    <!-- Export sessions (Rust StoreDialog::Export) -->
+    <div v-if="exportPlan" class="modal-backdrop" style="z-index: 88">
+      <div class="dialog">
+        <div class="dialog-title">Export sessions</div>
+        <div class="dialog-body">
+          <p class="dialog-sub">Write {{ exportPlan.sessions }} session(s), {{ exportPlan.folders }} folder(s) and {{ exportPlan.tunnels }} tunnel(s) to {{ exportPlan.path }}?</p>
+          <p class="dialog-sub">Passwords, passphrases and trust records are not exported.</p>
+          <div class="dialog-actions">
+            <button class="dbtn primary" @click="confirmExport"><img :src="icon('ok')" class="dbtn-ico" /> Export</button>
+            <button class="dbtn" @click="exportPlan = null"><img :src="icon('cancel')" class="dbtn-ico" /> Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <ImportDialog v-if="importPreview" :preview="importPreview" :busy="importing" @ok="confirmImport" @cancel="importPreview = null" />
     <FolderDialog v-if="folderDlg" :title="folderDlg.title" :name="folderDlg.name" :icon="folderDlg.icon" @ok="saveFolderDlg" @cancel="folderDlg = null" />
 
@@ -823,7 +853,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
     <!-- global settings -->
     <SettingsDialog v-if="settingsOpen" @saved="loadUI()" @close="settingsOpen = false"
-      @import="settingsOpen = false; importSessions()" @unlock="settingsOpen = false; unlockError = ''; showUnlock = true" />
+      @import="settingsOpen = false; importSessions()" @import-toml="importToml()" @export-toml="exportToml()" @unlock="settingsOpen = false; unlockError = ''; showUnlock = true" />
     <TunnelsDialog v-if="tunnelsOpen" :sessions="sessions" @close="tunnelsOpen = false" />
 
     <!-- SSH host-key trust (trust-on-first-use) -->

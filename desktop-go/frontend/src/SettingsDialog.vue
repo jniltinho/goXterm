@@ -9,7 +9,7 @@ import {
 import { SCHEMES } from "./schemes";
 import { COMMANDS, DEFAULT_SHORTCUTS, shortcutValid } from "./commands";
 
-const emit = defineEmits<{ saved: []; close: []; import: []; unlock: [] }>();
+const emit = defineEmits<{ saved: []; close: []; import: []; unlock: []; "import-toml": []; "export-toml": [] }>();
 const icon = (n: string) => `./icons/${n}.png`;
 
 const TABS = [
@@ -255,8 +255,8 @@ watch(tab, async (t) => {
             <section class="grp"><div class="grp-h">Import and export</div><div class="grp-b">
               <div class="line">
                 <button class="btn" :disabled="!store.unlocked" @click="emit('import')">Import MobaXterm.ini…</button>
-                <button class="btn" disabled title="Not available yet">Import rustXterm TOML…</button>
-                <button class="btn" disabled title="Not available yet">Export rustXterm TOML…</button>
+                <button class="btn" :disabled="!store.unlocked" @click="emit('import-toml')">Import rustXterm TOML…</button>
+                <button class="btn" :disabled="!store.unlocked" @click="emit('export-toml')">Export rustXterm TOML…</button>
               </div>
             </div></section>
           </template>

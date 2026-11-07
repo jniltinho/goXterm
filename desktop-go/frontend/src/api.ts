@@ -88,6 +88,11 @@ export interface ImportPreview {
   report: { sessions: { folder: string; session: Record<string, unknown> }[] | null; folders: string[] | null; skipped: ImportEntry[] | null; warnings: ImportEntry[] | null };
 }
 export const ImportMobaPick = () => call<ImportPreview | null>("ImportMobaPick");
+// rustXterm TOML export/import (no credentials), as the Rust app's.
+export interface ExportPlan { path: string; sessions: number; folders: number; tunnels: number }
+export const ExportTOMLPick = () => call<ExportPlan | null>("ExportTOMLPick");
+export const ExportTOMLWrite = (path: string) => call<void>("ExportTOMLWrite", path);
+export const ImportTOMLPick = () => call<string>("ImportTOMLPick");
 export const ImportMobaApply = (path: string) => call<number>("ImportMobaApply", path);
 // Folder icon ("folder" = default yellow) and moving a session (null = the root).
 export const SetFolderIcon = (id: number, icon: string) => call<void>("SetFolderIcon", id, icon);

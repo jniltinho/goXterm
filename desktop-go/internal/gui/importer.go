@@ -2,6 +2,8 @@ package gui
 
 import (
 	"errors"
+	"fmt"
+	"os"
 
 	"rustxterm-go/internal/mobaini"
 	"rustxterm-go/internal/store"
@@ -46,4 +48,75 @@ func (a *App) ImportMobaApply(path string) (int, error) {
 		items[i] = store.ImportItem{Folder: it.Folder, Session: it.Session}
 	}
 	return st.ImportSessions(items)
+}
+
+// ExportPlan is the "Export sessions" confirmation: where, and how much is written.
+type ExportPlan struct {
+	Path     string `json:"path"`
+	Sessions int    `json:"sessions"`
+	Folders  int    `json:"folders"`
+	Tunnels  int    `json:"tunnels"`
+}
+
+// ExportTOMLPick asks where to save the rustXterm export (native dialog); nil when cancelled.
+func (a *App) ExportTOMLPick() (*ExportPlan, error) {
+	if a.savePath == nil {
+		return nil, errors.New("no file dialog")
+	}
+	path, err := a.savePath("rustxterm-sessions.toml")
+	if err != nil || path == "" {
+		return nil, err
+	}
+	st, err := openStore()
+	if err != nil {
+		return nil, err
+	}
+	defer st.Close()
+	ss, _ := st.Sessions()
+	fs, _ := st.Folders()
+	ts, _ := st.Tunnels()
+	return &ExportPlan{Path: path, Sessions: len(ss), Folders: len(fs), Tunnels: len(ts)}, nil
+}
+
+// ExportTOMLWrite writes the export (no passwords, passphrases or trust records) to path.
+func (a *App) ExportTOMLWrite(path string) error {
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	text, err := st.ExportTOML()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(text), 0o600)
+}
+
+// ImportTOMLPick asks for a rustXterm export and merges it; returns the status line ("" if cancelled).
+func (a *App) ImportTOMLPick() (string, error) {
+	if a.openPath == nil {
+		return "", errors.New("no file dialog")
+	}
+	path, err := a.openPath("Import rustXterm sessions")
+	if err != nil || path == "" {
+		return "", err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	st, err := openStore()
+	if err != nil {
+		return "", err
+	}
+	defer st.Close()
+	n, local, err := st.ImportTOML(string(b))
+	if err != nil {
+		return "", fmt.Errorf("cannot import %s: %w", path, err)
+	}
+	msg := fmt.Sprintf("Imported %d session(s) from %s.", n, path)
+	if local > 0 {
+		msg += fmt.Sprintf(" Skipped %d local terminal entry(ies): they are never saved.", local)
+	}
+	return msg, nil
 }
