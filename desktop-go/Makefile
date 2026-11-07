@@ -22,6 +22,9 @@ tidy: image       ## resolve modules and write go.sum
 check: image      ## gofmt + go vet
 	$(RUN) sh -c 'test -z "$$(gofmt -l cmd internal main.go)" || { gofmt -l cmd internal main.go; exit 1; }; go vet ./...'
 
+layers: image     ## module layering (core never imports the GUI/Wails; protocol packages stay independent)
+	$(RUN) go test ./internal/archtest
+
 test: image       ## unit tests
 	$(RUN) go test ./...
 
