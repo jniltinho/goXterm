@@ -151,7 +151,8 @@ func (a *App) dial(host string, port int, user, password string) (string, error)
 	tabID, onData, onClose := a.newStreamTab()
 	sess, err := sshconn.Connect(sshconn.Config{
 		Host: host, Port: port, User: user, Password: password,
-		HostKey: a.sshHostKeyCallback(host, port), Cols: 80, Rows: 24,
+		AskPassword: a.askPassword(host, user),
+		HostKey:     a.sshHostKeyCallback(host, port), Cols: 80, Rows: 24,
 	}, onData, onClose)
 	if err != nil {
 		return "", err

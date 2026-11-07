@@ -38,7 +38,8 @@ func (a *App) SftpConnect(sessionID int64) (*SftpSession, error) {
 		return nil, err
 	}
 	c, err := sftpconn.Connect(sshconn.Config{
-		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password, HostKey: a.sshHostKeyCallback(sv.Host, sv.Port),
+		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
+		AskPassword: a.askPassword(sv.Host, sv.User), HostKey: a.sshHostKeyCallback(sv.Host, sv.Port),
 	})
 	if err != nil {
 		return nil, err

@@ -41,6 +41,9 @@ export const SessionJSON = (id: number) => call<string>("SessionJSON", id);
 
 // SSH host-key trust (TOFU): the backend emits "ssh:trust" for an unknown key; answer once/save/reject.
 export const SshTrustRespond = (reqId: string, decision: string) => call<void>("SshTrustRespond", reqId, decision);
+// Interactive SSH password: the backend emits "ssh:password" when it needs one; answer or cancel.
+export const SshPasswordRespond = (reqId: string, password: string, ok: boolean) =>
+  call<void>("SshPasswordRespond", reqId, password, ok);
 
 // Terminal (SSH) — output streams as Wails events "term:out:<tabId>" (base64) and "term:close:<tabId>".
 export const Connect = (id: number) => call<string>("Connect", id);

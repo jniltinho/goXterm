@@ -9,7 +9,7 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { DeleteSession, SshTrustRespond } from "./api";
+import { DeleteSession, SshTrustRespond, SshPasswordRespond } from "./api";
 import { Events } from "@wailsio/runtime";
 import TerminalView from "./Terminal.vue";
 import FileBrowser from "./FileBrowser.vue";
@@ -74,6 +74,7 @@ async function openDemos() {
 
 onMounted(async () => {
   Events.On("ssh:trust", (ev: { data: unknown }) => { trustReq.value = ev.data as TrustReq; });
+  Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passReq.value = ev.data as PassReq; });
   try { locked.value = await Locked(); } catch { locked.value = true; }
   if (locked.value) { loading.value = false; return; }
   await loadData();
@@ -125,6 +126,17 @@ function respondTrust(decision: "once" | "save" | "reject") {
   if (!trustReq.value) return;
   void SshTrustRespond(trustReq.value.reqId, decision);
   trustReq.value = null;
+}
+
+// Interactive SSH password prompt (sessions with no saved credential).
+type PassReq = { reqId: string; host: string; user: string };
+const passReq = ref<PassReq | null>(null);
+const passValue = ref("");
+function respondPassword(ok: boolean) {
+  if (!passReq.value) return;
+  void SshPasswordRespond(passReq.value.reqId, ok ? passValue.value : "", ok);
+  passReq.value = null;
+  passValue.value = "";
 }
 
 function newSession() { editorSessionId.value = null; editorOpen.value = true; }
@@ -351,6 +363,22 @@ const tabIcon = (t: Tab) => icon(t.icon);
             <button class="dbtn primary" @click="respondTrust('once')">Accept once</button>
             <button class="dbtn" @click="respondTrust('save')">Accept and save</button>
             <button class="dbtn" @click="respondTrust('reject')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- interactive SSH password (sessions without a saved credential) -->
+    <div v-if="passReq" class="modal-backdrop" style="z-index: 66">
+      <div class="dialog" style="width: 400px">
+        <div class="dialog-title">Password</div>
+        <div class="dialog-body">
+          <p class="dialog-sub">Enter the password for <b>{{ (passReq.user || "user") + "@" + passReq.host }}</b>.</p>
+          <label class="dialog-label">Password</label>
+          <input type="password" class="dialog-input" v-model="passValue" @keyup.enter="respondPassword(true)" autofocus />
+          <div class="dialog-actions">
+            <button class="dbtn primary" @click="respondPassword(true)">OK</button>
+            <button class="dbtn" @click="respondPassword(false)">Cancel</button>
           </div>
         </div>
       </div>

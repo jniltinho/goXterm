@@ -15,12 +15,15 @@ import (
 
 // Config describes one SSH connection.
 type Config struct {
-	Host       string
-	Port       int
-	User       string
-	Password   string // password and keyboard-interactive auth; key/agent come later
-	HostKey    ssh.HostKeyCallback
-	Cols, Rows int
+	Host     string
+	Port     int
+	User     string
+	Password string // static password/keyboard-interactive auth, tried first when non-empty
+	// AskPassword, when set, is called to prompt the user for a password if there is no saved one (or
+	// it was rejected). It may block (e.g. a UI dialog); the answer is reused within this dial.
+	AskPassword func() (string, error)
+	HostKey     ssh.HostKeyCallback
+	Cols, Rows  int
 }
 
 // Session is an open SSH shell with a PTY.
@@ -36,17 +39,44 @@ type Session struct {
 // agent come later). Shared by the terminal and SFTP.
 func DialClient(cfg Config) (*ssh.Client, error) {
 	var auths []ssh.AuthMethod
-	if cfg.Password != "" {
-		pw := cfg.Password
-		auths = append(auths, ssh.Password(pw))
-		// PAM / network gear ask the password as a keyboard-interactive prompt.
-		auths = append(auths, ssh.KeyboardInteractive(func(_, _ string, questions []string, _ []bool) ([]string, error) {
+	// ki builds a keyboard-interactive method that answers every prompt with getPw() (PAM / network
+	// gear ask the password this way).
+	ki := func(getPw func() (string, error)) ssh.AuthMethod {
+		return ssh.KeyboardInteractive(func(_, _ string, questions []string, _ []bool) ([]string, error) {
+			if len(questions) == 0 {
+				return nil, nil
+			}
+			pw, err := getPw()
+			if err != nil {
+				return nil, err
+			}
 			ans := make([]string, len(questions))
 			for i := range ans {
 				ans[i] = pw
 			}
 			return ans, nil
-		}))
+		})
+	}
+	if cfg.Password != "" {
+		pw := cfg.Password
+		auths = append(auths, ssh.Password(pw), ki(func() (string, error) { return pw, nil }))
+	}
+	if cfg.AskPassword != nil {
+		// Prompt once, then reuse the answer across the remaining method attempts in this dial.
+		var cached string
+		var have bool
+		ask := func() (string, error) {
+			if have {
+				return cached, nil
+			}
+			pw, err := cfg.AskPassword()
+			if err != nil {
+				return "", err
+			}
+			cached, have = pw, true
+			return pw, nil
+		}
+		auths = append(auths, ssh.PasswordCallback(ask), ki(ask))
 	}
 	clientCfg := &ssh.ClientConfig{
 		User:            cfg.User,
