@@ -1,8 +1,8 @@
 # Connecting to Windows with RDP
 
-rustXterm has its own RDP client (Linux and Windows); no `mstsc`, FreeRDP or other external program
-is used. This guide covers the session options, the security layers Windows servers use, the trust
-prompts and the errors you can meet, with the fix for each.
+rustXterm has its own RDP client, written in pure Go (Linux, Windows and macOS); no `mstsc`, FreeRDP or
+other external program is used. This guide covers the session options, the security layers Windows
+servers use, the trust prompts and the errors you can meet, with the fix for each.
 
 ![RDP connection sequence](diagrams/09-rdp-connection-sequence.png)
 
@@ -11,25 +11,29 @@ prompts and the errors you can meet, with the fix for each.
 1. **New session → RDP**, enter the host, port (default 3389) and user name. The user name accepts the
    same forms as `mstsc`:
    - `administrator` (with the domain, if any, in the RDP options' **Domain** field);
-   - `TRD-APP01\administrator` or `CORP\alice`: the part before `\` is used as the domain when the
-     **Domain** field is empty (a local account of server `TRD-APP01`, or domain `CORP`);
-   - `.\administrator`: a local account of the server you connect to (the domain `.` is sent, so it
-     works on domain-joined servers too);
-   - `alice@corp.example` (UPN), sent as typed.
-2. Connect. The first time, rustXterm shows the server's certificate (or key) fingerprint: compare it
-   with the one your administrator gives you, then **Accept** (this time) or **Accept and save**.
-3. Enter the password. It is asked only after the server identity is trusted.
+   - `TRD-APP01\administrator` or `CORP\alice`: the part before `\` is the domain (a local account of
+     server `TRD-APP01`, or domain `CORP`);
+   - `.\administrator`: a local account of the server you connect to;
+   - `alice@corp.example` (UPN).
+2. Connect and enter the password (tick **Save password** to keep it; it is stored only after the login
+   succeeds). It is held in memory until the server is trusted and travels only inside TLS.
+3. The first time, rustXterm shows the server certificate's SHA-256 fingerprint: compare it with the
+   one your administrator gives you, then **Accept** (this time) or **Accept and save**. No credential is
+   sent to the server before you accept.
 
 ## Session options
 
 | Option | Default | What it does |
 |---|---|---|
-| Domain | empty | Domain of the account (`LAB`, `corp.example`). |
-| Resolution | Fit to tab | Follows the tab size and resizes the remote desktop when the server supports it; or a fixed size. |
+| Domain | empty | Domain of the account (`LAB`, `corp.example`), used when the user name has none. |
+| Resolution | Fit to tab | The remote desktop takes the tab's size when you connect (the image is scaled when the tab changes size later); or a fixed size. |
 | Keyboard layout | Server default | Layout sent to the server (e.g. US 0x0409, Brazilian ABNT2 0x0416). |
-| Share clipboard text | On | Copy and paste text between the local desktop and the remote one. |
-| Allow legacy TLS 1.0/1.1 | Off | For old servers (Windows Server 2008/2008 R2 without updates) that only speak TLS 1.0/1.1. Less secure. |
-| Allow legacy RDP security (no TLS, insecure) | Off | For servers whose Security Layer is **RDP** (see below). Insecure; use only when the server cannot be changed. |
+| Share clipboard text | On | Copy and paste text between the local desktop and the remote one. Off: the clipboard channel is not opened at all. |
+| Allow legacy TLS 1.0/1.1 | Off | For old servers (Windows Server 2008/2008 R2 without updates) that only speak TLS 1.0. Less secure; see [Old servers](#old-servers-windows-server-2008--2008-r2). |
+| Allow legacy RDP security | — | Shown disabled: this client never uses standard RDP security (see below). |
+
+To leave a remote desktop that has the keyboard, press the release keys (default **Ctrl+Alt**, Settings → General →
+**Keyboard release keys**).
 
 ## Security layers
 
@@ -38,49 +42,18 @@ for remote (RDP) connections"** (registry `SecurityLayer` under
 `HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp`) decides how the connection
 is protected:
 
-| Server Security Layer | What rustXterm uses | Option needed |
-|---|---|---|
-| Negotiate (`1`, Windows default) | TLS + NLA (CredSSP), or TLS only when NLA is off | none |
-| SSL (`2`) | TLS (+ NLA when "Require user authentication… (NLA)" is on) | none |
-| RDP (`0`) | Standard RDP Security: RC4 encryption, **no TLS, no NLA** | **Allow legacy RDP security** |
+| Server Security Layer | What rustXterm uses |
+|---|---|
+| Negotiate (`1`, Windows default) | TLS + NLA (CredSSP/NTLMv2), or TLS only when NLA is off on the server |
+| SSL (`2`) | TLS (+ NLA when "Require user authentication… (NLA)" is on) |
+| RDP (`0`) | **Not supported**: refused before any credential is sent |
 
-### Legacy RDP security (Security Layer = RDP)
+### Standard RDP security (Security Layer = RDP) is refused
 
-With the server set to **RDP**, a client that asks for TLS is refused. Without the option you get:
-
-> the server only allows the legacy Standard RDP Security layer (no TLS/NLA). Enable 'Allow legacy RDP
-> security' in the session's RDP settings to connect (insecure), or set the server's Remote Desktop
-> "Security Layer" to Negotiate or SSL …
-
-You have two ways out:
-
-1. **Preferred: change the server** to Negotiate or SSL (below). Nothing changes on the client.
-2. **No server change possible:** edit the session, tick **Allow legacy RDP security (no TLS,
-   insecure)** and connect again. rustXterm first tries TLS as usual; only when the server answers that
-   it allows nothing but the legacy layer does it reconnect with it.
-
-What to know before ticking it:
-
-- **The server cannot be authenticated.** The legacy layer has no certificate a client can verify (the
-  server's key is signed with a key Microsoft published), so anyone on the network path could pose as
-  the server. rustXterm shows the server's RSA key fingerprint the first time (the prompt reads
-  *"Legacy RDP security (no TLS): this connection is not protected against interception"*, the
-  fingerprint starts with `RSA `) and, if you save it, refuses the connection when the key later
-  changes. Compare the fingerprint over a trusted channel before saving it.
-- **The encryption is weak** (RC4, keys of 40, 56 or 128 bits chosen by the server). Treat the session
-  as readable by someone who can capture the traffic.
-- **No NLA:** the password is sent inside the encrypted Client Info PDU (auto-logon); Windows checks it
-  only after the session has started.
-- **Downgrade guard:** if you once connected to the same host name and port over TLS and saved its
-  certificate, rustXterm does not fall back to the legacy layer for it, because the "TLS refused" answer
-  is not authenticated and an attacker could forge it. If the administrator really switched the server
-  to RDP, connect with another name for it (for example its IP address); trust is saved per host name
-  and port.
-- **Not supported:** servers whose encryption level is **None** (the password would travel in clear) or
-  **FIPS Compliant** (3DES); both stop with an error that names the level. Server redirection (RD
-  Connection Broker) is not supported in this mode.
-
-### Changing the server to Negotiate or SSL
+Standard RDP security has no TLS: the server cannot be authenticated and the logon travels under RC4.
+rustXterm does not implement it. When a server picks it, the connection stops with
+`the server only offers standard RDP security (no TLS), which is not supported`, and nothing has been
+sent. Change the server to Negotiate or SSL:
 
 Group Policy (domain or `gpedit.msc`): *Computer Configuration → Administrative Templates → Windows
 Components → Remote Desktop Services → Remote Desktop Session Host → Security →* **Require use of
@@ -95,61 +68,66 @@ Set-ItemProperty $k SecurityLayer 1        # 1 = Negotiate, 2 = SSL
 Set-ItemProperty $k UserAuthentication 1   # NLA
 ```
 
-New connections use the new setting at once; no restart is needed. A Group Policy value overrides
-the registry value.
+New connections use the new setting at once; a Group Policy value overrides the registry value.
+
+### NLA
+
+NLA (CredSSP) authenticates you before the server starts a session. rustXterm does it with NTLMv2
+over TLS 1.2/1.3 and checks the server's CredSSP reply (`pubKeyAuth`), which binds the TLS channel to
+your login; without that reply the credentials are never sent. Kerberos is not used, so an account must
+be able to log on with NTLM.
 
 ## Old servers (Windows Server 2008 / 2008 R2)
 
-These servers predate RDP 8 and typically speak only **TLS 1.0**. Two things are needed:
+These servers typically speak only **TLS 1.0**. Tick **Allow legacy TLS 1.0/1.1**: without it the
+client offers only TLS 1.2/1.3 and the old server resets the connection.
 
-- **Tick "Allow legacy TLS 1.0/1.1"** in the session's RDP options. Without it the default TLS stack
-  offers only TLS 1.2/1.3, the old server resets the socket, and you get
-  `Connection reset by peer (os error 104)`.
-- With that option on, rustXterm also adapts to these servers automatically (no extra setting): it
-  stops advertising RDP 8 features (the MCS message channel and the network-auto-detect /
-  skip-channel-join capabilities), which otherwise make a 2008-era server reset the connection right
-  after the login; and it accepts screen and pointer updates that such servers batch together in one
-  message, which otherwise ended the session with a "decode error"; and it renders bitmaps whose width the server padded to a multiple of 4 without shearing the image.
-
-The login then works with full NLA/CredSSP. Use the domain forms from Quick start (for example
-`criarenet.net\administrator`, or `.\administrator` for a local account).
+With the option on, rustXterm connects with **TLS + the standard RDP logon** (no NLA). Go's TLS
+library always splits TLS 1.0 records (a BEAST countermeasure that cannot be turned off) and the 2008
+SChannel aborts CredSSP on that, so NLA over TLS 1.0 is not possible in this client. The password still
+travels only inside TLS. A 2008 server that *requires* NLA therefore needs TLS 1.2 enabled on the
+server.
 
 Prefer enabling TLS 1.2 on the server when you can; the legacy option is a client-side workaround, not
 a fix for the server.
 
 ## Certificates and trust
 
-- TLS servers present a certificate; Windows uses a self-signed one by default. The prompt shows its
-  SHA-256 fingerprint. **Accept and save** stores it per host name and port.
-- A saved certificate (or legacy key) that changes stops the connection before any credential is sent
-  and shows both fingerprints. This happens after a server reinstall or certificate renewal, and also
-  when someone intercepts the connection.
+- TLS servers present a certificate; Windows uses a self-signed one by default. A certificate the
+  system trusts (a CA your machine knows) is accepted silently. Any other one is shown with its SHA-256
+  fingerprint; **Accept and save** stores it per host name and port.
+- If a saved certificate changes, the prompt comes back showing the new and the previous fingerprints,
+  before any credential is sent. This happens after a server reinstall or certificate renewal, and
+  also when someone intercepts the connection: confirm with the administrator before accepting.
+- **Reject** ends the connection.
 
 ## Errors and fixes
 
-| Message (start) | Cause | Fix |
+| Message (contains) | Cause | Fix |
 |---|---|---|
-| `the server only allows the legacy Standard RDP Security layer` | Server Security Layer = RDP | Change the server to Negotiate/SSL, or tick **Allow legacy RDP security** |
-| `the server refused TLS, but this host was trusted over TLS before` | Downgrade guard (see above) | Check with the administrator; connect by another host name if the change is real |
-| `the server offers no encryption (level None)` | Encryption level None | Set the server's encryption level to Client Compatible or High |
-| `the server requires FIPS encryption` | Encryption level FIPS Compliant | Use Negotiate/SSL on the server (TLS works with FIPS) |
-| `The server only offers legacy TLS (TLS 1.0/1.1 …)` | Old, unpatched server | Update the server, or tick **Allow legacy TLS 1.0/1.1** |
-| `Connection reset by peer (os error 104)` | Old server (2008/2008 R2): only TLS 1.0, or RDP 8 features it does not understand | Tick **Allow legacy TLS 1.0/1.1** (see "Old servers" above) |
-| `authentication failed: CredSSP: … STATUS_LOGON_FAILURE` | Wrong user, domain or password (NLA); or a local account sent without a domain to a domain-joined server | Check the credentials and the domain field; for a local account use `.\user` (Oracle Cloud Windows: `.\opc`) |
-| `certificate of HOST:PORT changed` | The saved certificate differs | Confirm the new fingerprint with the administrator |
-| `HOST:PORT: connect timed out` | Port 3389 blocked, RDP disabled or wrong host | Check the firewall and "Allow remote connections to this computer" |
-
-For anything else, set Settings → Diagnostics to **Protocol trace** with RDP (or start rustXterm with
-`--debug-log`) and try again: `rustxterm-logs/rustxterm-diagnostic.log` shows the NLA user and domain
-sent, the negotiated protocol and every connection step, without passwords or the NTLM messages.
+| `the server only offers standard RDP security (no TLS)` | Server Security Layer = RDP | Change the server to Negotiate or SSL (above) |
+| `NLA: wrong user name or password (0xC000006D)` | Wrong user, domain or password; or a local account sent without a domain to a domain-joined server | Check the credentials and the Domain field; for a local account use `.\user` |
+| `NLA: the password has expired and must be changed` | Password expired | Change it (e.g. with `mstsc` or on the console) and connect again |
+| `NLA: the account is locked` / `is disabled` | Account state | Ask the administrator |
+| `server requires Network Level Authentication (NLA)` | **Allow legacy TLS** is on but the server requires NLA | Turn the option off (and enable TLS 1.2 on the server if it is a 2008 one) |
+| `certificate not trusted for HOST:PORT` | You rejected the certificate prompt | Connect again and compare the fingerprint |
+| `connection reset by peer` right after connecting | Old server (2008/2008 R2) that only speaks TLS 1.0 | Tick **Allow legacy TLS 1.0/1.1** |
+| `dial tcp …: i/o timeout` / `connection refused` | Port 3389 blocked, RDP disabled or wrong host | Check the firewall and "Allow remote connections to this computer" |
 
 ## Testing it yourself
 
-The repository's Windows Server 2022 test VM (`lab/vagrant/windows`) can be switched between the
-layers to try each case; the recipe is in [`lab/vagrant/README.md`](../lab/vagrant/README.md) and the
-last results are in [`docs/gates/rdp-standard-security.md`](gates/rdp-standard-security.md).
+The Docker lab (`lab/`) runs an xrdp server; `make lab-test` connects to it (TLS, rejected
+certificate, NLA offer). The clipboard test (`TestLabRDPClipboard`) needs `RXT_RDP_CLIP=1` and the
+`xclip` steps in its comment.
 
-To check a real host before connecting, `scripts/rdp-probe.py <host>` reports its security layer
-without sending any credentials (it only does the RDP negotiation), so you know whether to tick a
-legacy option. `scripts/rdp-test.sh <host> <user> <password> [domain]` validates one login end to end
-with rdesktop (headless) — one credential per run, for your own or authorised hosts only.
+To check a real Windows host, `TestRealRDP` connects and captures one frame without sending input:
+
+```bash
+RXT_RDP_REAL=1 RXT_RDP_HOST=<host> RXT_RDP_USER=<user> RXT_RDP_PASS=<password> RXT_RDP_PROTO=nla \
+  go test ./internal/rdpconn -run TestRealRDP -v
+```
+
+(`RXT_RDP_PROTO` is `nla` or `ssl`; `RXT_RDP_LEGACY=1` allows TLS 1.0; `RXT_RDP_LAYOUT=0x0416` sets the
+keyboard layout.) Run it in the Docker build image, against your own or authorised hosts only. The
+repository's Windows test VMs are described in [`lab/vagrant/README.md`](../lab/vagrant/README.md);
+`dockur/windows` works too.
