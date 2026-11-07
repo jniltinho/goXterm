@@ -46,12 +46,13 @@ function wireEvents() {
   offClose = Events.On("term:close:" + tabId, (ev: { data: unknown }) => {
     stopped = true;
     const why = String(ev.data ?? "");
-    const rule = "\x1b[90m" + "─".repeat(Math.min(term.cols || 60, 60)) + "\x1b[0m";
+    // Match the Rust app's stopped notice: ASCII dashes in red, then the keys the tab answers to.
+    const red = "\x1b[31m", muted = "\x1b[90m", key = "\x1b[35m", rst = "\x1b[0m";
+    const rule = red + "-".repeat(Math.max(1, (term.cols || 60) - 1)) + rst;
     term.writeln("\r\n" + rule);
-    term.writeln("\x1b[31m  ✖ Session stopped\x1b[0m" + (why ? " \x1b[90m(" + why + ")\x1b[0m" : ""));
-    term.writeln("\x1b[90m    - Press \x1b[0mReturn\x1b[90m to close this tab\x1b[0m");
-    term.writeln("\x1b[90m    - Press \x1b[0mR\x1b[90m to restart the session\x1b[0m");
-    term.writeln(rule);
+    term.writeln(red + "Session stopped" + rst + (why ? " " + muted + "(" + why + ")" + rst : ""));
+    term.writeln("    - Press " + key + "<Return>" + rst + " or " + key + "Ctrl+D" + rst + " to exit tab");
+    term.writeln("    - Press " + key + "R" + rst + " to restart session");
   });
 }
 
@@ -131,7 +132,7 @@ onMounted(async () => {
   startMon();
   term.onData((d) => {
     if (stopped) {
-      if (d === "\r") emit("close");
+      if (d === "\r" || d === "\x04") emit("close"); // Return or Ctrl+D closes the tab
       else if (d === "r" || d === "R") void restart();
       return;
     }

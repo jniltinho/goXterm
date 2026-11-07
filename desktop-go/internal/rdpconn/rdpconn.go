@@ -124,7 +124,9 @@ func encode(b client.Bitmap) (Rect, bool) {
 	bpp := b.BitsPerPixel // bytes per pixel (grdp Bpp = bits/8)
 	img := image.NewRGBA(image.Rect(0, 0, b.Width, b.Height))
 	for y := 0; y < b.Height; y++ {
-		src := b.Height - 1 - y // RDP bitmaps are stored bottom-up
+		// grdp's RLE decoder already yields top-down rows, so each rectangle is read in order (an extra
+		// bottom-up flip turned every tile upside down against real servers — 2008 R2).
+		src := y
 		for x := 0; x < b.Width; x++ {
 			i := (src*b.Width + x) * bpp
 			if i+bpp > len(b.Data) {

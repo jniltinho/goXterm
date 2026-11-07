@@ -201,9 +201,9 @@ func (fb *framebuffer) blit(rects []pdu.BitmapData) {
 			continue
 		}
 
-		// Blit pixels. RDP bitmap rows are stored bottom-up.
+		// Blit pixels. grdp's RLE decoder yields top-down rows (no extra flip).
 		for row := 0; row < h; row++ {
-			srcRow := (h - 1 - row) // RDP is bottom-up
+			srcRow := row
 			for col := 0; col < w; col++ {
 				px := (srcRow*w + col) * bpp
 				if px+bpp > len(pixdata) {
