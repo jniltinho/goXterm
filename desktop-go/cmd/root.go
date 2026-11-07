@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -31,12 +32,38 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute runs the command line.
+// exitErr carries a Rust-compatible exit code (lib.rs exit_code): 1 Failed, 2 Usage, 3 Locked,
+// 4 Denied, 5 NotRunning, 6 AgentControlOff.
+type exitErr struct {
+	code int
+	msg  string
+}
+
+func (e exitErr) Error() string { return e.msg }
+
+// fail / usage / locked build the common coded errors.
+func fail(format string, a ...any) error   { return exitErr{1, fmt.Sprintf(format, a...)} }
+func usage(format string, a ...any) error  { return exitErr{2, fmt.Sprintf(format, a...)} }
+func locked(format string, a ...any) error { return exitErr{3, fmt.Sprintf(format, a...)} }
+
+// Execute runs the command line, mapping errors to the Rust CLI's exit codes. A --json run prints the
+// error as {"error":{"code","message"}} like the Rust agent.
 func Execute() {
-	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+	err := rootCmd.ExecuteContext(context.Background())
+	if err == nil {
+		return
 	}
+	code := 1
+	if e, ok := err.(exitErr); ok {
+		code = e.code
+	}
+	if flags.json {
+		b, _ := json.Marshal(map[string]any{"error": map[string]any{"code": code, "message": err.Error()}})
+		fmt.Fprintln(os.Stdout, string(b))
+	} else {
+		fmt.Fprintln(os.Stderr, "rustxterm:", err.Error())
+	}
+	os.Exit(code)
 }
 
 func init() {
