@@ -107,18 +107,53 @@ func (a *App) Folders() ([]FolderView, error) {
 	return out, nil
 }
 
-// openStore unlocks via the keyring wrap, else RXT_MASTER_PASSWORD (set for development/testing).
-// A real unlock dialog is the next UI step; until then a locked store returns this error, which the
-// SPA shows.
+// masterPW caches the master password after an in-UI unlock (in memory only, never logged/persisted).
+var masterPW struct {
+	sync.Mutex
+	pw string
+}
+
+// openStore unlocks via the keyring wrap, else the password cached by Unlock, else RXT_MASTER_PASSWORD
+// (development/testing). A locked store returns this error, which the SPA shows as the unlock prompt.
 func openStore() (*store.Store, error) {
 	dir := store.DataDir()
 	if st, ok, _ := store.OpenWithKeyring(dir, store.SystemKeyring()); ok {
 		return st, nil
 	}
-	if pw := os.Getenv("RXT_MASTER_PASSWORD"); pw != "" {
+	masterPW.Lock()
+	pw := masterPW.pw
+	masterPW.Unlock()
+	if pw == "" {
+		pw = os.Getenv("RXT_MASTER_PASSWORD")
+	}
+	if pw != "" {
 		return store.Open(dir, pw)
 	}
 	return nil, errors.New("store is locked: unlock with the keyring or set RXT_MASTER_PASSWORD")
+}
+
+// Unlock opens the store with the master password and, on success, caches it in memory for the rest
+// of the session. The password is never logged or written anywhere.
+func (a *App) Unlock(password string) error {
+	st, err := store.Open(store.DataDir(), password)
+	if err != nil {
+		return err
+	}
+	st.Close()
+	masterPW.Lock()
+	masterPW.pw = password
+	masterPW.Unlock()
+	return nil
+}
+
+// Locked reports whether the store still needs a master password (no keyring, no cached, no env).
+func (a *App) Locked() bool {
+	st, err := openStore()
+	if err != nil {
+		return true
+	}
+	st.Close()
+	return false
 }
 
 // sessionByID loads one saved session as a SessionView (no credentials), shared by the per-protocol

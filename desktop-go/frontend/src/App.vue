@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, shallowRef } from "vue";
 import {
-  Sessions, Folders, Connect, ConnectDemo, HasDemo,
+  Sessions, Folders, Locked, Unlock, Connect, ConnectDemo, HasDemo,
   TelnetConnect, ConnectTelnetDemo, HasTelnetDemo,
   SerialConnect, ConnectSerialDemo, HasSerialDemo,
   SftpConnect, FtpConnect, ConnectSftpDemo, HasSftpDemo, ConnectFtpDemo, HasFtpDemo,
@@ -19,6 +19,10 @@ const folders = ref<Folder[]>([]);
 const loading = ref(true);
 const error = ref("");
 const selected = ref<Session | null>(null);
+const locked = ref(false);
+const master = ref("");
+const unlockError = ref("");
+const unlocking = ref(false);
 
 type Tab =
   | { id: string; title: string; kind: "ssh"; icon: string; connect: () => Promise<string> }
@@ -29,7 +33,9 @@ const tabs = shallowRef<Tab[]>([]);
 const active = ref("");
 let seq = 0;
 
-onMounted(async () => {
+async function loadData() {
+  loading.value = true;
+  error.value = "";
   try {
     [folders.value, sessions.value] = await Promise.all([Folders(), Sessions()]);
   } catch (e) {
@@ -37,6 +43,9 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+}
+
+async function openDemos() {
   try { if (await HasDemo()) openTerm("lab: ssh demo", "ssh", () => ConnectDemo()); } catch { /* none */ }
   try { if (await HasTelnetDemo()) openTerm("lab: telnet demo", "terminal", () => ConnectTelnetDemo()); } catch { /* none */ }
   try { if (await HasSerialDemo()) openTerm("lab: serial demo", "plug", () => ConnectSerialDemo()); } catch { /* none */ }
@@ -44,7 +53,31 @@ onMounted(async () => {
   try { if (await HasFtpDemo()) openFiles("lab: ftps demo", "ftps", () => ConnectFtpDemo()); } catch { /* none */ }
   try { if (await HasVncDemo()) openVnc("lab: vnc demo", () => ConnectVncDemo()); } catch { /* none */ }
   try { if (await HasRdpDemo()) openRdp("lab: rdp demo", () => ConnectRdpDemo()); } catch { /* none */ }
+}
+
+onMounted(async () => {
+  try { locked.value = await Locked(); } catch { locked.value = true; }
+  if (locked.value) { loading.value = false; return; }
+  await loadData();
+  await openDemos();
 });
+
+async function doUnlock() {
+  if (!master.value || unlocking.value) return;
+  unlockError.value = "";
+  unlocking.value = true;
+  try {
+    await Unlock(master.value);
+    locked.value = false;
+    master.value = "";
+    await loadData();
+    await openDemos();
+  } catch (e) {
+    unlockError.value = String(e);
+  } finally {
+    unlocking.value = false;
+  }
+}
 
 // openTerm opens a terminal tab (SSH, Telnet or Serial — all stream term:out/term:close).
 function openTerm(title: string, icon: string, connect: () => Promise<string>) {
@@ -125,6 +158,27 @@ const tabIcon = (t: Tab) => icon(t.icon);
 
 <template>
   <div class="app flex h-full flex-col">
+    <div v-if="locked" class="unlock-overlay">
+      <div class="unlock-brand"><img :src="icon('session')" class="h-8 w-8" /> rustXterm</div>
+      <div class="unlock-card">
+        <div class="unlock-title">Unlock sessions</div>
+        <p class="unlock-sub">Enter the master password to open saved sessions.</p>
+        <label class="unlock-label">Master password</label>
+        <input
+          type="password"
+          class="unlock-input"
+          v-model="master"
+          @keyup.enter="doUnlock"
+          autofocus
+        />
+        <div v-if="unlockError" class="unlock-err">{{ unlockError }}</div>
+        <div class="unlock-actions">
+          <button class="ubtn primary" :disabled="!master || unlocking" @click="doUnlock">
+            {{ unlocking ? "Unlocking…" : "Unlock" }}
+          </button>
+        </div>
+      </div>
+    </div>
     <header class="toolbar flex items-center gap-1 px-1.5 py-1">
       <img :src="icon('session-new')" class="tbico" title="New session" />
       <img :src="icon('ssh')" class="tbico" title="Open SSH terminal" @click="selected && openTerm(selected.name, 'ssh', () => Connect(selected!.id))" :class="selected ? '' : 'off'" />
@@ -183,7 +237,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
         </div>
         <div class="relative min-h-0 flex-1">
           <template v-for="t in tabs" :key="t.id">
-            <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0 p-1" />
+            <TerminalView v-if="t.kind === 'ssh'" v-show="t.id === active" :connect="t.connect" @close="closeTab(t.id)" class="absolute inset-0 p-1" />
             <FileBrowser v-else-if="t.kind === 'files'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
             <VncCanvas v-else-if="t.kind === 'vnc'" v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
             <RdpCanvas v-else v-show="t.id === active" :connect="t.connect" class="absolute inset-0" />
@@ -227,5 +281,18 @@ const tabIcon = (t: Tab) => icon(t.icon);
 .tab-x { margin-left: 2px; padding: 0 4px; color: #7f8ea0; }
 .tab-x:hover { color: #fff; background: #c0392b; }
 .statusbar { height: 22px; font-size: 11px; color: #5a6b7b; background: #e7ecf1; border-top: 1px solid #c9d1d9; }
+.unlock-overlay { position: absolute; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; background: #eef1f4; }
+.unlock-brand { display: flex; align-items: center; gap: 10px; font-size: 26px; font-weight: 600; color: #2b3a4a; }
+.unlock-card { width: 360px; background: #f7f9fb; border: 1px solid #c9d1d9; }
+.unlock-title { font-size: 12px; font-weight: 700; color: #4a5a68; background: #e7ecf1; border-bottom: 1px solid #d6dde4; padding: 5px 10px; }
+.unlock-sub { font-size: 12px; color: #4a5a68; padding: 10px 12px 4px; }
+.unlock-label { display: block; font-size: 12px; color: #1e1e1e; padding: 2px 12px; }
+.unlock-input { width: calc(100% - 24px); margin: 2px 12px 0; height: 26px; padding: 0 8px; font-size: 13px; background: #fff; border: 1px solid #a9b4c0; }
+.unlock-input:focus { outline: 1px solid #5b9bd5; border-color: #5b9bd5; }
+.unlock-err { color: #c0392b; font-size: 12px; padding: 6px 12px 0; }
+.unlock-actions { display: flex; justify-content: flex-end; padding: 12px; }
+.ubtn { height: 28px; padding: 0 16px; font-size: 13px; border: 1px solid #a9b4c0; background: #eef1f4; cursor: pointer; }
+.ubtn.primary { background: #2f6fb5; border-color: #2a62a0; color: #fff; }
+.ubtn.primary:disabled { opacity: .5; cursor: default; }
 .app :deep(*), .app { border-radius: 0 !important; }
 </style>

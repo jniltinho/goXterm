@@ -30,6 +30,10 @@ export interface Folder {
 export const Sessions = () => call<Session[]>("Sessions");
 export const Folders = () => call<Folder[]>("Folders");
 
+// Store unlock — Locked() is true until the master password is entered (or the keyring/env unlocks it).
+export const Locked = () => call<boolean>("Locked");
+export const Unlock = (password: string) => call<void>("Unlock", password);
+
 // Terminal (SSH) — output streams as Wails events "term:out:<tabId>" (base64) and "term:close:<tabId>".
 export const Connect = (id: number) => call<string>("Connect", id);
 export const QuickConnect = (host: string, port: number, user: string, password: string) =>
