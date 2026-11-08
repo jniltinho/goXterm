@@ -39,6 +39,10 @@ type Config struct {
 	// see why a password is being asked instead of the key being used.
 	Log func(string)
 
+	// NoPassword / NoKeyboardInteractive turn those auth methods off (the session's "Allow password" /
+	// "Allow keyboard-interactive" unticked): only keys and the agent are offered then.
+	NoPassword, NoKeyboardInteractive bool
+
 	// Jumps are SSH gateways dialled in order before the target (like ProxyJump). Each hop checks its
 	// own host key and authenticates on its own (its key file, the agent, its password prompt).
 	Jumps []Jump
@@ -196,9 +200,18 @@ func authMethods(cfg Config) []ssh.AuthMethod {
 			}
 		}
 	}
+	// pwMethods are the password and keyboard-interactive methods the session allows for getPw.
+	pwMethods := func(pass ssh.AuthMethod, getPw func() (string, error)) {
+		if !cfg.NoPassword {
+			auths = append(auths, pass)
+		}
+		if !cfg.NoKeyboardInteractive {
+			auths = append(auths, ki(getPw))
+		}
+	}
 	if cfg.Password != "" {
 		pw := cfg.Password
-		auths = append(auths, ssh.Password(pw), ki(func() (string, error) { return pw, nil }))
+		pwMethods(ssh.Password(pw), func() (string, error) { return pw, nil })
 	}
 	if cfg.AskPassword != nil {
 		// Prompt once, then reuse the answer across the remaining method attempts in this dial.
@@ -215,7 +228,7 @@ func authMethods(cfg Config) []ssh.AuthMethod {
 			cached, have = pw, true
 			return pw, nil
 		}
-		auths = append(auths, ssh.PasswordCallback(ask), ki(ask))
+		pwMethods(ssh.PasswordCallback(ask), ask)
 	}
 	return auths
 }
