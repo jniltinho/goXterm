@@ -67,7 +67,11 @@ func (a *App) Connect(sessionID int64) (string, error) {
 		}
 	}
 	cfg.Jumps = a.jumpHosts(sshOpt, cfg.User)
-	return a.dial(cfg, sessionID)
+	return a.dial(cfg, sessionID, endPolicy{
+		remoteCommand: strings.TrimSpace(cfg.RemoteCommand) != "",
+		keepOpen:      asBool(sshOpt["keep_open_after_command"]),
+		autoReconnect: asBool(sshOpt["auto_reconnect"]),
+	})
 }
 
 // jumpHosts turns a session's ssh.jump_hosts into gateway hops, each with its own host-key check
@@ -109,7 +113,7 @@ func (a *App) ConnectDemo() (string, error) {
 		return "", errors.New("no demo target")
 	}
 	user, pass, host, port := parseTarget(v)
-	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: pass}, 0)
+	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: pass}, 0, endPolicy{})
 }
 
 // parseTarget parses `user[:password]@host[:port]` (port defaults to 22).
@@ -164,7 +168,7 @@ func (a *App) QuickConnect(host string, port int, user, password string) (string
 	if port == 0 {
 		port = 22
 	}
-	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: password}, 0)
+	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: password}, 0, endPolicy{})
 }
 
 // newStreamTab allocates a tabId and the output/close callbacks shared by every byte-stream terminal
@@ -207,24 +211,64 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		if err != nil {
 			msg = err.Error()
 		}
+		var end *TermEnd
+		var te tabEnd
+		if errors.As(err, &te) {
+			end = &te.end
+		}
 		a.mu.Lock()
 		delete(a.term, tabID)
 		if e := a.early[tabID]; e != nil {
-			e.closed, e.closeMsg = true, msg
+			e.closed, e.closeMsg, e.end = true, msg, end
 			a.mu.Unlock()
 			return
 		}
 		a.mu.Unlock()
 		if a.emit != nil {
-			a.emit("term:close:"+tabID, msg)
+			a.emit("term:close:"+tabID, map[string]any{"msg": msg, "end": end})
 		}
 	}
 	return tabID, onData, onClose
 }
 
+// TermEnd tells the SPA how a terminal ended and what to do next, from the session's SSH options (as
+// the Rust engine): close the tab when its remote command exited and "Do not exit after command
+// ends" is off; reconnect with backoff after a dropped connection when "Reconnect automatically" is on.
+type TermEnd struct {
+	Dropped   bool `json:"dropped"`   // the connection was lost (not a normal exit)
+	CloseTab  bool `json:"closeTab"`  // close the tab
+	Reconnect bool `json:"reconnect"` // reconnect automatically
+}
+
+// endPolicy is the part of a session's SSH options that decides TermEnd.
+type endPolicy struct{ remoteCommand, keepOpen, autoReconnect bool }
+
+// tabEnd carries the end decision through a stream tab's onClose.
+type tabEnd struct {
+	err error
+	end TermEnd
+}
+
+func (e tabEnd) Error() string { return e.err.Error() }
+func (e tabEnd) Unwrap() error { return e.err }
+
+// endOf decides how a shell that ended with err is handled.
+func (p endPolicy) endOf(err error) TermEnd {
+	var st sshconn.ExitStatus
+	exited := errors.As(err, &st)
+	return TermEnd{Dropped: !exited, CloseTab: exited && p.remoteCommand && !p.keepOpen, Reconnect: !exited && p.autoReconnect}
+}
+
 // dial opens an SSH shell tab; sessionID > 0 (a saved session) offers "Save password" at the prompt.
-func (a *App) dial(cfg sshconn.Config, sessionID int64) (string, error) {
-	tabID, onData, onClose := a.newStreamTab()
+func (a *App) dial(cfg sshconn.Config, sessionID int64, pol endPolicy) (string, error) {
+	tabID, onData, closeTab := a.newStreamTab()
+	onClose := func(err error) {
+		if err == nil {
+			closeTab(nil)
+			return
+		}
+		closeTab(tabEnd{err: err, end: pol.endOf(err)})
+	}
 	ask, saver := a.askSaving(cfg.Host, cfg.User, sessionID)
 	cfg.AskPassword = ask
 	cfg.AskPassphrase = a.askPassphrase

@@ -118,7 +118,9 @@ export const Send = (tabId: string, data: string) => call<void>("Send", tabId, d
 // tab was listening. Call right after subscribing to term:out/term:close.
 export interface BannerLine { kind: "head" | "check" | "muted"; text: string; target?: string; on?: boolean; note?: string }
 export interface Banner { title: string; hint: string; lines: BannerLine[] }
-export interface Attach { banner: Banner | null; early: string; closed: boolean; closeMsg: string }
+// How a terminal ended and what the tab does next (from the session's SSH options).
+export interface TermEnd { dropped: boolean; closeTab: boolean; reconnect: boolean }
+export interface Attach { banner: Banner | null; early: string; closed: boolean; closeMsg: string; end: TermEnd | null }
 export const TermAttach = (tabId: string) => call<Attach>("TermAttach", tabId);
 // Save a terminal's text through a native save dialog; resolves to the path ("" when cancelled).
 export const SaveTerminalOutput = (suggested: string, text: string) => call<string>("SaveTerminalOutput", suggested, text);

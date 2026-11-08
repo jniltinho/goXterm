@@ -34,10 +34,11 @@ type Banner struct {
 // output that arrived before it was listening (base64), and the close reason if the stream already
 // ended.
 type Attach struct {
-	Banner   *Banner `json:"banner"`
-	Early    string  `json:"early"`
-	Closed   bool    `json:"closed"`
-	CloseMsg string  `json:"closeMsg"`
+	Banner   *Banner  `json:"banner"`
+	Early    string   `json:"early"`
+	Closed   bool     `json:"closed"`
+	CloseMsg string   `json:"closeMsg"`
+	End      *TermEnd `json:"end"` // how it ended, when Closed
 }
 
 // earlyTab holds a stream tab's output until the SPA attaches, so nothing is lost between connect
@@ -47,6 +48,7 @@ type earlyTab struct {
 	banner   *Banner
 	closed   bool
 	closeMsg string
+	end      *TermEnd
 }
 
 // shortcut: output beyond 1 MiB before attach is dropped; the SPA attaches milliseconds after connect.
@@ -64,7 +66,7 @@ func (a *App) TermAttach(tabID string) Attach {
 	}
 	return Attach{
 		Banner: e.banner, Early: base64.StdEncoding.EncodeToString(e.buf),
-		Closed: e.closed, CloseMsg: e.closeMsg,
+		Closed: e.closed, CloseMsg: e.closeMsg, End: e.end,
 	}
 }
 
