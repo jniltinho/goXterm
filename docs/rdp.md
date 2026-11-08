@@ -80,13 +80,18 @@ be able to log on with NTLM.
 ## Old servers (Windows Server 2008 / 2008 R2)
 
 These servers typically speak only **TLS 1.0**. Tick **Allow legacy TLS 1.0/1.1**: without it the
-client offers only TLS 1.2/1.3 and the old server resets the connection.
+client offers only TLS 1.2/1.3 and the connection stops with
+`the server only offers legacy TLS (TLS 1.0/1.1)`.
 
 With the option on, rustXterm connects with **TLS + the standard RDP logon** (no NLA). Go's TLS
 library always splits TLS 1.0 records (a BEAST countermeasure that cannot be turned off) and the 2008
 SChannel aborts CredSSP on that, so NLA over TLS 1.0 is not possible in this client. The password still
 travels only inside TLS. A 2008 server that *requires* NLA therefore needs TLS 1.2 enabled on the
 server.
+
+Right after the logon these servers deactivate the session and activate it again
+(deactivation-reactivation); rustXterm redoes the capability exchange and the desktop continues.
+Tested against Windows Server 2008 R2 (`dockur/windows`) at 1688×968.
 
 Prefer enabling TLS 1.2 on the server when you can; the legacy option is a client-side workaround, not
 a fix for the server.
@@ -111,7 +116,8 @@ a fix for the server.
 | `NLA: the account is locked` / `is disabled` | Account state | Ask the administrator |
 | `server requires Network Level Authentication (NLA)` | **Allow legacy TLS** is on but the server requires NLA | Turn the option off (and enable TLS 1.2 on the server if it is a 2008 one) |
 | `certificate not trusted for HOST:PORT` | You rejected the certificate prompt | Connect again and compare the fingerprint |
-| `connection reset by peer` right after connecting | Old server (2008/2008 R2) that only speaks TLS 1.0 | Tick **Allow legacy TLS 1.0/1.1** |
+| `the server only offers legacy TLS (TLS 1.0/1.1)` | Old server (2008/2008 R2) that only speaks TLS 1.0 | Tick **Allow legacy TLS 1.0/1.1** |
+| `the server closed the connection before the session started` | The server dropped the connection after the logon (licensing, policy or a session limit) | Check the server's event log (TerminalServices-*) and the RD licensing mode |
 | `dial tcp …: i/o timeout` / `connection refused` | Port 3389 blocked, RDP disabled or wrong host | Check the firewall and "Allow remote connections to this computer" |
 
 ## Testing it yourself
