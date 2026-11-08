@@ -35,8 +35,9 @@ const (
 	Std Protocol = "std"
 )
 
-// colorDepth is the requested session depth: 16 bpp keeps the interleaved-RLE path (xrdp, 2008 R2).
-const colorDepth = 16
+// colorDepth is the requested session depth, as the Rust app: 32 bpp brings RDP 6 planar bitmaps
+// (xrdp, 2008 R2) and lets RDP 8+ servers send NSCodec surface bits.
+const colorDepth = 32
 
 // Config describes one RDP connection.
 type Config struct {
@@ -129,6 +130,7 @@ func (s *Session) Start() error {
 	}
 	c.SetUseNLA(useNLA(cfg.Protocol))
 	c.SetKeyboardLayout(cfg.KeyboardLayout)
+	c.SetEnableRFX(true) // surface commands + NSCodec, offered to RDP 8+ servers only
 	c.SetTLSClientConfig(tlsConfig(cfg))
 	if cfg.OnClipboard != nil {
 		s.clip.Send = func(b []byte) error { return c.SendStaticChannel(clipChannel, b) }
@@ -163,8 +165,17 @@ func (s *Session) loop(c *rdp.Client) {
 			return
 		}
 		var rects []Rect
-		for _, b := range fp.bitmapUpdates(u.Data) {
-			rects = append(rects, bitmapRects(b)...)
+		for _, up := range fp.updates(u.Data) {
+			switch up.code {
+			case fpUpdateBitmap:
+				rects = append(rects, bitmapRects(up.data)...)
+			case fpUpdateSurfCmds:
+				jobs, ended := surfaceCommands(up.data)
+				rects = append(rects, encodeJobs(jobs)...)
+				for _, id := range ended { // RDP 8+ servers pause after a few unacknowledged frames
+					_ = c.SendFrameAcknowledge(id)
+				}
+			}
 		}
 		if len(rects) > 0 {
 			s.onFrame(rects)
@@ -204,9 +215,15 @@ const (
 	packetCompr    = 0x20 // PACKET_COMPRESSED (bulk compression is never negotiated)
 )
 
-// bitmapUpdates returns the complete TS_UPDATE_BITMAP_DATA payloads in one fast-path PDU body.
-func (f *fastPath) bitmapUpdates(data []byte) [][]byte {
-	var out [][]byte
+// fastUpdate is one complete (reassembled) fast-path update.
+type fastUpdate struct {
+	code byte
+	data []byte
+}
+
+// updates returns the complete bitmap and surface-command updates in one fast-path PDU body.
+func (f *fastPath) updates(data []byte) []fastUpdate {
+	var out []fastUpdate
 	for len(data) >= 3 {
 		hdr, i, compr := data[0], 1, byte(0)
 		if hdr>>6&fpCompressed != 0 {
@@ -239,8 +256,8 @@ func (f *fastPath) bitmapUpdates(data []byte) [][]byte {
 			f.frag = append(f.frag, body...)
 			continue
 		}
-		if hdr&0xf == fpUpdateBitmap {
-			out = append(out, update)
+		if code := hdr & 0xf; code == fpUpdateBitmap || code == fpUpdateSurfCmds {
+			out = append(out, fastUpdate{code, update})
 		}
 	}
 	return out
@@ -290,17 +307,32 @@ func bitmapRects(p []byte) []Rect {
 		}
 		jobs = append(jobs, bitmapRect{data, left, top, right, bottom, w, h, bpp, compressed, noHdr})
 	}
-	rects, ok := make([]Rect, len(jobs)), make([]bool, len(jobs))
+	return parallelRects(len(jobs), func(i int) (Rect, bool) {
+		j := jobs[i]
+		rgba := codec.ProcessBitmap(j.data, j.w, j.h, j.bpp, j.compressed, 0, j.noHdr)
+		return encode(rgba, j.w, j.h, j.left, j.top, j.right, j.bottom)
+	})
+}
+
+// encodeJobs PNG-encodes decoded surface tiles in parallel, in order.
+func encodeJobs(jobs []tileJob) []Rect {
+	return parallelRects(len(jobs), func(i int) (Rect, bool) {
+		j := jobs[i]
+		return encode(j.rgba, j.w, j.h, j.x, j.y, j.x+j.w-1, j.y+j.h-1)
+	})
+}
+
+// parallelRects runs f for 0..n-1 on up to GOMAXPROCS goroutines and keeps the results in order.
+func parallelRects(n int, f func(int) (Rect, bool)) []Rect {
+	rects, ok := make([]Rect, n), make([]bool, n)
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
-	for i := range jobs {
+	for i := 0; i < n; i++ {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(i int) {
 			defer func() { <-sem; wg.Done() }()
-			j := jobs[i]
-			rgba := codec.ProcessBitmap(j.data, j.w, j.h, j.bpp, j.compressed, 0, j.noHdr)
-			rects[i], ok[i] = encode(rgba, j.w, j.h, j.left, j.top, j.right, j.bottom)
+			rects[i], ok[i] = f(i)
 		}(i)
 	}
 	wg.Wait()

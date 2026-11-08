@@ -22,8 +22,8 @@ func NewFrameAcknowledgePDU(shareID uint32, userID uint16, frameID uint32) *Fram
 			},
 			ShareID:            shareID,
 			StreamID:           0x01, // STREAM_LOW
-			UncompressedLength: 4,    // frameID is 4 bytes
-			PDUType2:           38,   // PDUTYPE2_FRAME_ACKNOWLEDGE
+			UncompressedLength: 8,    // 4 + frameID, as the other Data PDUs (rustxterm)
+			PDUType2:           0x38, // PDUTYPE2_FRAME_ACKNOWLEDGE (rustxterm: upstream wrote decimal 38 = 0x26)
 		},
 		FrameID: frameID,
 	}
@@ -38,8 +38,8 @@ func (pdu *FrameAcknowledgePDU) Serialize() []byte {
 	binary.LittleEndian.PutUint32(frameData, pdu.FrameID)
 
 	// Update lengths
-	pdu.ShareDataHeader.UncompressedLength = uint16(len(frameData)) // #nosec G115
-	totalLen := uint16(6 + 12 + len(frameData))                     // #nosec G115 -- ShareControl(6) + ShareData(12) + data
+	pdu.ShareDataHeader.UncompressedLength = uint16(4 + len(frameData)) // #nosec G115
+	totalLen := uint16(6 + 12 + len(frameData))                         // #nosec G115 -- ShareControl(6) + ShareData(12) + data
 	pdu.ShareDataHeader.ShareControlHeader.TotalLength = totalLen
 
 	// Write header and data

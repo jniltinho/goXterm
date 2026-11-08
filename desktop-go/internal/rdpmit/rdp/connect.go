@@ -178,6 +178,9 @@ func (c *Client) basicSettingsExchange() error {
 	}
 
 	c.initChannels(serverUserData.ServerNetworkData)
+	if serverUserData.ServerCoreData != nil { // rustxterm: gates RemoteFX (see capabilitiesExchange)
+		c.serverVersion = serverUserData.ServerCoreData.Version
+	}
 
 	// RNS_UD_SC_SKIP_CHANNELJOIN_SUPPORTED = 0x00000008
 	// This flag means the server SUPPORTS skipping, but we should only skip if we also requested it

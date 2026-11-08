@@ -54,4 +54,15 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
 - `rdp/tls.go`: a TLS 1.0-only server reports which session option to tick.
 - `protocol/pdu/secure_settings_exchange.go`: performance flags as the Rust app sent them (no full
   window drag, no menu animations, font smoothing); upstream sent 0.
+- `codec/planar.go`: scanline deltas wrap modulo 256 (upstream saturated them, streaking columns) and
+  the alpha plane is ignored (Windows sends 0); `codec/planar_test.go` (new).
+- `codec/nscodec.go`: rewritten from MS-RDPNSC — upstream's RLE was not the NSCodec scheme and Co/Cg
+  were unsigned, so no Windows tile decoded; rows are bottom-up in surface bits.
+  `codec/nscodec_test.go` (new).
+- `protocol/pdu/cap_surface.go`: the Bitmap Codecs capability offers NSCodec only (id 1); upstream
+  also offered RemoteFX-Image without properties. `rdp/capabilities_exchange.go` offers surface
+  commands and codecs only to RDP 8+ servers (server core version >= 0x00080005); xrdp and 2008 R2
+  report 0x00080004.
+- `protocol/pdu/frame_ack.go`: PDUTYPE2_FRAME_ACKNOWLEDGE is 0x38 (upstream wrote decimal 38, and the
+  server dropped the connection at the first acknowledged frame); `rdp/frame_ack.go` restored.
 - `rdp/security_test.go` (new): tests for the changes above.
