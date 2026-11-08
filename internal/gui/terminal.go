@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 
@@ -49,11 +50,49 @@ func (a *App) Connect(sessionID int64) (string, error) {
 		password = string(secret)
 	}
 	st.Close()
-	return a.dial(sshconn.Config{
+	cfg := sshconn.Config{
 		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
-		KeepaliveSecs: int(asInt64(sshOpt["keepalive_secs"])),
-	}, sessionID)
+		KeepaliveSecs:   int(asInt64(sshOpt["keepalive_secs"])),
+		AgentForwarding: asBool(sshOpt["agent_forwarding"]),
+		X11:             asBool(sshOpt["x11_forwarding"]),
+		RemoteCommand:   asString(sshOpt["remote_command"]),
+		StartupDir:      asString(sshOpt["startup_dir"]),
+	}
+	for _, kv := range asList(sshOpt["env"]) { // [["NAME","value"], …]
+		if p := asList(kv); len(p) == 2 {
+			cfg.Env = append(cfg.Env, [2]string{asString(p[0]), asString(p[1])})
+		}
+	}
+	cfg.Jumps = a.jumpHosts(sshOpt, cfg.User)
+	return a.dial(cfg, sessionID)
+}
+
+// jumpHosts turns a session's ssh.jump_hosts into gateway hops, each with its own host-key check
+// (known_hosts / trust prompt) and password prompt.
+func (a *App) jumpHosts(sshOpt map[string]any, targetUser string) []sshconn.Jump {
+	var hops []sshconn.Jump
+	for _, raw := range asList(sshOpt["jump_hosts"]) {
+		j, _ := raw.(map[string]any)
+		host := strings.TrimSpace(asString(j["host"]))
+		if host == "" {
+			continue
+		}
+		port := int(asInt64(j["port"]))
+		if port == 0 {
+			port = 22
+		}
+		user := asString(j["user"])
+		if user == "" {
+			user = targetUser
+		}
+		hops = append(hops, sshconn.Jump{
+			Host: host, Port: port, User: user, KeyFile: asString(j["key_file"]),
+			HostKey:     a.sshHostKeyCallback(host, port),
+			AskPassword: a.ask("", host, user, nil),
+		})
+	}
+	return hops
 }
 
 // HasDemo reports whether a demo SSH target is configured (RXT_DEMO_SSH), used to auto-open a lab
@@ -207,7 +246,13 @@ func (a *App) dial(cfg sshconn.Config, sessionID int64) (string, error) {
 	if err := saver.commit(); err != nil { // logged in: keep the password the user chose to save
 		onData([]byte("\x1b[90m[rustxterm] password not saved: " + err.Error() + "\x1b[0m\r\n"))
 	}
-	a.setBanner(tabID, a.sshBanner(cfg.User, cfg.Host, cfg.Port, cfg.KeepaliveSecs, sess.ServerVersion(), keyAlgo, keyFP))
+	x11, agentFwd := sess.Forwarding()
+	var gw []string
+	for _, j := range cfg.Jumps {
+		gw = append(gw, j.Host)
+	}
+	a.setBanner(tabID, a.sshBanner(cfg.User, cfg.Host, cfg.Port, cfg.KeepaliveSecs, sess.ServerVersion(), keyAlgo, keyFP,
+		bannerFwd{gateway: strings.Join(gw, " → "), x11: x11, agent: agentFwd}))
 	a.mu.Lock()
 	a.term[tabID] = sess
 	a.mu.Unlock()

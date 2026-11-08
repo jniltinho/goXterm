@@ -181,6 +181,7 @@ func (a *App) sshClientForSession(id int64) (*ssh.Client, error) {
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
 		AskPassword: a.askPassword(sv.Host, sv.User),
 		HostKey:     a.sshHostKeyCallback(sv.Host, sv.Port),
+		Jumps:       a.jumpHosts(sshOpt, sv.User),
 	})
 }
 
