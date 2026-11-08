@@ -10,13 +10,13 @@ SSH, SFTP, FTP/FTPS, RDP, VNC, Telnet, Serial, WSL and local shells in tabs, wit
 your shell, live server monitoring and an encrypted session store. One binary for Linux, Windows and macOS
 is the desktop app, the CLI and the MCP server.
 
-[![Release](https://img.shields.io/github/v/release/jniltinho/rustXterm?include_prereleases&sort=semver&color=blue)](https://github.com/jniltinho/rustXterm/releases)
-[![Downloads](https://img.shields.io/github/downloads/jniltinho/rustXterm/total?color=blue)](https://github.com/jniltinho/rustXterm/releases)
-[![CI](https://github.com/jniltinho/rustXterm/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jniltinho/rustXterm/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/jniltinho/goXterm?include_prereleases&sort=semver&color=blue)](https://github.com/jniltinho/goXterm/releases)
+[![Downloads](https://img.shields.io/github/downloads/jniltinho/goXterm/total?color=blue)](https://github.com/jniltinho/goXterm/releases)
+[![CI](https://github.com/jniltinho/goXterm/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jniltinho/goXterm/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
 
-**[⬇ Download the latest release](https://github.com/jniltinho/rustXterm/releases/latest)**
+**[⬇ Download the latest release](https://github.com/jniltinho/goXterm/releases/latest)**
 
 [Install](#install) · [Quick start](#quick-start) · [Features](#features) · [CLI and MCP](#cli-and-mcp) · [Build](#build-from-source) · [Docs](#documentation)
 
@@ -92,7 +92,7 @@ the [screenshot gallery](docs/screenshots/README.md).
 
 ## Install
 
-Download from [GitHub Releases](https://github.com/jniltinho/rustXterm/releases). Every release has:
+Download from [GitHub Releases](https://github.com/jniltinho/goXterm/releases). Every release has:
 
 | Asset | Platform |
 |---|---|
@@ -275,7 +275,7 @@ formats.
 ## Contributing and feedback
 
 Bug reports, ideas and pull requests are welcome: open an
-[issue](https://github.com/jniltinho/rustXterm/issues). The [developer guide](docs/DEVELOPMENT.md)
+[issue](https://github.com/jniltinho/goXterm/issues). The [developer guide](docs/DEVELOPMENT.md)
 explains the Docker-only workflow and the test lab. If rustXterm is useful to you, a ⭐ helps other
 people find it.
 
