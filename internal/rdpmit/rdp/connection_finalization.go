@@ -43,9 +43,16 @@ func (c *Client) connectionFinalization() error {
 	)
 
 	for !serverSynchronizeReceived || !controlCooperateReceived || !grantedControlReceived || !fontMapReceived {
-		_, wire, err = c.mcsLayer.Receive()
+		var channelID uint16
+		channelID, wire, err = c.mcsLayer.Receive()
 		if err != nil {
 			return err
+		}
+		if handled, derr := c.dispatchChannel(channelID, wire); handled { // rustxterm
+			if derr != nil {
+				return derr
+			}
+			continue
 		}
 
 		dataPDU = &pdu.Data{}

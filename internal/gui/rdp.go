@@ -138,7 +138,9 @@ func (a *App) rdpDial(cfg rdpconn.Config, clipboard bool) (*RdpView, error) {
 	tabID := "r" + strconv.Itoa(a.seq)
 	a.mu.Unlock()
 
-	onFrame := func(rs []rdpconn.Rect) { // one event per update: the SPA draws its rectangles in order
+	// One event per update: the SPA draws its rectangles in order, then acknowledges the surface
+	// frames that ended in it (RdpFrameAck), so a slow renderer throttles the server.
+	onFrame := func(rs []rdpconn.Rect, frames []uint32) {
 		if a.emit == nil {
 			return
 		}
@@ -146,7 +148,7 @@ func (a *App) rdpDial(cfg rdpconn.Config, clipboard bool) (*RdpView, error) {
 		for i, r := range rs {
 			out[i] = map[string]any{"x": r.X, "y": r.Y, "png": base64.StdEncoding.EncodeToString(r.PNG)}
 		}
-		a.emit("rdp:frame:"+tabID, out)
+		a.emit("rdp:frame:"+tabID, map[string]any{"rects": out, "frames": frames})
 	}
 	onReady := func() {
 		if a.emit != nil {
@@ -224,6 +226,13 @@ func (a *App) RdpMouse(tabID, kind string, button, x, y int) error {
 }
 
 // RdpKey sends a scancode key event.
+// RdpFrameAck acknowledges surface frames the SPA has drawn.
+func (a *App) RdpFrameAck(tabID string, frames []uint32) {
+	if s := a.rdpSession(tabID); s != nil {
+		s.AckFrames(frames)
+	}
+}
+
 // RdpSyncClipboard offers the local clipboard's text to the remote desktop (the SPA calls it when the
 // RDP view gets focus, so text copied locally can be pasted there).
 func (a *App) RdpSyncClipboard(tabID string) error {

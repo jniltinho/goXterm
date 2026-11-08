@@ -18,12 +18,18 @@ func (c *Client) capabilitiesExchange() error {
 	// decoded the first PDU as a Demand Active and failed with EOF on anything else).
 	var resp pdu.ServerDemandActive
 	for skipped := 0; ; skipped++ {
-		_, wire, err := c.mcsLayer.Receive()
+		channelID, wire, err := c.mcsLayer.Receive()
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			return fmt.Errorf("the server closed the connection before the session started (%w)", err)
 		}
 		if err != nil {
 			return err
+		}
+		if handled, err := c.dispatchChannel(channelID, wire); handled {
+			if err != nil {
+				return err
+			}
+			continue
 		}
 		b, err := io.ReadAll(wire)
 		if err != nil {

@@ -31,7 +31,12 @@ func labConfig(t *testing.T) Config {
 func dial(t *testing.T, cfg Config) (*Session, chan Rect, chan error) {
 	frame := make(chan Rect, 1)
 	closed := make(chan error, 1)
-	s, w, h, err := Connect(cfg, func(rs []Rect) {
+	var s *Session
+	s, w, h, err := Connect(cfg, func(rs []Rect, frames []uint32) {
+		s.AckFrames(frames)
+		if len(rs) == 0 {
+			return
+		}
 		select {
 		case frame <- rs[0]:
 		default:
@@ -221,7 +226,12 @@ func snapshotDial(t *testing.T, cfg Config, path string) (*Session, chan Rect, c
 	frame, closed := make(chan Rect, 1), make(chan error, 1)
 	var mu sync.Mutex
 	canvas := image.NewRGBA(image.Rect(0, 0, cfg.Width, cfg.Height))
-	s, _, _, err := Connect(cfg, func(rs []Rect) {
+	var s *Session
+	s, _, _, err := Connect(cfg, func(rs []Rect, frames []uint32) {
+		s.AckFrames(frames)
+		if len(rs) == 0 {
+			return
+		}
 		mu.Lock()
 		for _, r := range rs {
 			if img, err := png.Decode(bytes.NewReader(r.PNG)); err == nil {
@@ -302,7 +312,7 @@ func TestFastPathReassemblesFragments(t *testing.T) {
 	if len(got) != 1 || got[0].code != fpUpdateBitmap || !bytes.Equal(got[0].data, upd) {
 		t.Fatalf("reassembled %d updates", len(got))
 	}
-	rs := bitmapRects(got[0].data)
+	rs := bitmapRects(got[0].data, &pixelBudget{rect: 1 << 20, left: 1 << 20})
 	if len(rs) != 1 || rs[0].X != 3 || rs[0].Y != 4 || rs[0].W != 4 || rs[0].H != 2 {
 		t.Fatalf("rects %+v", rs)
 	}

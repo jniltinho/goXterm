@@ -18,7 +18,26 @@ const (
 	exHeaderPresent    = 0x01   // EX_COMPRESSED_BITMAP_HEADER_PRESENT
 	exHeaderSize       = 24     // TS_COMPRESSED_BITMAP_HEADER_EX
 	surfaceBitsHdrSize = 20     // destLeft..bitmapDataLength after cmdType
+	codecNone          = 0      // uncompressed pixels
 )
+
+// rawSurface converts uncompressed surface bits (32 bpp BGRA or 24 bpp BGR, rows bottom-up, as
+// FreeRDP reads RDP_CODEC_ID_NONE) to top-down RGBA; nil for other depths or short data.
+func rawSurface(data []byte, w, h, bpp int) []byte {
+	px := bpp / 8
+	if (bpp != 32 && bpp != 24) || len(data) < w*h*px {
+		return nil
+	}
+	rgba := make([]byte, w*h*4)
+	for y := 0; y < h; y++ {
+		src := data[(h-1-y)*w*px:]
+		for x := 0; x < w; x++ {
+			o, i := (y*w+x)*4, x*px
+			rgba[o], rgba[o+1], rgba[o+2], rgba[o+3] = src[i+2], src[i+1], src[i], 255
+		}
+	}
+	return rgba
+}
 
 // tileJob is a decoded top-down RGBA bitmap to put on screen at (x, y).
 type tileJob struct {
@@ -28,8 +47,8 @@ type tileJob struct {
 }
 
 // surfaceCommands decodes one TS_FP_SURFCMDS body into screen jobs and returns the ids of frames
-// that ended (each must be acknowledged).
-func surfaceCommands(p []byte) (jobs []tileJob, ended []uint32) {
+// that ended (each must be acknowledged once drawn). b bounds the decoded sizes.
+func surfaceCommands(p []byte, b *pixelBudget) (jobs []tileJob, ended []uint32) {
 	for len(p) >= 2 {
 		cmd := binary.LittleEndian.Uint16(p)
 		p = p[2:]
@@ -39,25 +58,32 @@ func surfaceCommands(p []byte) (jobs []tileJob, ended []uint32) {
 				return
 			}
 			left, top := int(binary.LittleEndian.Uint16(p)), int(binary.LittleEndian.Uint16(p[2:]))
-			flags, codecID := p[9], p[11]
+			bpp, flags, codecID := int(p[8]), p[9], p[11]
 			w, h := int(binary.LittleEndian.Uint16(p[12:])), int(binary.LittleEndian.Uint16(p[14:]))
-			n := int(binary.LittleEndian.Uint32(p[16:]))
+			n := uint64(binary.LittleEndian.Uint32(p[16:]))
 			p = p[surfaceBitsHdrSize:]
-			if n < 0 || n > len(p) {
+			if flags&exHeaderPresent != 0 { // the extended header precedes bitmapData and is not counted in n
+				if len(p) < exHeaderSize {
+					return
+				}
+				p = p[exHeaderSize:]
+			}
+			if n > uint64(len(p)) {
 				return
 			}
 			data := p[:n]
 			p = p[n:]
-			if flags&exHeaderPresent != 0 {
-				if len(data) < exHeaderSize {
-					continue
-				}
-				data = data[exHeaderSize:]
-			}
-			if codecID != pdu.NSCodecID || w <= 0 || h <= 0 {
+			if !b.take(w, h) {
 				continue
 			}
-			if rgba := codec.DecodeNSCodecToRGBA(data, w, h); rgba != nil {
+			var rgba []byte
+			switch codecID {
+			case pdu.NSCodecID:
+				rgba = codec.DecodeNSCodecToRGBA(data, w, h)
+			case codecNone:
+				rgba = rawSurface(data, w, h, bpp)
+			}
+			if rgba != nil {
 				jobs = append(jobs, tileJob{rgba: rgba, w: w, h: h, x: left, y: top})
 			}
 		case cmdFrameMarker:

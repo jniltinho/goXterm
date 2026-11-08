@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"rustxterm-go/internal/rdpmit/protocol/fastpath"
@@ -58,6 +59,10 @@ type Client struct {
 
 	// NLA configuration
 	useNLA bool
+
+	// rustxterm: true between a Deactivate All and the end of reactivation; input is not sent then
+	// (MS-RDPBCGR 1.3.1.3)
+	inactive atomic.Bool
 
 	// rustxterm: keyboard layout sent in the core data and input capabilities (SetKeyboardLayout)
 	keyboardLayout    uint32
