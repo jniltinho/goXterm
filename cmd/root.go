@@ -5,8 +5,8 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -27,6 +27,7 @@ var rootCmd = &cobra.Command{
 	Short:         "rustXterm: desktop app, command line and MCP server",
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	Args:          noArgs, // an unknown subcommand is a usage error (2), as with clap
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return gui.Run(version, flags.safeGPU)
 	},
@@ -45,29 +46,36 @@ func (e exitErr) Error() string { return e.msg }
 func fail(format string, a ...any) error   { return exitErr{1, fmt.Sprintf(format, a...)} }
 func usage(format string, a ...any) error  { return exitErr{2, fmt.Sprintf(format, a...)} }
 func locked(format string, a ...any) error { return exitErr{3, fmt.Sprintf(format, a...)} }
+func denied(format string, a ...any) error { return exitErr{4, fmt.Sprintf(format, a...)} }
 
-// Execute runs the command line, mapping errors to the Rust CLI's exit codes. A --json run prints the
-// error as {"error":{"code","message"}} like the Rust agent.
+// Execute runs the command line and exits with the Rust CLI's exit code.
 func Execute() {
-	err := rootCmd.ExecuteContext(context.Background())
+	if code := report(rootCmd.ExecuteContext(context.Background()), os.Stdout, os.Stderr); code != 0 {
+		os.Exit(code)
+	}
+}
+
+// report prints err like the Rust agent (cli.rs run) and returns its exit code: with --json
+// {"error":{"code":"<wire code>","message":…}} on stdout, otherwise "rustxterm: <message>" on stderr.
+func report(err error, stdout, stderr io.Writer) int {
 	if err == nil {
-		return
+		return 0
 	}
 	code := 1
 	if e, ok := err.(exitErr); ok {
 		code = e.code
 	}
 	if flags.json {
-		b, _ := json.Marshal(map[string]any{"error": map[string]any{"code": code, "message": err.Error()}})
-		fmt.Fprintln(os.Stdout, string(b))
+		fmt.Fprintln(stdout, encodeJSON(map[string]any{"error": map[string]any{"code": codeNames[code], "message": err.Error()}}, false))
 	} else {
-		fmt.Fprintln(os.Stderr, "rustxterm:", err.Error())
+		fmt.Fprintln(stderr, "rustxterm:", err.Error())
 	}
-	os.Exit(code)
+	return code
 }
 
 func init() {
 	p := rootCmd.PersistentFlags()
 	p.BoolVar(&flags.json, "json", false, "print JSON instead of tables")
+	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usage("%v", err) })
 	p.BoolVar(&flags.safeGPU, "safe-gpu", false, "start the webview with GPU acceleration off (Linux, Windows)")
 }
