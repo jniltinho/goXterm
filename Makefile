@@ -1,103 +1,114 @@
-# Developer entry points. Every recipe runs in Docker (scripts/cargo-docker.sh or docker);
-# nothing here needs a host Rust toolchain. See docs/DEVELOPMENT.md.
-#
-#   make help                       list targets
-#   make dist VERSION=0.0.0-test    release artifacts into dist/
-#   CARGO_TARGET_DIR=target/agent-foo make test   per-agent target dir
+# rustXterm (Go + Wails v3). ONE binary = desktop window + CLI + MCP server (Cobra): no subcommand
+# opens the window, subcommands are the CLI/MCP. Everything builds in Docker (only docker + make).
+# The binary is CGO: GTK 4 + WebKitGTK 6.0 (the Wails window) and SQLCipher (reads the Rust store).
+# Builds always refresh dist/. History: openspec/changes/migrate-gui-to-go-wails; the Rust app is in archive/rust/.
+NODE_IMAGE ?= node:24
+IMAGE      ?= rustxterm-go-linux
+VERSION    ?= $(or $(shell git describe --tags --exact-match --match 'v*' 2>/dev/null | sed 's/^v//'),dev)
+LDFLAGS    := -s -w -X rustxterm-go/cmd.version=$(VERSION)
+BIN        := rustxterm-go
+DOCKER     := docker run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp
+GO_ENV     := -e GOFLAGS=-buildvcs=false -e GOCACHE=/src/.cache/go-build -e GOMODCACHE=/src/.cache/mod -e CGO_ENABLED=1
+RUN         = $(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)
 
-SHELL := /bin/sh
-.DEFAULT_GOAL := help
+.PHONY: guard lab-test bench embed-stub prints image tidy check layers test frontend build appimage windows macos dist-all clean
 
-CARGO   := scripts/cargo-docker.sh cargo
-IMAGE   ?= rustxterm-toolchain:dev
-DIST    ?= dist
-VERSION ?=
+image:            ## build toolchain image (Go + GTK/WebKitGTK + SQLCipher)
+	docker build -q -t $(IMAGE) -f build/linux.Dockerfile build
 
-DENY        := cargo-deny-0.20.2-x86_64-unknown-linux-musl
-DENY_SHA256 := 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+tidy: image       ## resolve modules and write go.sum
+	$(RUN) go mod tidy
 
-.PHONY: help toolchain build release dist dist-check test test-ui snapshots fmt fmt-check clippy \
-	check layers scenarios guard guard-ci deny lab-up lab-test lab-down prints matrix clean shell
+# The binary embeds internal/gui/dist (//go:embed): a fresh checkout has no SPA build yet, so the
+# compile-only targets drop a placeholder page there (git-ignored; `make frontend` replaces it).
+embed-stub:
+	@test -e internal/gui/dist/index.html || { mkdir -p internal/gui/dist && echo '<!doctype html><title>rustXterm</title>' > internal/gui/dist/index.html; }
 
-help: ## Show this help
-	@awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z_-]+:.*## / { printf "  %-12s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+check: image embed-stub ## gofmt + go vet
+	$(RUN) sh -c 'test -z "$$(gofmt -l cmd internal main.go)" || { gofmt -l cmd internal main.go; exit 1; }; go vet ./...'
 
-toolchain: ## Build (or refresh) the pinned toolchain image
-	docker build --target toolchain -t $(IMAGE) .
+layers: image embed-stub ## module layering (core never imports the GUI/Wails; protocol packages stay independent)
+	$(RUN) go test ./internal/archtest
 
-build: ## Debug build of the workspace
-	$(CARGO) build --workspace
+test: image embed-stub ## unit tests
+	$(RUN) go test ./...
 
-release: ## Release build (host-glibc binary in $CARGO_TARGET_DIR/release; use `dist` for portable artifacts)
-	$(CARGO) build --workspace --release
+icons:            ## copy the bundled icon catalog (assets/icons/app) into frontend/public/icons
+	mkdir -p frontend/public/icons && cp assets/icons/app/32/*.png frontend/public/icons/
+	cp assets/icons/rustxterm-256.png frontend/public/icons/logo.png
+	mkdir -p frontend/public/fonts && cp assets/fonts/*/*.ttf frontend/public/fonts/
 
-dist: ## Release artifacts (binary, AppImage, tarball, SHA256SUMS) into DIST=dist; optional VERSION=X.Y.Z
-	docker build --target dist $(if $(VERSION),--build-arg RXT_VERSION=$(VERSION)) --output type=local,dest=$(DIST)/ .
+frontend: icons   ## the Vue/Tailwind SPA (Vite Plus) into internal/gui/dist (embedded by the binary)
+	$(DOCKER) -v $(CURDIR):/src -w /src/frontend $(NODE_IMAGE) sh -c 'npm ci --no-audit --no-fund && npm run build:desktop'
 
-dist-check: ## Check the artifacts in DIST=dist (glibc, NEEDED libs, self-test, checksums, guard)
-	$(CARGO) xtask dist-check $(DIST)
+build: image frontend ## the single binary for Linux amd64 → dist/
+	$(RUN) go build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BIN)-$(VERSION)-linux-amd64 .
 
-test: ## Run all workspace tests (lab tests are ignored)
-	$(CARGO) test --workspace --locked
+# AppImage holds the binary, its .desktop and icon; GTK 4 + WebKitGTK 6.0 and libsqlcipher come from
+# the system (Ubuntu 24.04+, Fedora 39+, Debian 13+).
+# Built as .new then renamed, so a running copy of the AppImage ("Text file busy") is replaced too.
+# shortcut: GTK/WebKit/SQLCipher are not bundled; bundle them (linuxdeploy) for older distributions.
+appimage: build   ## the Linux app as an x86_64 AppImage → dist/
+	$(RUN) sh -c '\
+	  app=.cache/AppDir; rm -rf $$app; mkdir -p $$app/usr/bin $$app/usr/share/icons/hicolor/256x256/apps; \
+	  cp dist/$(BIN)-$(VERSION)-linux-amd64 $$app/usr/bin/$(BIN); \
+	  cp build/linux/AppRun build/linux/$(BIN).desktop $$app/; \
+	  cp build/linux/$(BIN).png $$app/$(BIN).png; cp build/linux/$(BIN).png $$app/usr/share/icons/hicolor/256x256/apps/$(BIN).png; \
+	  desktop-file-validate $$app/$(BIN).desktop && \
+	  ARCH=x86_64 appimagetool --no-appstream --runtime-file /usr/local/share/appimage-runtime-x86_64 \
+	    $$app dist/$(BIN)-$(VERSION)-x86_64.AppImage.new && \
+	  mv -f dist/$(BIN)-$(VERSION)-x86_64.AppImage.new dist/$(BIN)-$(VERSION)-x86_64.AppImage'
 
-test-ui: ## Run the rxt-ui kittest UI and snapshot tests
-	$(CARGO) test -p rxt-ui --locked
+# With the pure-Go store, Windows and macOS cross-build CGO-free from Linux — no mingw/osxcross:
+#   windows: WebView2 (CGO_ENABLED=0), -H windowsgui.
+#   macos:   Wails purego backend (CGO_ENABLED=0, -tags purego); universal joins amd64+arm64.
+windows: image frontend ## Windows amd64 (WebView2, CGO-free) → dist/
+	$(RUN) sh -c 'CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags production -trimpath \
+	  -ldflags "$(LDFLAGS) -H windowsgui" -o dist/$(BIN)-$(VERSION)-windows-amd64.exe .'
 
-snapshots: ## Regenerate the rxt-ui snapshot images (UPDATE_SNAPSHOTS=1)
-	UPDATE_SNAPSHOTS=1 $(CARGO) test -p rxt-ui --locked
+# shortcut: the universal app carries only the Go linker ad-hoc slice signatures; Developer ID
+# signing + notarization is task 13.3.
+macos: image frontend ## macOS amd64+arm64 + universal "rustXterm (Go).app" zip (purego, CGO-free) → dist/
+	$(RUN) sh -c 'for a in amd64 arm64; do CGO_ENABLED=0 GOOS=darwin GOARCH=$$a go build -tags "production purego" \
+	  -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BIN)-$(VERSION)-darwin-$$a . || exit 1; done'
+	$(RUN) go run ./build/macapp -version $(VERSION) -icon frontend/public/icons/logo.png \
+	  -out dist/$(BIN)-$(VERSION)_macos_universal.zip dist/$(BIN)-$(VERSION)-darwin-amd64 dist/$(BIN)-$(VERSION)-darwin-arm64
+	@echo 'Unsigned universal app: xattr -dr com.apple.quarantine "rustXterm (Go).app"' 
 
-fmt: ## Format the workspace
-	$(CARGO) fmt --all
+dist-all: appimage windows macos ## Linux binary + AppImage, Windows .exe, macOS per-arch — all in dist/
 
-fmt-check: ## Check formatting
-	$(CARGO) fmt --all --check
+# Screenshot sweep (13.1) on Linux into docs/prints/go-linux/<skin>/ (git-ignored). Needs the QA
+# container `rxt-qa` (toolchain image on the lab network, with the QA store) and RXT_QA_PASS set.
+prints: build    ## screenshots of every screen in Light and Dark → docs/prints/go-linux/
+	@test -n "$$RXT_QA_PASS" || { echo "set RXT_QA_PASS (the QA store's throwaway master password)"; exit 1; }
+	docker start rxt-qa >/dev/null
+	for s in light dark; do docker exec -e RXT_QA_PASS rxt-qa sh /w/build/qa/prints.sh $$s /w/.cache/prints/$$s || exit 1; \
+	  mkdir -p docs/prints/go-linux/$$s && cp .cache/prints/$$s/*.png docs/prints/go-linux/$$s/; done
 
-clippy: ## Lint with clippy, warnings are errors
-	$(CARGO) clippy --workspace --all-targets --locked -- -D warnings
+# Benchmark (13.2): the Go app against a Rust release binary (RUST_BIN, e.g. the v0.8.0 Linux asset)
+# in one clean container on Xvfb → .cache/bench/results.md. Needs `make build`.
+RUST_BIN ?= .cache/bench/rustxterm-0.8.0-x86_64
+bench: build      ## cold start, terminal throughput and input latency vs the Rust app
+	docker build -q -t $(IMAGE)-bench -f build/bench/Dockerfile build/bench
+	$(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)-bench sh build/bench/run.sh \
+	  /src/dist/$(BIN)-$(VERSION)-linux-amd64 /src/$(RUST_BIN) /src/.cache/bench/out
 
-check: fmt-check clippy test layers scenarios ## CI checks: fmt-check, clippy, test, layers, scenarios
+# Publication guard (design D12; build/guard): local-only paths, base/ digests, home paths and asset
+# attribution across the tree, history and GUARD_ARGS (--ci, --artifact PATH). Run before every push.
+guard: image      ## publication guard (.githooks/pre-push runs it)
+	$(RUN) sh -c 'git config --global --add safe.directory /src && go run ./build/guard $(GUARD_ARGS)'
 
-layers: ## Enforce crate layer rules
-	$(CARGO) xtask layers
+# Integration tests against the Docker lab (lab/README.md): lab/lab.sh up first. The tests that pass must
+# equal lab/expected-tests.txt exactly. Credentials are the lab's fictional ones.
+lab-test: image   ## Go TestLab* against the running lab (host network)
+	@mkdir -p .cache; $(DOCKER) --network host -v $(CURDIR):/src -w /src $(GO_ENV) -e RXT_SSH_LAB=1 \
+	  -e RXT_DEMO_SSH=alice:lab-alice-pass@127.0.0.1:2222 -e RXT_SSH_KEY_TEST=1 -e RXT_SSH_KEY=/src/lab/.generated/bob_ed25519 \
+	  $(IMAGE) go test -tags lab -count=1 -v -run '^TestLab' ./internal/... ./cmd/... > .cache/lab-test.log 2>&1; rc=$$?; \
+	grep -E '^(--- |FAIL|ok )' .cache/lab-test.log; \
+	grep -o '^--- PASS: TestLab[A-Za-z0-9]*' .cache/lab-test.log | sed 's/--- PASS: //' | sort > .cache/lab-passed.txt; \
+	grep -v -E '^[[:space:]]*(#|$$)' lab/expected-tests.txt | sort > .cache/lab-expected.txt; \
+	if ! diff -u .cache/lab-expected.txt .cache/lab-passed.txt; then echo "lab-test: passed tests differ from lab/expected-tests.txt"; exit 1; fi; \
+	exit $$rc
 
-scenarios: ## Check the spec scenario map
-	$(CARGO) xtask scenarios
-
-guard: ## Publication guard with base/ mounted read-only; run before every push
-	RXT_MOUNT_BASE=1 $(CARGO) xtask guard
-
-guard-ci: ## Publication guard as CI runs it (no base/)
-	$(CARGO) xtask guard --ci
-
-deny: ## cargo deny check with the same pinned, SHA-256 checked binary as CI
-	@set -eu; \
-	if [ ! -x target/tools/cargo-deny ]; then \
-		mkdir -p target/tools; \
-		curl --fail --show-error --silent --location --retry 3 \
-			"https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/$(DENY).tar.gz" -o target/tools/deny.tgz; \
-		echo "$(DENY_SHA256)  target/tools/deny.tgz" | sha256sum --check --strict -; \
-		tar -xzf target/tools/deny.tgz -C target/tools --strip-components=1 "$(DENY)/cargo-deny"; \
-		rm -f target/tools/deny.tgz; \
-	fi
-	scripts/cargo-docker.sh target/tools/cargo-deny check
-
-lab-up: ## Start the Docker protocol lab (127.0.0.1 only)
-	lab/lab.sh up
-
-lab-test: ## Run the lab integration tests (must match lab/expected-tests.txt)
-	lab/lab.sh test
-
-lab-down: ## Stop the lab and remove its volumes
-	lab/lab.sh down
-
-prints: ## Write UI screenshots to docs/prints/ (local-only)
-	RXT_MOUNT_PRINTS=1 $(CARGO) xtask prints
-
-matrix: ## Distro matrix self-tests and GUI smoke on the artifacts in DIST=dist
-	scripts/distro-matrix.sh $(DIST)
-
-clean: ## Delete target/ (all build dirs, cargo home, tools) and dist/ without asking
-	rm -rf target $(DIST)
-
-shell: ## Interactive shell in the toolchain container
-	scripts/cargo-docker.sh bash
+clean:
+	rm -rf dist .cache

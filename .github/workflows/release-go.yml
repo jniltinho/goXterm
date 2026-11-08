@@ -1,4 +1,4 @@
-# Builds and publishes the Go + Wails app (desktop-go/) on version tags (v0.9.0, v0.9.1-rc.1) — the
+# Builds and publishes the Go + Wails app on version tags (v0.9.0, v0.9.1-rc.1) — the
 # only release; the Rust release (release.yml) is disabled:
 # the Linux binary and AppImage, the Windows .exe and the universal macOS app (zip), all built in
 # Docker by `make dist-all`, plus SHA256SUMS. Like release.yml it only publishes a commit whose
@@ -42,10 +42,9 @@ jobs:
           [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && version=dev
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build every artifact (Linux, AppImage, Windows, macOS universal) in Docker
-        working-directory: desktop-go
         run: make dist-all VERSION=${{ steps.version.outputs.version }}
       - name: Checksums
-        working-directory: desktop-go/dist
+        working-directory: dist
         run: |
           rm -f *.new
           sha256sum -- * > SHA256SUMS
@@ -54,7 +53,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         with:
           name: rustxterm-go-dist
-          path: desktop-go/dist/*
+          path: dist/*
           if-no-files-found: error
       - name: Publish the GitHub Release
         if: github.event_name == 'push'
@@ -63,6 +62,6 @@ jobs:
         run: |
           prerelease=""
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" desktop-go/dist/* --verify-tag $prerelease \
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag $prerelease \
             --title "$GITHUB_REF_NAME" --generate-notes \
             --notes "Unsigned builds. macOS: unzip, then xattr -dr com.apple.quarantine \"rustXterm (Go).app\"."
