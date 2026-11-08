@@ -295,14 +295,14 @@ func TestFastPathReassemblesFragments(t *testing.T) {
 	upd := bitmapUpdate(3, 4, 4, 2, px)
 	var f fastPath
 	stream := append(fpUpdate(fpUpdateBitmap, fpFragFirst, upd[:10]), fpUpdate(0x5, fpFragSingle, nil)...) // + pointer-null
-	if got := f.bitmapUpdates(stream); len(got) != 0 {
+	if got := f.updates(stream); len(got) != 0 {
 		t.Fatalf("first fragment produced %d updates", len(got))
 	}
-	got := f.bitmapUpdates(append(fpUpdate(fpUpdateBitmap, 0x3, upd[10:20]), fpUpdate(fpUpdateBitmap, fpFragLast, upd[20:])...))
-	if len(got) != 1 || !bytes.Equal(got[0], upd) {
+	got := f.updates(append(fpUpdate(fpUpdateBitmap, 0x3, upd[10:20]), fpUpdate(fpUpdateBitmap, fpFragLast, upd[20:])...))
+	if len(got) != 1 || got[0].code != fpUpdateBitmap || !bytes.Equal(got[0].data, upd) {
 		t.Fatalf("reassembled %d updates", len(got))
 	}
-	rs := bitmapRects(got[0])
+	rs := bitmapRects(got[0].data)
 	if len(rs) != 1 || rs[0].X != 3 || rs[0].Y != 4 || rs[0].W != 4 || rs[0].H != 2 {
 		t.Fatalf("rects %+v", rs)
 	}

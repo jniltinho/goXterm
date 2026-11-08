@@ -52,7 +52,9 @@ func (c *Client) capabilitiesExchange() error {
 		}
 	}
 
-	if c.enableRFX {
+	// rustxterm: only RDP 8+ servers (Windows 8 / 2012 and later); xrdp and 2008 R2 report RDP 5–7,
+	// and xrdp switches to GDI orders this client does not draw when surface commands are offered.
+	if c.enableRFX && c.serverVersion >= 0x00080005 {
 		// Set MultifragmentUpdate MaxRequestSize large enough for RFX tiles
 		for i, cap := range req.CapabilitySets {
 			if cap.MultifragmentUpdateCapabilitySet != nil {

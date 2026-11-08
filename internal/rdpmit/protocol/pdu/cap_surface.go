@@ -290,32 +290,29 @@ func NewBitmapCodecsCapabilitySet() CapabilitySet {
 	}
 }
 
-// NewBitmapCodecsWithRFXCapabilitySet creates a capability set advertising NSCodec + RemoteFX-Image.
+// NewBitmapCodecsWithRFXCapabilitySet creates the Bitmap Codecs capability set for surface bits.
+// rustxterm: NSCodec only, under NSCodecID — what Windows 8+ picks for surface bits (it chose NSCodec
+// even with RemoteFX offered), and the decoder this client has verified against Windows 11.
+// Upstream also offered RemoteFX-Image with no properties.
 func NewBitmapCodecsWithRFXCapabilitySet() CapabilitySet {
-	nscodecProps := NSCodecCapabilitySet{
-		FAllowDynamicFidelity: 1,
-		FAllowSubsampling:     1,
-		ColorLossLevel:        3,
-	}
-
 	return CapabilitySet{
 		CapabilitySetType: CapabilitySetTypeBitmapCodecs,
 		BitmapCodecsCapabilitySet: &BitmapCodecsCapabilitySet{
-			BitmapCodecArray: []BitmapCodec{
-				{
-					CodecGUID:       NSCodecGUID,
-					CodecID:         1,
-					CodecProperties: nscodecProps.Serialize(),
-				},
-				{
-					CodecGUID:       RemoteFXImageGUID,
-					CodecID:         2,
-					CodecProperties: nil,
-				},
-			},
+			BitmapCodecArray: []BitmapCodec{{
+				CodecGUID: NSCodecGUID,
+				CodecID:   NSCodecID,
+				CodecProperties: (&NSCodecCapabilitySet{
+					FAllowDynamicFidelity: 1,
+					FAllowSubsampling:     1,
+					ColorLossLevel:        3,
+				}).Serialize(),
+			}},
 		},
 	}
 }
+
+// NSCodecID is the id this client gives NSCodec; the server uses it in surface bits.
+const NSCodecID = 1
 
 // RailCapabilitySet represents the Remote Programs Capability Set (MS-RDPBCGR 2.2.7.2.4).
 type RailCapabilitySet struct {

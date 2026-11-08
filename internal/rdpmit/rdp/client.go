@@ -65,6 +65,8 @@ type Client struct {
 
 	// RemoteFX-Image support
 	enableRFX bool
+	// rustxterm: the server's RDP version from its core data (0x00080004 = RDP 5–7, 0x00080005+ = 8+)
+	serverVersion uint32
 
 	// Pending slow-path update (per-client, not global)
 	pendingSlowPathUpdate *Update
@@ -301,3 +303,7 @@ func (c *Client) GetServerCapabilities() *ServerCapabilityInfo {
 
 	return info
 }
+
+// ServerVersion is the RDP version from the server's core data (0 before the basic settings
+// exchange). rustxterm.
+func (c *Client) ServerVersion() uint32 { return c.serverVersion }

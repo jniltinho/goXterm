@@ -108,7 +108,7 @@ func DecompressPlanar(src []byte, width, height int) []byte {
 			rgba[dstIdx] = planeR[srcIdx]
 			rgba[dstIdx+1] = planeG[srcIdx]
 			rgba[dstIdx+2] = planeB[srcIdx]
-			rgba[dstIdx+3] = planeA[srcIdx]
+			rgba[dstIdx+3] = 255 // rustxterm: desktop alpha is not used (FreeRDP draws BGRX); Windows sends 0
 		}
 	}
 
@@ -218,13 +218,9 @@ func decompressPlanarPlaneRLE(src []byte, dst []byte, width, height int) int {
 	return srcIdx
 }
 
+// clampPlanarDelta adds a scanline delta to the value above it. rustxterm: the sum wraps modulo 256
+// as in FreeRDP's planar decoder (upstream saturated it, which streaked whole columns): encoders
+// rely on the wrap for jumps larger than ±127.
 func clampPlanarDelta(base byte, delta int16) byte {
-	value := int16(base) + delta
-	if value < 0 {
-		return 0
-	}
-	if value > 255 {
-		return 255
-	}
-	return byte(value)
+	return byte(int16(base) + delta) // #nosec G115 -- the wrap is the format
 }

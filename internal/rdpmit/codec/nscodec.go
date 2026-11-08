@@ -1,140 +1,125 @@
 package codec
 
-// NSCodecRLEDecompress decompresses NSCodec RLE data for a single plane.
-// This is different from bitmap RLE - NSCodec uses a simpler format with
-// run segments and literal segments. The last 4 bytes of compressed data
-// are raw (not RLE-encoded) and appended directly to the output.
-func NSCodecRLEDecompress(data []byte, expectedSize int) []byte {
-	if len(data) == expectedSize {
-		// Raw data, no decompression needed
-		return data
-	}
+import "encoding/binary"
 
-	if len(data) > expectedSize || len(data) < 2 {
-		return nil
-	}
+// NSCodec decoder (MS-RDPNSC). rustxterm: rewritten — upstream's RLE was not the NSCodec scheme
+// and it treated Co/Cg as unsigned, so every Windows 11 tile failed to decode. This follows the
+// spec (3.1.9 RLE, 3.1.8.1 colour) as FreeRDP's nsc_rle_decode / nsc_decode implement it.
 
-	// The last min(4, len(data)) bytes are raw "end data"
-	endSize := 4
-	if endSize > len(data) {
-		endSize = len(data)
-	}
-	rleLen := len(data) - endSize
-	targetRLE := expectedSize - endSize
-
-	result := make([]byte, 0, expectedSize)
-	offset := 0
-
-	for offset < rleLen && len(result) < targetRLE {
-		header := data[offset]
-		offset++
-
-		if header&0x80 != 0 {
-			// Run segment: repeat single byte
-			runLength := int(header & 0x7F)
-			if runLength == 0 {
-				if offset >= rleLen {
-					return nil
-				}
-				runLength = int(data[offset]) + 128
-				offset++
-			}
-			if offset >= rleLen {
+// nscRLEDecode expands one RLE plane to size bytes: a value followed by the same value is a run
+// (next byte + 2, or 0xFF then a 32-bit length); the last 4 bytes are stored raw.
+func nscRLEDecode(in []byte, size int) []byte {
+	out := make([]byte, 0, size+4)
+	left, i := size, 0
+	for left > 4 {
+		if i >= len(in) {
+			return nil
+		}
+		v := in[i]
+		i++
+		if left == 5 || i >= len(in) || in[i] != v {
+			out = append(out, v)
+			left--
+			continue
+		}
+		i++ // the repeated value
+		if i >= len(in) {
+			return nil
+		}
+		n := int(in[i]) + 2
+		i++
+		if in[i-1] == 0xFF {
+			if i+4 > len(in) {
 				return nil
 			}
-			runValue := data[offset]
-			offset++
-
-			for i := 0; i < runLength && len(result) < targetRLE; i++ {
-				result = append(result, runValue)
-			}
-		} else {
-			// Literal segment: copy raw bytes
-			literalLength := int(header)
-			if literalLength == 0 {
-				if offset >= rleLen {
-					return nil
-				}
-				literalLength = int(data[offset]) + 128
-				offset++
-			}
-
-			if offset+literalLength > rleLen {
-				return nil
-			}
-
-			for _, b := range data[offset : offset+literalLength] {
-				if len(result) >= targetRLE {
-					break
-				}
-				result = append(result, b)
-			}
-			offset += literalLength
+			n = int(binary.LittleEndian.Uint32(in[i:]))
+			i += 4
 		}
+		if n > left {
+			return nil
+		}
+		for k := 0; k < n; k++ {
+			out = append(out, v)
+		}
+		left -= n
 	}
-
-	if len(result) < targetRLE {
+	if i+4 > len(in) {
 		return nil
 	}
+	return append(out, in[i:i+4]...)[:size]
+}
 
-	// Append raw end data
-	result = append(result, data[rleLen:]...)
-	if len(result) < expectedSize {
+// nscPlane returns a plane of size bytes: absent (count 0) is all 0xFF, shorter than size is RLE,
+// otherwise raw.
+func nscPlane(data []byte, size int) []byte {
+	switch {
+	case len(data) == 0:
+		p := make([]byte, size)
+		for i := range p {
+			p[i] = 0xFF
+		}
+		return p
+	case len(data) < size:
+		return nscRLEDecode(data, size)
+	default:
+		return data[:size]
+	}
+}
+
+// DecodeNSCodecToRGBA decodes an NSCodec bitmap stream (MS-RDPNSC 2.2.2), whose rows are stored
+// bottom-up in surface bits, to top-down RGBA.
+func DecodeNSCodecToRGBA(data []byte, width, height int) []byte {
+	if len(data) < 20 || width <= 0 || height <= 0 {
 		return nil
 	}
-
-	return result[:expectedSize]
-}
-
-// ChromaSuperSample upsamples chroma planes from subsampled to full resolution
-func ChromaSuperSample(plane []byte, srcWidth, srcHeight, dstWidth, dstHeight int) []byte {
-	result := make([]byte, dstWidth*dstHeight)
-
-	for y := 0; y < dstHeight; y++ {
-		srcY := y / 2
-		if srcY >= srcHeight {
-			srcY = srcHeight - 1
+	var count [4]int
+	for i := range count {
+		count[i] = int(binary.LittleEndian.Uint32(data[4*i:]))
+	}
+	colorLoss, subsampling := data[16], data[17] != 0
+	if colorLoss < 1 || colorLoss > 7 {
+		return nil
+	}
+	rw := roundUpToMultiple(width, 8) // luma stride with subsampling
+	size := [4]int{width * height, width * height, width * height, width * height}
+	if subsampling {
+		size[0] = rw * height
+		size[1] = (rw / 2) * (roundUpToMultiple(height, 2) / 2)
+		size[2] = size[1]
+	}
+	var planes [4][]byte
+	off := 20
+	for i := range planes {
+		if count[i] < 0 || off+count[i] > len(data) {
+			return nil
 		}
-
-		for x := 0; x < dstWidth; x++ {
-			srcX := x / 2
-			if srcX >= srcWidth {
-				srcX = srcWidth - 1
+		if planes[i] = nscPlane(data[off:off+count[i]], size[i]); planes[i] == nil {
+			return nil
+		}
+		off += count[i]
+	}
+	shift := colorLoss - 1
+	rgba := make([]byte, width*height*4)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			yi, ci := y*width+x, y*width+x
+			if subsampling {
+				yi, ci = y*rw+x, (y/2)*(rw/2)+x/2
 			}
-
-			srcIdx := srcY*srcWidth + srcX
-			dstIdx := y*dstWidth + x
-
-			if srcIdx < len(plane) {
-				result[dstIdx] = plane[srcIdx]
-			}
+			yv := int(planes[0][yi])
+			co := int(int8(planes[1][ci] << shift))
+			cg := int(int8(planes[2][ci] << shift))
+			o := ((height-1-y)*width + x) * 4 // rows are bottom-up (FreeRDP: FREERDP_FLIP_VERTICAL)
+			rgba[o] = clampByteNS(yv + co - cg)
+			rgba[o+1] = clampByteNS(yv + cg)
+			rgba[o+2] = clampByteNS(yv - co - cg)
+			rgba[o+3] = 255 // desktop alpha is not used (as with planar bitmaps)
 		}
 	}
-
-	return result
+	return rgba
 }
 
-// RestoreColorLoss restores color values that were quantized during compression
-func RestoreColorLoss(plane []byte, colorLossLevel uint8) []byte {
-	if colorLossLevel <= 1 {
-		return plane
-	}
-
-	shift := colorLossLevel - 1
-	result := make([]byte, len(plane))
-
-	for i, v := range plane {
-		restored := int(v) << shift
-		if restored > 255 {
-			restored = 255
-		}
-		result[i] = byte(restored)
-	}
-
-	return result
-}
-
-// clampByteNS clamps a value to 0-255 range (used by NSCodec)
+// clampByteNS clamps a value to 0-255.
 func clampByteNS(v int) byte {
 	if v < 0 {
 		return 0
@@ -143,161 +128,4 @@ func clampByteNS(v int) byte {
 		return 255
 	}
 	return byte(v)
-}
-
-// AYCoCgToRGBA converts AYCoCg color space to RGBA
-func AYCoCgToRGBA(luma, co, cg, alpha []byte, planeWidth, planeHeight, imgWidth, imgHeight int) []byte {
-	rgba := make([]byte, imgWidth*imgHeight*4)
-
-	for y := 0; y < imgHeight; y++ {
-		for x := 0; x < imgWidth; x++ {
-			planeIdx := y*planeWidth + x
-			rgbaIdx := (y*imgWidth + x) * 4
-
-			if planeIdx >= len(luma) || planeIdx >= len(co) || planeIdx >= len(cg) {
-				continue
-			}
-
-			// Get YCoCg values (shifted to signed range)
-			yVal := int(luma[planeIdx])
-			coVal := int(co[planeIdx]) - 128
-			cgVal := int(cg[planeIdx]) - 128
-
-			// YCoCg to RGB conversion
-			t := yVal - cgVal
-			r := clampByteNS(t + coVal)
-			g := clampByteNS(yVal + cgVal)
-			b := clampByteNS(t - coVal)
-
-			rgba[rgbaIdx+0] = r
-			rgba[rgbaIdx+1] = g
-			rgba[rgbaIdx+2] = b
-
-			// Alpha
-			if alpha != nil && planeIdx < len(alpha) {
-				rgba[rgbaIdx+3] = alpha[planeIdx]
-			} else {
-				rgba[rgbaIdx+3] = 255
-			}
-		}
-	}
-
-	return rgba
-}
-
-// DecodeNSCodecToRGBA decodes an NSCodec bitmap stream to RGBA pixels
-func DecodeNSCodecToRGBA(data []byte, width, height int) []byte {
-	if len(data) < 20 { // Minimum header size
-		return nil
-	}
-
-	// Parse header
-	lumaPlaneByteCount := int(uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16 | uint32(data[3])<<24)
-	orangeChromaPlaneByteCount := int(uint32(data[4]) | uint32(data[5])<<8 | uint32(data[6])<<16 | uint32(data[7])<<24)
-	greenChromaPlaneByteCount := int(uint32(data[8]) | uint32(data[9])<<8 | uint32(data[10])<<16 | uint32(data[11])<<24)
-	alphaPlaneByteCount := int(uint32(data[12]) | uint32(data[13])<<8 | uint32(data[14])<<16 | uint32(data[15])<<24)
-	colorLossLevel := data[16]
-	chromaSubsamplingLevel := data[17]
-	// Reserved: data[18:20]
-
-	if colorLossLevel < 1 || colorLossLevel > 7 {
-		return nil
-	}
-
-	chromaSubsampling := chromaSubsamplingLevel != 0
-
-	// Calculate expected plane sizes
-	var lumaWidth, lumaHeight int
-	var chromaWidth, chromaHeight int
-
-	if chromaSubsampling {
-		lumaWidth = roundUpToMultiple(width, 8)
-		lumaHeight = height
-		chromaWidth = lumaWidth / 2
-		chromaHeight = roundUpToMultiple(height, 2) / 2
-	} else {
-		lumaWidth = width
-		lumaHeight = height
-		chromaWidth = width
-		chromaHeight = height
-	}
-
-	lumaExpectedSize := lumaWidth * lumaHeight
-	chromaExpectedSize := chromaWidth * chromaHeight
-
-	// Extract planes from data
-	offset := 20
-
-	var lumaPlaneData, orangePlaneData, greenPlaneData, alphaPlaneData []byte
-
-	if lumaPlaneByteCount > 0 {
-		if offset+lumaPlaneByteCount > len(data) {
-			return nil
-		}
-		lumaPlaneData = data[offset : offset+lumaPlaneByteCount]
-		offset += lumaPlaneByteCount
-	}
-
-	if orangeChromaPlaneByteCount > 0 {
-		if offset+orangeChromaPlaneByteCount > len(data) {
-			return nil
-		}
-		orangePlaneData = data[offset : offset+orangeChromaPlaneByteCount]
-		offset += orangeChromaPlaneByteCount
-	}
-
-	if greenChromaPlaneByteCount > 0 {
-		if offset+greenChromaPlaneByteCount > len(data) {
-			return nil
-		}
-		greenPlaneData = data[offset : offset+greenChromaPlaneByteCount]
-		offset += greenChromaPlaneByteCount
-	}
-
-	if alphaPlaneByteCount > 0 {
-		if offset+alphaPlaneByteCount > len(data) {
-			return nil
-		}
-		alphaPlaneData = data[offset : offset+alphaPlaneByteCount]
-	}
-
-	// Decompress planes
-	lumaPlane := NSCodecRLEDecompress(lumaPlaneData, lumaExpectedSize)
-	if lumaPlane == nil {
-		return nil
-	}
-
-	orangePlane := NSCodecRLEDecompress(orangePlaneData, chromaExpectedSize)
-	if orangePlane == nil {
-		return nil
-	}
-
-	greenPlane := NSCodecRLEDecompress(greenPlaneData, chromaExpectedSize)
-	if greenPlane == nil {
-		return nil
-	}
-
-	var alphaPlane []byte
-	if alphaPlaneByteCount > 0 {
-		alphaExpectedSize := width * height
-		alphaPlane = NSCodecRLEDecompress(alphaPlaneData, alphaExpectedSize)
-		if alphaPlane == nil {
-			return nil
-		}
-	}
-
-	// Apply chroma super-sampling if needed
-	if chromaSubsampling {
-		orangePlane = ChromaSuperSample(orangePlane, chromaWidth, chromaHeight, lumaWidth, lumaHeight)
-		greenPlane = ChromaSuperSample(greenPlane, chromaWidth, chromaHeight, lumaWidth, lumaHeight)
-	}
-
-	// Apply color loss restoration
-	if colorLossLevel > 1 {
-		orangePlane = RestoreColorLoss(orangePlane, colorLossLevel)
-		greenPlane = RestoreColorLoss(greenPlane, colorLossLevel)
-	}
-
-	// Convert AYCoCg to RGBA
-	return AYCoCgToRGBA(lumaPlane, orangePlane, greenPlane, alphaPlane, lumaWidth, lumaHeight, width, height)
 }
