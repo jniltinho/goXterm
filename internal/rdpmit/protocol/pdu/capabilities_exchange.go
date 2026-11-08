@@ -3,6 +3,8 @@ package pdu
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 )
 
@@ -223,22 +225,33 @@ func (set *CapabilitySet) DeserializeQuick(wire io.Reader) error {
 }
 
 // Deserialize reads and fully parses a capability set from wire format.
+// rustxterm: the set is read as exactly lengthCapability bytes and parsed inside them. Upstream
+// parsed straight off the stream, so a set laid out differently than expected (Windows Server 2008
+// at 32 bpp) consumed the following sets and the Demand Active failed with EOF. A set this client
+// cannot parse is kept with its type only.
 func (set *CapabilitySet) Deserialize(wire io.Reader) error {
-	var (
-		lengthCapability uint16
-		err              error
-	)
-
-	err = binary.Read(wire, binary.LittleEndian, &set.CapabilitySetType)
-	if err != nil {
+	var lengthCapability uint16
+	if err := binary.Read(wire, binary.LittleEndian, &set.CapabilitySetType); err != nil {
 		return err
 	}
-
-	err = binary.Read(wire, binary.LittleEndian, &lengthCapability)
-	if err != nil {
+	if err := binary.Read(wire, binary.LittleEndian, &lengthCapability); err != nil {
 		return err
 	}
+	if lengthCapability < 4 {
+		return fmt.Errorf("capability set 0x%04X: length %d", uint16(set.CapabilitySetType), lengthCapability)
+	}
+	body := make([]byte, lengthCapability-4)
+	if _, err := io.ReadFull(wire, body); err != nil {
+		return err
+	}
+	if err := set.parseBody(bytes.NewReader(body), lengthCapability); err != nil {
+		*set = CapabilitySet{CapabilitySetType: set.CapabilitySetType}
+	}
+	return nil
+}
 
+// parseBody parses one capability set's body (its type and length already consumed).
+func (set *CapabilitySet) parseBody(wire io.Reader, lengthCapability uint16) error {
 	switch set.CapabilitySetType {
 	case CapabilitySetTypeGeneral:
 		set.GeneralCapabilitySet = &GeneralCapabilitySet{}
@@ -324,12 +337,7 @@ func (set *CapabilitySet) Deserialize(wire io.Reader) error {
 		return set.LargePointerCapabilitySet.Deserialize(wire)
 	}
 
-	data := make([]byte, lengthCapability-4)
-	if _, err = wire.Read(data); err != nil {
-		return err
-	}
-
-	return nil
+	return nil // unknown set: its body was already read
 }
 
 // FrameAcknowledgeCapabilitySet advertises support for frame acknowledgement (RDP 8.0+)
@@ -425,8 +433,8 @@ func (pdu *ServerDemandActive) Deserialize(wire io.Reader) error {
 		pdu.CapabilitySets = append(pdu.CapabilitySets, capabilitySet)
 	}
 
-	err = binary.Read(wire, binary.LittleEndian, &pdu.SessionId)
-	if err != nil {
+	// rustxterm: sessionId closes the PDU; a server that omits it is not an error
+	if err = binary.Read(wire, binary.LittleEndian, &pdu.SessionId); err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 

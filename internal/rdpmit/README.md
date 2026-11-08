@@ -65,4 +65,9 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   report 0x00080004.
 - `protocol/pdu/frame_ack.go`: PDUTYPE2_FRAME_ACKNOWLEDGE is 0x38 (upstream wrote decimal 38, and the
   server dropped the connection at the first acknowledged frame); `rdp/frame_ack.go` restored.
+- `protocol/pdu/capabilities_exchange.go`: each capability set is read as exactly its declared length
+  and parsed inside it (upstream parsed off the stream, so a set laid out differently — Windows
+  Server 2008 at 32 bpp — consumed the next ones and the Demand Active failed with EOF); a set that
+  does not parse is kept by type; a missing sessionId is tolerated.
+  `protocol/pdu/demand_active_test.go` (new).
 - `rdp/security_test.go` (new): tests for the changes above.
