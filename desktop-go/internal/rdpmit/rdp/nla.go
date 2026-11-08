@@ -111,7 +111,7 @@ func (c *Client) StartNLA() error {
 	}
 
 	// Step 3: Process challenge and get authenticate message
-	authMsg, err := ntlmCtx.Authenticate(tsResp.NegoTokens[0].Data, nil)
+	authMsg, err := authenticateSafely(ntlmCtx, tsResp.NegoTokens[0].Data)
 	if err != nil {
 		return fmt.Errorf("NLA: authenticate message: %w", err)
 	}
@@ -268,6 +268,18 @@ func nlaError(code uint32) error {
 		return fmt.Errorf("NLA: the account is disabled (0x%08X)", code)
 	}
 	return fmt.Errorf("NLA: server returned error code 0x%08X", code)
+}
+
+// authenticateSafely answers the server's NTLM challenge. bodgit/ntlmssp indexes AV-pair values from
+// the (untrusted) challenge without checking their length (MsvAvFlags shorter than 4 bytes panics),
+// so a malformed challenge becomes an error here instead of a crash.
+func authenticateSafely(c *ntlmssp.Client, challenge []byte) (msg []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			msg, err = nil, fmt.Errorf("malformed NTLM challenge from the server: %v", r)
+		}
+	}()
+	return c.Authenticate(challenge, nil)
 }
 
 // gssWrap seals b as a CredSSP token: the 16-byte NTLM signature followed by the sealed data.

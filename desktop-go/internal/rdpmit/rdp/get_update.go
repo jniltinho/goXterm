@@ -46,6 +46,7 @@ func (c *Client) GetUpdate() (*Update, error) {
 			// rustxterm: deactivation-reactivation (MS-RDPBCGR 1.3.1.3): Windows deactivates right
 			// after the logon (2008 R2 always) and sends a new Demand Active; redo the capabilities
 			// exchange and finalization and keep the session instead of closing it.
+			c.inactive.Store(true)
 			if err := c.reactivate(); err != nil {
 				return nil, fmt.Errorf("reactivation: %w", err)
 			}
@@ -92,15 +93,8 @@ func (c *Client) getX224Update() (*Update, error) {
 
 	// rustxterm: static virtual channels registered with AddStaticChannel (e.g. cliprdr) get the
 	// raw channel chunk, CHANNEL_PDU_HEADER included.
-	for name, recv := range c.channelHandlers {
-		if id, ok := c.channelIDMap[name]; ok && id == channelID {
-			data, err := io.ReadAll(wire)
-			if err != nil {
-				return nil, err
-			}
-			recv(data)
-			return nil, nil
-		}
+	if handled, err := c.dispatchChannel(channelID, wire); handled {
+		return nil, err
 	}
 
 	// Read ShareControlHeader first to check PDU type
@@ -217,6 +211,7 @@ func (c *Client) reactivate() error {
 	if err := c.connectionFinalization(); err != nil {
 		return err
 	}
+	c.inactive.Store(false)
 	if err := c.sendRefreshRect(); err != nil {
 		logging.Warn("RDP: refresh after reactivation: %v", err)
 	}

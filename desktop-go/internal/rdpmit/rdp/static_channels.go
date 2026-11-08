@@ -7,6 +7,7 @@ package rdp
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 )
 
 // SetTLSClientConfig makes StartTLS and NLA use cfg (cloned) instead of the built-in settings.
@@ -34,4 +35,21 @@ func (c *Client) SendStaticChannel(name string, chunk []byte) error {
 		return fmt.Errorf("static channel %q was not joined", name)
 	}
 	return c.mcsLayer.Send(c.userID, id, chunk)
+}
+
+// dispatchChannel hands a PDU received on a registered static channel to its handler and reports
+// whether it did. Every receive loop calls it (updates, the wait for Demand Active, finalization),
+// so channel traffic during (re)activation — e.g. cliprdr Monitor Ready — is not lost.
+func (c *Client) dispatchChannel(channelID uint16, wire io.Reader) (bool, error) {
+	for name, recv := range c.channelHandlers {
+		if id, ok := c.channelIDMap[name]; ok && id == channelID {
+			data, err := io.ReadAll(wire)
+			if err != nil {
+				return true, err
+			}
+			recv(data)
+			return true, nil
+		}
+	}
+	return false, nil
 }

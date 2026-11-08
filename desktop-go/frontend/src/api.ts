@@ -230,3 +230,5 @@ export const RdpDisconnect = (tabId: string) => call<void>("RdpDisconnect", tabI
 // Clipboard (text): remote copies go straight to the system clipboard; call RdpSyncClipboard when the
 // view gets focus to offer the local clipboard to the remote desktop.
 export const RdpSyncClipboard = (tabId: string) => call<void>("RdpSyncClipboard", tabId);
+// Acknowledge drawn surface frames (the server throttles until they are acknowledged).
+export const RdpFrameAck = (tabId: string, frames: number[]) => call<void>("RdpFrameAck", tabId, frames);

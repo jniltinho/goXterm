@@ -70,4 +70,11 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   Server 2008 at 32 bpp — consumed the next ones and the Demand Active failed with EOF); a set that
   does not parse is kept by type; a missing sessionId is tolerated.
   `protocol/pdu/demand_active_test.go` (new).
+- `rdp/static_channels.go`, `rdp/capabilities_exchange.go`, `rdp/connection_finalization.go`:
+  static-channel PDUs (e.g. cliprdr Monitor Ready) are dispatched in every receive loop, also while
+  waiting for the Demand Active and during finalization (they were dropped there).
+- `rdp/send_input_event.go`, `rdp/get_update.go`: input is not sent between a Deactivate All and the
+  end of reactivation (MS-RDPBCGR 1.3.1.3).
+- `rdp/nla.go`: bodgit/ntlmssp indexes AV-pair values from the server challenge without length
+  checks (a 1-byte MsvAvFlags panics); the call is guarded and becomes an error. `rdp/nla_test.go`.
 - `rdp/security_test.go` (new): tests for the changes above.

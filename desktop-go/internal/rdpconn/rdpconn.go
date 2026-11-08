@@ -63,7 +63,9 @@ type Config struct {
 	VerifyTLS func(tls.ConnectionState) error
 }
 
-// Rect is a changed region as a PNG; onFrame gets all rectangles of one update together, in order.
+// Rect is a changed region as a PNG. onFrame gets all rectangles of one update together, in order,
+// and the ids of surface frames that ended in it: the caller passes those to AckFrames once the
+// rectangles are on screen, so a slow renderer throttles the server (MS-RDPRFX frame acknowledge).
 type Rect struct {
 	X, Y, W, H int
 	PNG        []byte
@@ -72,7 +74,7 @@ type Rect struct {
 // Session is an RDP connection: Connect prepares it, Start dials and logs in.
 type Session struct {
 	cfg     Config
-	onFrame func([]Rect)
+	onFrame func([]Rect, []uint32)
 	onReady func()
 	onClose func(error)
 	clip    Clip
@@ -103,7 +105,7 @@ func tlsConfig(cfg Config) *tls.Config {
 
 // Connect prepares the session but does not dial or log in yet; call Start after the caller has
 // subscribed to frame events. It returns the requested desktop size.
-func Connect(cfg Config, onFrame func([]Rect), onReady func(), onClose func(error)) (*Session, int, int, error) {
+func Connect(cfg Config, onFrame func([]Rect, []uint32), onReady func(), onClose func(error)) (*Session, int, int, error) {
 	if cfg.Width <= 0 {
 		cfg.Width = 1024
 	}
@@ -164,21 +166,23 @@ func (s *Session) loop(c *rdp.Client) {
 			s.finish(err)
 			return
 		}
-		var rects []Rect
+		var (
+			rects  []Rect
+			frames []uint32
+		)
+		b := s.budget()
 		for _, up := range fp.updates(u.Data) {
 			switch up.code {
 			case fpUpdateBitmap:
-				rects = append(rects, bitmapRects(up.data)...)
+				rects = append(rects, bitmapRects(up.data, b)...)
 			case fpUpdateSurfCmds:
-				jobs, ended := surfaceCommands(up.data)
+				jobs, ended := surfaceCommands(up.data, b)
 				rects = append(rects, encodeJobs(jobs)...)
-				for _, id := range ended { // RDP 8+ servers pause after a few unacknowledged frames
-					_ = c.SendFrameAcknowledge(id)
-				}
+				frames = append(frames, ended...)
 			}
 		}
-		if len(rects) > 0 {
-			s.onFrame(rects)
+		if len(rects) > 0 || len(frames) > 0 {
+			s.onFrame(rects, frames)
 		}
 	}
 }
@@ -268,6 +272,42 @@ const (
 	noCompressionHdr  = 0x0400 // NO_BITMAP_COMPRESSION_HDR
 )
 
+// AckFrames acknowledges surface frames once they are drawn; RDP 8+ servers stop sending after a
+// few unacknowledged frames.
+func (s *Session) AckFrames(ids []uint32) {
+	s.mu.Lock()
+	c := s.c
+	s.mu.Unlock()
+	if c == nil {
+		return
+	}
+	for _, id := range ids {
+		_ = c.SendFrameAcknowledge(id)
+	}
+}
+
+// pixelBudget bounds what one update may make this client decode: each rectangle at most a desktop
+// (plus a tile of padding) and all of them together at most four desktops. Server sizes are
+// untrusted: a 65535×65535 rectangle would otherwise allocate gigabytes.
+type pixelBudget struct{ rect, left int }
+
+func (s *Session) budget() *pixelBudget {
+	px := (s.cfg.Width + 64) * (s.cfg.Height + 64)
+	return &pixelBudget{rect: px, left: 4 * px}
+}
+
+// take reserves a w×h rectangle; false means skip it.
+func (b *pixelBudget) take(w, h int) bool {
+	if w <= 0 || h <= 0 || w > maxSide || h > maxSide || w*h > b.rect || w*h > b.left {
+		return false
+	}
+	b.left -= w * h
+	return true
+}
+
+// maxSide is the largest rectangle side accepted (MS-RDPBCGR desktops are at most 8192 wide).
+const maxSide = 8192
+
 // bitmapRect is one rectangle of a bitmap update, still encoded.
 type bitmapRect struct {
 	data                                []byte
@@ -278,7 +318,7 @@ type bitmapRect struct {
 // bitmapRects decodes a TS_UPDATE_BITMAP_DATA (MS-RDPBCGR 2.2.9.1.1.3.1.2) into PNG rectangles, in
 // update order. The rectangles are decoded and PNG-encoded in parallel: done one by one on the
 // receive goroutine, a full-screen redraw (hundreds of 64×64 tiles) held up reading the socket.
-func bitmapRects(p []byte) []Rect {
+func bitmapRects(p []byte, b *pixelBudget) []Rect {
 	if len(p) < 4 || binary.LittleEndian.Uint16(p) != 1 { // UPDATETYPE_BITMAP
 		return nil
 	}
@@ -302,10 +342,12 @@ func bitmapRects(p []byte) []Rect {
 			}
 			data = data[8:]
 		}
-		if w <= 0 || h <= 0 {
+		if !b.take(w, h) {
 			continue
 		}
-		jobs = append(jobs, bitmapRect{data, left, top, right, bottom, w, h, bpp, compressed, noHdr})
+		// a compressed 32 bpp bitmap is always RDP 6 planar (MS-RDPBCGR 2.2.9.1.1.3.1.2.2), with or
+		// without the TS_CD_HEADER stripped above; ProcessBitmap picks planar from noHdr
+		jobs = append(jobs, bitmapRect{data, left, top, right, bottom, w, h, bpp, compressed, noHdr || (compressed && bpp == 32)})
 	}
 	return parallelRects(len(jobs), func(i int) (Rect, bool) {
 		j := jobs[i]
