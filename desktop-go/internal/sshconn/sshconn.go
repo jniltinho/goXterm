@@ -38,6 +38,33 @@ type Config struct {
 	// Log, when set, receives one-line auth problems (unreadable key, unreachable agent) so the user can
 	// see why a password is being asked instead of the key being used.
 	Log func(string)
+
+	// NoPassword / NoKeyboardInteractive turn those auth methods off (the session's "Allow password" /
+	// "Allow keyboard-interactive" unticked): only keys and the agent are offered then.
+	NoPassword, NoKeyboardInteractive bool
+
+	// Jumps are SSH gateways dialled in order before the target (like ProxyJump). Each hop checks its
+	// own host key and authenticates on its own (its key file, the agent, its password prompt).
+	Jumps []Jump
+	// AgentForwarding forwards the local ssh-agent ($SSH_AUTH_SOCK) into the shell.
+	AgentForwarding bool
+	// X11 forwards X11 to the local $DISPLAY with a fake cookie that is swapped for the real one.
+	X11 bool
+	// Env is sent before the shell starts; the server's AcceptEnv decides what it keeps.
+	Env [][2]string
+	// RemoteCommand runs instead of the login shell; StartupDir is entered first (the Rust app's
+	// startup command).
+	RemoteCommand, StartupDir string
+}
+
+// Jump is one SSH gateway in front of the target.
+type Jump struct {
+	Host        string
+	Port        int    // 0 = 22
+	User        string // "" = the target's user
+	KeyFile     string
+	HostKey     ssh.HostKeyCallback
+	AskPassword func() (string, error) // nil = no password prompt for this hop
 }
 
 func (c Config) log(s string) {
@@ -53,11 +80,77 @@ type Session struct {
 	stdin  io.WriteCloser
 	mu     sync.Mutex
 	closed bool
+
+	x11, agent bool // forwarding the server accepted (for the session banner)
 }
 
-// DialClient authenticates and returns an SSH client (password + keyboard-interactive auth; key and
-// agent come later). Shared by the terminal and SFTP.
+// DialClient authenticates and returns an SSH client, through cfg.Jumps when set (each hop is closed
+// when the client ends). Shared by the terminal, SFTP, tunnels and VNC gateways.
 func DialClient(cfg Config) (*ssh.Client, error) {
+	var hops []*ssh.Client
+	closeHops := func() {
+		for i := len(hops) - 1; i >= 0; i-- {
+			_ = hops[i].Close()
+		}
+	}
+	for _, j := range cfg.Jumps {
+		jc := Config{User: j.User, KeyFile: j.KeyFile, UseAgent: cfg.UseAgent, AskPassword: j.AskPassword,
+			AskPassphrase: cfg.AskPassphrase, Log: cfg.Log}
+		if jc.User == "" {
+			jc.User = cfg.User
+		}
+		port := j.Port
+		if port == 0 {
+			port = 22
+		}
+		var via *ssh.Client
+		if len(hops) > 0 {
+			via = hops[len(hops)-1]
+		}
+		c, err := dialVia(via, j.Host, port, &ssh.ClientConfig{User: jc.User, Auth: authMethods(jc),
+			HostKeyCallback: j.HostKey, Timeout: 15 * time.Second})
+		if err != nil {
+			closeHops()
+			return nil, fmt.Errorf("jump host %s: %w", net.JoinHostPort(j.Host, fmt.Sprint(port)), err)
+		}
+		hops = append(hops, c)
+	}
+	var via *ssh.Client
+	if len(hops) > 0 {
+		via = hops[len(hops)-1]
+	}
+	client, err := dialVia(via, cfg.Host, cfg.Port, &ssh.ClientConfig{User: cfg.User, Auth: authMethods(cfg),
+		HostKeyCallback: cfg.HostKey, Timeout: 15 * time.Second})
+	if err != nil {
+		closeHops()
+		return nil, err
+	}
+	if len(hops) > 0 {
+		go func() { _ = client.Wait(); closeHops() }()
+	}
+	return client, nil
+}
+
+// dialVia opens host:port directly, or as a direct-tcpip channel of via (a jump host).
+func dialVia(via *ssh.Client, host string, port int, cc *ssh.ClientConfig) (*ssh.Client, error) {
+	addr := net.JoinHostPort(host, fmt.Sprint(port))
+	if via == nil {
+		return ssh.Dial("tcp", addr, cc)
+	}
+	conn, err := via.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	c, chans, reqs, err := ssh.NewClientConn(conn, addr, cc)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return ssh.NewClient(c, chans, reqs), nil
+}
+
+// authMethods lists the auth methods for cfg: key file, agent, saved password, then the prompt.
+func authMethods(cfg Config) []ssh.AuthMethod {
 	var auths []ssh.AuthMethod
 	// ki builds a keyboard-interactive method that answers every prompt with getPw() (PAM / network
 	// gear ask the password this way).
@@ -107,9 +200,18 @@ func DialClient(cfg Config) (*ssh.Client, error) {
 			}
 		}
 	}
+	// pwMethods are the password and keyboard-interactive methods the session allows for getPw.
+	pwMethods := func(pass ssh.AuthMethod, getPw func() (string, error)) {
+		if !cfg.NoPassword {
+			auths = append(auths, pass)
+		}
+		if !cfg.NoKeyboardInteractive {
+			auths = append(auths, ki(getPw))
+		}
+	}
 	if cfg.Password != "" {
 		pw := cfg.Password
-		auths = append(auths, ssh.Password(pw), ki(func() (string, error) { return pw, nil }))
+		pwMethods(ssh.Password(pw), func() (string, error) { return pw, nil })
 	}
 	if cfg.AskPassword != nil {
 		// Prompt once, then reuse the answer across the remaining method attempts in this dial.
@@ -126,15 +228,9 @@ func DialClient(cfg Config) (*ssh.Client, error) {
 			cached, have = pw, true
 			return pw, nil
 		}
-		auths = append(auths, ssh.PasswordCallback(ask), ki(ask))
+		pwMethods(ssh.PasswordCallback(ask), ask)
 	}
-	clientCfg := &ssh.ClientConfig{
-		User:            cfg.User,
-		Auth:            auths,
-		HostKeyCallback: cfg.HostKey,
-		Timeout:         15 * time.Second,
-	}
-	return ssh.Dial("tcp", net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port)), clientCfg)
+	return auths
 }
 
 // loadKey reads a private key file and returns its signer. If the key is passphrase-protected and
@@ -187,6 +283,22 @@ func Connect(cfg Config, onData func([]byte), onClose func(error)) (*Session, er
 	if rows <= 0 {
 		rows = 24
 	}
+	s := &Session{client: client, sess: sess}
+	if cfg.X11 {
+		if err := s.forwardX11(cfg.log); err != nil {
+			cfg.log("X11 forwarding: " + err.Error())
+		}
+	}
+	if cfg.AgentForwarding {
+		if err := s.forwardAgent(); err != nil {
+			cfg.log("agent forwarding: " + err.Error())
+		}
+	}
+	for _, kv := range cfg.Env {
+		if kv[0] != "" {
+			_ = sess.Setenv(kv[0], kv[1]) // refused unless the server's AcceptEnv allows it
+		}
+	}
 	modes := ssh.TerminalModes{ssh.ECHO: 1, ssh.TTY_OP_ISPEED: 14400, ssh.TTY_OP_OSPEED: 14400}
 	if err := sess.RequestPty("xterm-256color", rows, cols, modes); err != nil {
 		sess.Close()
@@ -201,12 +313,16 @@ func Connect(cfg Config, onData func([]byte), onClose func(error)) (*Session, er
 	}
 	stdout, _ := sess.StdoutPipe()
 	stderr, _ := sess.StderrPipe()
-	if err := sess.Shell(); err != nil {
+	start := sess.Shell
+	if cmd := StartupCommand(cfg.RemoteCommand, cfg.StartupDir); cmd != "" {
+		start = func() error { return sess.Start(cmd) }
+	}
+	if err := start(); err != nil {
 		sess.Close()
 		client.Close()
 		return nil, err
 	}
-	s := &Session{client: client, sess: sess, stdin: stdin}
+	s.stdin = stdin
 
 	pump := func(r io.Reader) {
 		buf := make([]byte, 32*1024)
@@ -220,10 +336,15 @@ func Connect(cfg Config, onData func([]byte), onClose func(error)) (*Session, er
 			}
 		}
 	}
-	go pump(stdout)
-	go pump(stderr)
+	// onClose waits for both readers: Wait can return before the last output is read, and a short
+	// remote command (or a shell's final lines) would lose it.
+	var drained sync.WaitGroup
+	drained.Add(2)
+	go func() { defer drained.Done(); pump(stdout) }()
+	go func() { defer drained.Done(); pump(stderr) }()
 	go func() {
 		err := s.sess.Wait()
+		drained.Wait()
 		s.markClosed()
 		if onClose != nil {
 			onClose(exitReason(err))

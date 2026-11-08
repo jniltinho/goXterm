@@ -21,7 +21,7 @@ func TestTermAttachBuffersUntilAttached(t *testing.T) {
 	tab, onData, _ := a.newStreamTab()
 	onData([]byte("[rustxterm] offering key\r\n"))
 	onData([]byte("Welcome"))
-	a.setBanner(tab, a.sshBanner("root", "h.example", 22, 0, "SSH-2.0-OpenSSH_9.6", "ssh-ed25519", "SHA256:abcdefghijklmnopqrstuvwxyz0123456789"))
+	a.setBanner(tab, a.sshBanner("root", "h.example", 22, 0, "SSH-2.0-OpenSSH_9.6", "ssh-ed25519", "SHA256:abcdefghijklmnopqrstuvwxyz0123456789", bannerFwd{}))
 	if len(emitted) != 0 {
 		t.Fatalf("nothing may be emitted before attach, got %v", emitted)
 	}

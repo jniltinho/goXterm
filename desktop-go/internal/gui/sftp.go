@@ -49,6 +49,7 @@ func (a *App) SftpConnect(sessionID int64) (*SftpSession, error) {
 		Host: host, Port: port, User: user, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
 		AskPassword: ask, HostKey: a.sshHostKeyCallback(host, port),
+		Jumps: a.jumpHosts(sshOpt, user),
 	})
 	if err != nil {
 		return nil, err
