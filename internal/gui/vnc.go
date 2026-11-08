@@ -94,6 +94,9 @@ func (a *App) VncConnect(sessionID int64) (*VncView, error) {
 	if err == nil && saver != nil {
 		_ = saver.commit() // a failed save only means the next connection asks again
 	}
+	if err == nil {
+		a.noteTab(view.TabID, sessionID, sv.Name, "vnc")
+	}
 	return view, err
 }
 

@@ -170,9 +170,7 @@ compact JSON; errors then print as `{"error":{"code":"…","message":"…"}}` on
 Offline reads unlock through the keyring, else the master password typed on a terminal (or
 `RXT_MASTER_PASSWORD`). Store changes (`sessions add/edit/remove`, `import`) need the master password
 typed on an interactive terminal (never the keyring, a pipe or the environment) and are audited. The
-other commands talk to the running app over the agent-control socket and never start the GUI; the app
-answers them once agent-control task 3.3 lands (until then they report that the operation is not
-implemented).
+other commands talk to the running app over the agent-control socket and never start the GUI.
 
 MCP clients start `rustxterm-go mcp` over stdio:
 
@@ -183,14 +181,19 @@ MCP clients start `rustxterm-go mcp` over stdio:
 The MCP server defines 20 tools and none that add, edit, remove or import sessions. The read-only tools
 (`list_sessions`, `show_session`, `list_folders`, `list_tunnels`) work without a running app; the live
 tools (`open_session`, `read_terminal`, `send_input`, `wait_for_output`, `screenshot_tab`, `file_get`,
-`file_put`, `tunnel_start`, ...) are listed only while the app's control socket is reachable. The app
-does not execute live operations or `export` yet; they are the remaining part of `migrate-gui-to-go-wails`
-task 3.3.
+`file_put`, `tunnel_start`, ...) are listed only while the app's control socket is reachable, and the app
+executes them under each session's agent policy.
 
-**Settings › Agent control** turns the control socket on. On Linux it is a same-user Unix socket
-(`$XDG_RUNTIME_DIR/rustxterm/control.sock`, peer UID checked) speaking the Rust app's wire protocol;
-macOS and Windows transports are still to come. New sessions default to the `deny` agent policy; the
-session editor's **Agent** tab sets Deny, Ask or Allow per session.
+**Settings › Agent control** turns the control socket on. It speaks the Rust app's wire protocol and accepts
+only the same user:
+- Linux: a Unix socket in `$XDG_RUNTIME_DIR/rustxterm/`, peer UID checked (SO_PEERCRED);
+- macOS: a Unix socket in `$TMPDIR/rustxterm-<uid>/`, peer UID checked (LOCAL_PEERCRED);
+- Windows: the named pipe `\\.\pipe\rustxterm-<SID>-control`, with a DACL for the user's SID only, remote clients
+  rejected, and each connection's user, integrity and AppContainer state checked.
+
+New sessions default to the `deny` agent policy; the session editor's **Agent** tab sets Deny, Ask or
+Allow per session. With Ask, an operation that writes (sending input, files, tunnels, serial lines) waits for
+an approval prompt in the app.
 
 <details>
 <summary>Exit codes</summary>

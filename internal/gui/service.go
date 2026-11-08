@@ -45,6 +45,12 @@ type App struct {
 	shellPID map[string]int
 	multi    multiExec         // MultiExec: broadcast typed input to the selected terminals
 	ctl      *control.Listener // agent control socket listener (nil when agent control is off)
+	// agent control: the saved session behind each tab, each terminal's text tail (read/wait), and the
+	// approval prompts waiting for the user.
+	tabInfo   map[string]agentTab
+	tails     map[string]*tail
+	approvals map[uint64]chan bool
+	apprSeq   uint64
 }
 
 // termStream is any byte-stream terminal the SPA drives the same way (SSH/Telnet/Serial); each

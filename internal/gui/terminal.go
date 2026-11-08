@@ -67,11 +67,15 @@ func (a *App) Connect(sessionID int64) (string, error) {
 		}
 	}
 	cfg.Jumps = a.jumpHosts(sshOpt, cfg.User)
-	return a.dial(cfg, sessionID, endPolicy{
+	tabID, err := a.dial(cfg, sessionID, endPolicy{
 		remoteCommand: strings.TrimSpace(cfg.RemoteCommand) != "",
 		keepOpen:      asBool(sshOpt["keep_open_after_command"]),
 		autoReconnect: asBool(sshOpt["auto_reconnect"]),
 	})
+	if err == nil {
+		a.noteTab(tabID, sessionID, sv.Name, sv.Protocol)
+	}
+	return tabID, err
 }
 
 // jumpHosts turns a session's ssh.jump_hosts into gateway hops, each with its own host-key check
@@ -185,9 +189,16 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		a.early = map[string]*earlyTab{}
 	}
 	a.early[tabID] = &earlyTab{}
+	if a.tails == nil {
+		a.tails = map[string]*tail{}
+	}
+	a.tails[tabID] = &tail{}
 	a.mu.Unlock()
 	onData := func(b []byte) {
 		a.mu.Lock()
+		if t := a.tails[tabID]; t != nil {
+			t.feed(b)
+		}
 		if e := a.early[tabID]; e != nil {
 			if len(e.buf) < earlyCap {
 				e.buf = append(e.buf, b...)
@@ -218,6 +229,8 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		}
 		a.mu.Lock()
 		delete(a.term, tabID)
+		delete(a.tails, tabID)
+		delete(a.tabInfo, tabID)
 		if e := a.early[tabID]; e != nil {
 			e.closed, e.closeMsg, e.end = true, msg, end
 			a.mu.Unlock()

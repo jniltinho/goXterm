@@ -103,7 +103,7 @@ guard: image      ## publication guard (.githooks/pre-push runs it)
 lab-test: image   ## Go TestLab* against the running lab (host network)
 	@mkdir -p .cache; $(DOCKER) --network host -v $(CURDIR):/src -w /src $(GO_ENV) -e RXT_SSH_LAB=1 \
 	  -e RXT_DEMO_SSH=alice:lab-alice-pass@127.0.0.1:2222 -e RXT_SSH_KEY_TEST=1 -e RXT_SSH_KEY=/src/lab/.generated/bob_ed25519 \
-	  $(IMAGE) go test -count=1 -v -run '^TestLab' ./internal/... > .cache/lab-test.log 2>&1; rc=$$?; \
+	  $(IMAGE) go test -tags lab -count=1 -v -run '^TestLab' ./internal/... ./cmd/... > .cache/lab-test.log 2>&1; rc=$$?; \
 	grep -E '^(--- |FAIL|ok )' .cache/lab-test.log; \
 	grep -o '^--- PASS: TestLab[A-Za-z0-9]*' .cache/lab-test.log | sed 's/--- PASS: //' | sort > .cache/lab-passed.txt; \
 	grep -v -E '^[[:space:]]*(#|$$)' lab/expected-tests.txt | sort > .cache/lab-expected.txt; \

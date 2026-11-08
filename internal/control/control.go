@@ -11,6 +11,9 @@ import (
 	"io"
 )
 
+// Conn is one accepted or dialed control connection (a Unix socket or a Windows named pipe).
+type Conn = io.ReadWriteCloser
+
 // MAX_FRAME is the largest accepted control-channel frame (matches rxt_core::control::MAX_FRAME).
 const MAX_FRAME = 1 << 20
 

@@ -403,6 +403,17 @@ func (s *Session) encodeRect(x, y, w, h int) (Rect, bool) {
 	return Rect{X: x, Y: y, W: w, H: h, PNG: buf.Bytes()}, true
 }
 
+// Snapshot is the whole current framebuffer as a PNG (agent screenshot).
+func (s *Session) Snapshot() (Rect, bool) {
+	s.mu.Lock()
+	w, h := s.width, s.height
+	s.mu.Unlock()
+	if w == 0 || h == 0 {
+		return Rect{}, false
+	}
+	return s.encodeRect(0, 0, w, h)
+}
+
 func (s *Session) resize(w, h int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -128,6 +128,14 @@ func callTool(raw json.RawMessage) (any, *rpcErr) {
 	if errMsg != "" {
 		return toolResult(errMsg, true), nil
 	}
+	if d.name == "screenshot_tab" { // a desktop capture is an image block, as in the Rust agent
+		var shot struct {
+			PNG string `json:"png"`
+		}
+		if rm, ok := result.(json.RawMessage); ok && json.Unmarshal(rm, &shot) == nil && shot.PNG != "" {
+			return map[string]any{"content": []any{map[string]any{"type": "image", "data": shot.PNG, "mimeType": "image/png"}}, "isError": false}, nil
+		}
+	}
 	return toolResult(asText(result), false), nil
 }
 

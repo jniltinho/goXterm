@@ -233,9 +233,6 @@ func reqTab(args map[string]any) (*uint64, error) {
 
 // offlineRead serves a Read-group op from the store (no running instance); used as the MCP fallback.
 func offlineRead(op control.AgentOp) (any, error) {
-	if op.Op == "export" {
-		return nil, fmt.Errorf("export is not implemented yet")
-	}
 	st, err := openStore()
 	if err != nil {
 		return nil, err
@@ -248,6 +245,8 @@ func offlineRead(op control.AgentOp) (any, error) {
 		return st.Folders()
 	case "list_tunnels":
 		return st.Tunnels()
+	case "export":
+		return st.Export()
 	case "show_session":
 		list, err := st.Sessions()
 		if err != nil {

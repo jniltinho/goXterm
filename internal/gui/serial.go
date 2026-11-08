@@ -24,13 +24,17 @@ func (a *App) SerialConnect(sessionID int64) (string, error) {
 	}
 	ser := subMap(m, "serial")
 	line := subMap(ser, "line")
-	return a.serialDial(serialconn.Config{
+	tabID, err := a.serialDial(serialconn.Config{
 		Device:   asString(ser["port"]),
 		Baud:     int(asInt64(line["baud"])),
 		DataBits: atoiOr(asString(line["data_bits"]), 0),
 		Parity:   asString(line["parity"]),
 		StopBits: asString(line["stop_bits"]),
 	})
+	if err == nil {
+		a.noteTab(tabID, sessionID, asString(m["name"]), "serial")
+	}
+	return tabID, err
 }
 
 // SerialOpen opens a serial terminal for an explicit device/baud (session editor and tests).

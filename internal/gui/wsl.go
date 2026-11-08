@@ -70,6 +70,7 @@ func (a *App) wslOpen(opts wslconn.Options) (string, error) {
 	a.mu.Lock()
 	a.term[tabID] = sess
 	a.mu.Unlock()
+	a.noteTab(tabID, 0, "", "wsl") // never available to agents
 	return tabID, nil
 }
 
