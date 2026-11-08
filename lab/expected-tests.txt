@@ -3,6 +3,9 @@
 # The archived Rust list is archive/rust/lab-expected-tests.txt.
 TestLabDynamicSocks
 TestLabEcho
+TestLabJumpHostEnv
+TestLabAgentForwarding
+TestLabX11Forwarding
 TestLabFTPSExplicit
 TestLabFTPSImplicit
 TestLabKeyAuth
