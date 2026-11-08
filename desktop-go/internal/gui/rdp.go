@@ -18,9 +18,10 @@ type RdpView struct {
 }
 
 // RdpConnect opens an RDP session for a saved session, honoring its stored RDP options (domain,
-// allow_legacy_tls, allow_standard_security). Security mapping for pure Go: standard security → Std;
-// legacy TLS (old 2008-era servers) → SSL, because NLA over TLS 1.0 is unreachable on Go's crypto/tls
-// (see rdpconn.Config.LegacyTLS); otherwise NLA over TLS 1.2+.
+// allow_legacy_tls, allow_standard_security). Security mapping for pure Go: standard security → Std
+// (which falls back to the CredSSP-or-TLS offer: standard RDP security itself is not implemented, see
+// rdpconn.Std); legacy TLS (old 2008-era servers) → SSL, because NLA over TLS 1.0 is unreachable on
+// Go's crypto/tls (see rdpconn.Config.LegacyTLS); otherwise NLA over TLS 1.2+.
 func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	m, password, err := sessionRawByID(sessionID)
 	if err != nil {
@@ -43,7 +44,7 @@ func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	}
 	user := asString(m["user"])
 	if d := asString(rdp["domain"]); d != "" && !strings.ContainsAny(user, `\/@`) {
-		user = d + `\` + user // grdp splits DOMAIN\user; UPN (user@domain) is passed as-is
+		user = d + `\` + user // NLA splits DOMAIN\user and user@domain
 	}
 	w, h := rdpSize(rdp["resolution"], tabW, tabH)
 	// No saved password: ask (with "Save password"). It travels only inside the TLS channel, after the
@@ -60,8 +61,9 @@ func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	view, err := a.rdpDial(rdpconn.Config{
 		Host: asString(m["host"]), Port: port, User: user, Password: password,
 		Width: w, Height: h, Protocol: proto, LegacyTLS: legacy,
-		VerifyTLS: a.tlsVerifier(asString(m["host"]), port),
-	})
+		KeyboardLayout: uint32(asInt64(rdp["keyboard_layout"])), // #nosec G115 -- a locale id from the editor list
+		VerifyTLS:      a.tlsVerifier(asString(m["host"]), port),
+	}, clipboardOn(rdp))
 	if err == nil && saver != nil {
 		a.mu.Lock()
 		if a.rdpSave == nil {
@@ -118,10 +120,16 @@ func (a *App) ConnectRdpDemo(tabW, tabH int) (*RdpView, error) {
 	return a.rdpDial(rdpconn.Config{
 		Host: host, Port: port, User: user, Password: pass, Width: w, Height: h,
 		Protocol: proto, LegacyTLS: proto != rdpconn.NLA, // ssl/std demos target old servers
-	})
+	}, true)
 }
 
-func (a *App) rdpDial(cfg rdpconn.Config) (*RdpView, error) {
+// clipboardOn reads "Share clipboard text" (default on, as in the Rust app).
+func clipboardOn(opts map[string]any) bool {
+	v, set := opts["clipboard"]
+	return !set || asBool(v)
+}
+
+func (a *App) rdpDial(cfg rdpconn.Config, clipboard bool) (*RdpView, error) {
 	if cfg.Width == 0 {
 		cfg.Width, cfg.Height = 1280, 800
 	}
@@ -130,12 +138,17 @@ func (a *App) rdpDial(cfg rdpconn.Config) (*RdpView, error) {
 	tabID := "r" + strconv.Itoa(a.seq)
 	a.mu.Unlock()
 
-	onFrame := func(r rdpconn.Rect) {
-		if a.emit != nil {
-			a.emit("rdp:frame:"+tabID, map[string]any{
-				"x": r.X, "y": r.Y, "png": base64.StdEncoding.EncodeToString(r.PNG),
-			})
+	// One event per update: the SPA draws its rectangles in order, then acknowledges the surface
+	// frames that ended in it (RdpFrameAck), so a slow renderer throttles the server.
+	onFrame := func(rs []rdpconn.Rect, frames []uint32) {
+		if a.emit == nil {
+			return
 		}
+		out := make([]map[string]any, len(rs))
+		for i, r := range rs {
+			out[i] = map[string]any{"x": r.X, "y": r.Y, "png": base64.StdEncoding.EncodeToString(r.PNG)}
+		}
+		a.emit("rdp:frame:"+tabID, map[string]any{"rects": out, "frames": frames})
 	}
 	onReady := func() {
 		if a.emit != nil {
@@ -154,9 +167,11 @@ func (a *App) rdpDial(cfg rdpconn.Config) (*RdpView, error) {
 			a.emit("rdp:close:"+tabID, msg)
 		}
 	}
-	cfg.OnClipboard = func(text string) { // copied on the remote desktop → the local clipboard
-		if a.clip != nil {
-			a.clip.SetText(text)
+	if clipboard {
+		cfg.OnClipboard = func(text string) { // copied on the remote desktop → the local clipboard
+			if a.clip != nil {
+				a.clip.SetText(text)
+			}
 		}
 	}
 	sess, w, h, err := rdpconn.Connect(cfg, onFrame, onReady, onClose)
@@ -211,6 +226,13 @@ func (a *App) RdpMouse(tabID, kind string, button, x, y int) error {
 }
 
 // RdpKey sends a scancode key event.
+// RdpFrameAck acknowledges surface frames the SPA has drawn.
+func (a *App) RdpFrameAck(tabID string, frames []uint32) {
+	if s := a.rdpSession(tabID); s != nil {
+		s.AckFrames(frames)
+	}
+}
+
 // RdpSyncClipboard offers the local clipboard's text to the remote desktop (the SPA calls it when the
 // RDP view gets focus, so text copied locally can be pasted there).
 func (a *App) RdpSyncClipboard(tabID string) error {

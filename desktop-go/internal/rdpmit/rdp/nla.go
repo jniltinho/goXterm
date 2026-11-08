@@ -1,0 +1,431 @@
+package rdp
+
+import (
+	"crypto/rand"
+	"crypto/tls"
+	"fmt"
+	"io"
+	"net"
+	"strings"
+	"time"
+
+	"unicode/utf16"
+
+	"github.com/bodgit/ntlmssp"
+
+	"rustxterm-go/internal/rdpmit/auth"
+	"rustxterm-go/internal/rdpmit/logging"
+)
+
+// maxNLAMessageSize is the maximum size for NLA/CredSSP messages (64KB)
+const maxNLAMessageSize = 64 * 1024
+
+// readNLAMessage reads a complete NLA message with size limit
+func readNLAMessage(r io.Reader, maxSize int) ([]byte, error) {
+	// Read into a limited reader to prevent memory exhaustion
+	buf := make([]byte, 0, 4096)
+	tmp := make([]byte, 4096)
+	total := 0
+
+	for {
+		n, err := r.Read(tmp)
+		if n > 0 {
+			total += n
+			if total > maxSize {
+				return nil, fmt.Errorf("NLA message exceeds max size (%d bytes)", maxSize)
+			}
+			buf = append(buf, tmp[:n]...)
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return buf, err
+		}
+		// NLA messages are self-delimiting ASN.1 - if we got data, try to parse
+		// Most NLA messages fit in first read
+		if n > 0 && len(buf) > 0 {
+			break
+		}
+	}
+	return buf, nil
+}
+
+// StartNLA performs Network Level Authentication using CredSSP/NTLMv2
+func (c *Client) StartNLA() error {
+	// First, establish TLS connection
+	if err := c.startTLSForNLA(); err != nil {
+		return fmt.Errorf("NLA TLS setup failed: %w", err)
+	}
+
+	// Parse domain from username if present (DOMAIN\user or user@domain)
+	domain, user := c.parseDomainUser()
+	logging.Debug("NLA: Authenticating user")
+
+	// rustxterm: NTLMv2 from github.com/bodgit/ntlmssp (BSD-3-Clause) instead of upstream's auth/ntlm.go,
+	// whose code follows the GPL grdp NTLM too closely.
+	ntlmCtx, err := ntlmssp.NewClient(ntlmssp.SetDomain(domain), ntlmssp.SetUserInfo(user, c.password))
+	if err != nil {
+		return fmt.Errorf("NLA: %w", err)
+	}
+
+	// Generate client nonce (32 bytes) - required for version 5+
+	clientNonce := make([]byte, 32)
+	if _, err := rand.Read(clientNonce); err != nil {
+		return fmt.Errorf("NLA: failed to generate nonce: %w", err)
+	}
+
+	// Step 1: Send NTLM Negotiate message with client nonce
+	negoMsg, err := ntlmCtx.Authenticate(nil, nil)
+	if err != nil {
+		return fmt.Errorf("NLA: negotiate message: %w", err)
+	}
+	tsReq := auth.EncodeTSRequestWithNonce([][]byte{negoMsg}, nil, nil, clientNonce)
+
+	if _, err := c.conn.Write(tsReq); err != nil {
+		return fmt.Errorf("NLA: failed to send negotiate message: %w", err)
+	}
+	logging.Debug("NLA: Sent negotiate message (%d bytes)", len(tsReq))
+
+	// Step 2: Receive server challenge (with size limit)
+	resp, err := readNLAMessage(c.conn, maxNLAMessageSize)
+	if err != nil {
+		return fmt.Errorf("NLA: failed to read challenge: %w", err)
+	}
+	logging.Debug("NLA: Received challenge (%d bytes)", len(resp))
+
+	tsResp, err := auth.DecodeTSRequest(resp)
+	if err != nil {
+		return fmt.Errorf("NLA: failed to decode challenge: %w", err)
+	}
+	logging.Debug("NLA: Server version=%d, errorCode=%d", tsResp.Version, tsResp.ErrorCode)
+	negotiatedVersion := tsResp.Version
+	if negotiatedVersion <= 0 {
+		negotiatedVersion = 6
+	}
+	bindingNonce := auth.CredSSPBindingNonce(tsResp, clientNonce)
+	logging.Debug("NLA: Using CredSSP binding nonce len=%d (serverNonce=%t)", len(bindingNonce), len(tsResp.ServerNonce) > 0)
+
+	if len(tsResp.NegoTokens) == 0 {
+		return fmt.Errorf("NLA: no challenge token received from server")
+	}
+
+	// Step 3: Process challenge and get authenticate message
+	authMsg, err := authenticateSafely(ntlmCtx, tsResp.NegoTokens[0].Data)
+	if err != nil {
+		return fmt.Errorf("NLA: authenticate message: %w", err)
+	}
+	ntlmSec := ntlmCtx.SecuritySession()
+	if ntlmSec == nil {
+		return fmt.Errorf("NLA: server did not negotiate NTLM sealing")
+	}
+
+	// Get the server's public key from the TLS connection
+	pubKey, err := c.getTLSPublicKey()
+	if err != nil {
+		return fmt.Errorf("NLA: failed to get TLS public key: %w", err)
+	}
+	logging.Debug("NLA: Got TLS SubjectPublicKey (%d bytes)", len(pubKey))
+
+	// For version 5+, compute hash-based pubKeyAuth.
+	// SHA256(ClientServerHashMagic || selectedNonce || publicKey), where
+	// selectedNonce is the server nonce from the challenge when present.
+	var pubKeyData []byte
+	if tsResp.Version >= 5 {
+		pubKeyData = auth.ComputeClientPubKeyAuth(tsResp.Version, pubKey, bindingNonce)
+		logging.Debug("NLA: Using version %d hash-based pubKeyAuth", tsResp.Version)
+	} else {
+		pubKeyData = pubKey
+		logging.Debug("NLA: Using version %d raw pubKey", tsResp.Version)
+	}
+
+	encryptedPubKey, err := gssWrap(ntlmSec, pubKeyData)
+	if err != nil {
+		return fmt.Errorf("NLA: seal pubKeyAuth: %w", err)
+	}
+	logging.Debug("NLA: Encrypted pubKeyAuth len=%d", len(encryptedPubKey))
+
+	// Send authenticate message with encrypted public key and optional client nonce.
+	// clientNonce is a version 5+ field and should only be sent when negotiated.
+	authClientNonce := []byte(nil)
+	if negotiatedVersion >= 5 {
+		authClientNonce = clientNonce
+	}
+	tsReq = auth.EncodeTSRequestWithVersion(negotiatedVersion, [][]byte{authMsg}, nil, encryptedPubKey, authClientNonce)
+	if _, err := c.conn.Write(tsReq); err != nil {
+		return fmt.Errorf("NLA: failed to send authenticate message: %w", err)
+	}
+	logging.Debug("NLA: Sent authenticate message (%d bytes)", len(tsReq))
+
+	// Step 4: Receive public key verification from server (with size limit)
+	resp, err = readNLAMessage(c.conn, maxNLAMessageSize)
+	if err != nil {
+		return fmt.Errorf("NLA: failed to read public key response: %w", err)
+	}
+	logging.Debug("NLA: Received public key response (%d bytes)", len(resp))
+
+	tsResp, err = auth.DecodeTSRequest(resp)
+	if err != nil {
+		return fmt.Errorf("NLA: failed to decode public key response: %w", err)
+	}
+
+	// rustxterm: the server's pubKeyAuth is mandatory (MS-CSSP 3.1.5); without it the TLS channel is
+	// not bound to the NTLM session, so never send credentials. A logon failure arrives as errorCode.
+	if tsResp.ErrorCode != 0 {
+		return nlaError(tsResp.ErrorCode)
+	}
+	if len(tsResp.PubKeyAuth) == 0 {
+		return fmt.Errorf("NLA: server sent no pubKeyAuth")
+	}
+	// Verify server's pubKeyAuth (for version 5+, this is a hash; for earlier versions, pubKey+1)
+	{
+		decryptedPubKeyAuth, err := gssUnwrap(ntlmSec, tsResp.PubKeyAuth)
+		if err != nil {
+			return fmt.Errorf("NLA: failed to decrypt server pubKeyAuth: %w", err)
+		}
+		logging.Debug("NLA: Decrypted server pubKeyAuth (%d bytes)", len(decryptedPubKeyAuth))
+
+		// Verify the server's response using the same binding nonce selected for
+		// the client-to-server pubKeyAuth.
+		if !auth.VerifyServerPubKeyAuth(tsResp.Version, decryptedPubKeyAuth, pubKey, bindingNonce) {
+			return fmt.Errorf("NLA: server pubKeyAuth verification failed")
+		}
+		logging.Debug("NLA: Server pubKeyAuth verified successfully")
+	}
+
+	// Step 5: Send credentials
+	// Per MS-CSSP, TSPasswordCreds MUST be UTF-16LE encoded
+	credentials := auth.EncodeCredentials(utf16le(domain), utf16le(user), utf16le(c.password))
+	encryptedCreds, err := gssWrap(ntlmSec, credentials)
+	if err != nil {
+		return fmt.Errorf("NLA: seal credentials: %w", err)
+	}
+	logging.Debug("NLA: Sending encrypted credentials")
+
+	tsReq = auth.EncodeTSRequestWithVersion(negotiatedVersion, nil, encryptedCreds, nil, nil)
+	if _, err := c.conn.Write(tsReq); err != nil {
+		return fmt.Errorf("NLA: failed to send credentials: %w", err)
+	}
+	logging.Info("NLA: Authentication completed successfully")
+
+	// Step 6: Wait for final server response (optional - some servers send a final TSRequest)
+	// Set a short timeout for this read - if no data comes, credentials were accepted
+	// Apply deadline to the underlying net.Conn to ensure it sticks through tls.Conn
+	if setter, ok := c.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+		_ = setter.SetReadDeadline(time.Now().Add(2 * time.Second))
+	}
+
+	finalResp := make([]byte, 4096)
+	finalN, err := c.conn.Read(finalResp)
+	if err != nil {
+		// Timeout is expected and OK - means server accepted credentials silently
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			logging.Debug("NLA: No final response from server (timeout - expected)")
+			// Clear the deadline
+			if setter, ok := c.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+				_ = setter.SetReadDeadline(time.Time{})
+			}
+			return nil
+		}
+		// Any non-timeout read error here indicates authentication/session failure.
+		logging.Debug("NLA: Error reading final response: %v", err)
+		if setter, ok := c.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+			_ = setter.SetReadDeadline(time.Time{})
+		}
+		return fmt.Errorf("NLA: failed to read final response: %w", err)
+	}
+
+	// Clear the deadline
+	if setter, ok := c.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+		_ = setter.SetReadDeadline(time.Time{})
+	}
+
+	// If we got data, check if it's an error response
+	if finalN > 0 {
+		logging.Debug("NLA: Received final response (%d bytes)", finalN)
+		finalTsResp, err := auth.DecodeTSRequest(finalResp[:finalN])
+		if err == nil {
+			if finalTsResp.ErrorCode != 0 {
+				return fmt.Errorf("NLA: server returned error code: 0x%08X", finalTsResp.ErrorCode)
+			}
+			logging.Debug("NLA: Final response indicates success (version=%d)", finalTsResp.Version)
+		}
+	}
+
+	return nil
+}
+
+// nlaError names the common CredSSP errorCode values (NTSTATUS, or an HRESULT wrapping one).
+func nlaError(code uint32) error {
+	switch code & 0xC00FFFFF {
+	case 0xC000006D, 0xC000006A, 0xC0000064: // STATUS_LOGON_FAILURE, WRONG_PASSWORD, NO_SUCH_USER
+		return fmt.Errorf("NLA: wrong user name or password (0x%08X)", code)
+	case 0xC0000071, 0xC0000224: // STATUS_PASSWORD_EXPIRED, PASSWORD_MUST_CHANGE
+		return fmt.Errorf("NLA: the password has expired and must be changed (0x%08X)", code)
+	case 0xC0000234: // STATUS_ACCOUNT_LOCKED_OUT
+		return fmt.Errorf("NLA: the account is locked (0x%08X)", code)
+	case 0xC0000072: // STATUS_ACCOUNT_DISABLED
+		return fmt.Errorf("NLA: the account is disabled (0x%08X)", code)
+	}
+	return fmt.Errorf("NLA: server returned error code 0x%08X", code)
+}
+
+// authenticateSafely answers the server's NTLM challenge. bodgit/ntlmssp indexes AV-pair values from
+// the (untrusted) challenge without checking their length (MsvAvFlags shorter than 4 bytes panics),
+// so a malformed challenge becomes an error here instead of a crash.
+func authenticateSafely(c *ntlmssp.Client, challenge []byte) (msg []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			msg, err = nil, fmt.Errorf("malformed NTLM challenge from the server: %v", r)
+		}
+	}()
+	return c.Authenticate(challenge, nil)
+}
+
+// gssWrap seals b as a CredSSP token: the 16-byte NTLM signature followed by the sealed data.
+func gssWrap(s *ntlmssp.SecuritySession, b []byte) ([]byte, error) {
+	sealed, sig, err := s.Wrap(b)
+	if err != nil {
+		return nil, err
+	}
+	return append(sig, sealed...), nil
+}
+
+// gssUnwrap opens a token made by gssWrap and checks its signature.
+func gssUnwrap(s *ntlmssp.SecuritySession, tok []byte) ([]byte, error) {
+	if len(tok) < 16 {
+		return nil, fmt.Errorf("token too short (%d bytes)", len(tok))
+	}
+	return s.Unwrap(tok[16:], tok[:16])
+}
+
+// utf16le encodes s as UTF-16LE (MS-CSSP TSPasswordCreds are always UTF-16LE).
+func utf16le(s string) []byte {
+	u := utf16.Encode([]rune(s))
+	b := make([]byte, 2*len(u))
+	for i, r := range u {
+		b[2*i], b[2*i+1] = byte(r), byte(r>>8)
+	}
+	return b
+}
+
+// startTLSForNLA establishes TLS connection for NLA.
+// rustxterm: same settings as StartTLS; upstream caps NLA at TLS 1.2 (Windows CredSSP), kept here
+// when the caller does not set MaxVersion.
+func (c *Client) startTLSForNLA() error {
+	return c.handshakeTLS(c.clientTLSConfig(tls.VersionTLS12))
+}
+
+// getTLSPublicKey extracts the server's public key from the TLS connection
+// Per MS-CSSP, this must be the SubjectPublicKey (NOT SubjectPublicKeyInfo)
+// SubjectPublicKeyInfo = SEQUENCE { algorithm, subjectPublicKey }
+// We need just the subjectPublicKey BIT STRING content
+func (c *Client) getTLSPublicKey() ([]byte, error) {
+	tlsConn, ok := c.conn.(*tls.Conn)
+	if !ok {
+		return nil, fmt.Errorf("connection is not TLS")
+	}
+
+	state := tlsConn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return nil, fmt.Errorf("no peer certificates")
+	}
+
+	cert := state.PeerCertificates[0]
+
+	// Parse SubjectPublicKeyInfo to extract just SubjectPublicKey
+	// SubjectPublicKeyInfo ::= SEQUENCE {
+	//   algorithm AlgorithmIdentifier,
+	//   subjectPublicKey BIT STRING
+	// }
+	// We need the raw bytes of the BIT STRING (including its unused bits prefix)
+	spki := cert.RawSubjectPublicKeyInfo
+	if len(spki) < 4 {
+		return nil, fmt.Errorf("SubjectPublicKeyInfo too short")
+	}
+
+	// Parse outer SEQUENCE
+	if spki[0] != 0x30 {
+		return nil, fmt.Errorf("expected SEQUENCE tag for SubjectPublicKeyInfo")
+	}
+
+	// Parse length
+	offset := 1
+	seqLen, lenBytes := parseASN1Length(spki[offset:])
+	offset += lenBytes
+	if seqLen == 0 || offset+seqLen > len(spki) {
+		return nil, fmt.Errorf("invalid SubjectPublicKeyInfo length")
+	}
+
+	// Skip AlgorithmIdentifier SEQUENCE
+	if offset >= len(spki) || spki[offset] != 0x30 {
+		return nil, fmt.Errorf("expected SEQUENCE tag for AlgorithmIdentifier")
+	}
+	if offset+1 >= len(spki) {
+		return nil, fmt.Errorf("AlgorithmIdentifier truncated")
+	}
+	algIdLen, algIdLenBytes := parseASN1Length(spki[offset+1:])
+	offset += 1 + algIdLenBytes + algIdLen
+
+	// Now at SubjectPublicKey BIT STRING
+	if offset >= len(spki) || spki[offset] != 0x03 {
+		return nil, fmt.Errorf("expected BIT STRING tag for SubjectPublicKey")
+	}
+	offset++ // skip tag
+
+	bitStrLen, bitStrLenBytes := parseASN1Length(spki[offset:])
+	offset += bitStrLenBytes
+
+	if offset+bitStrLen > len(spki) {
+		return nil, fmt.Errorf("SubjectPublicKey extends past end of SubjectPublicKeyInfo")
+	}
+
+	// Skip the "unused bits" byte (first byte of BIT STRING content)
+	// FreeRDP's i2d_PublicKey returns just the raw key structure without this byte
+	if bitStrLen < 1 {
+		return nil, fmt.Errorf("SubjectPublicKey BIT STRING too short")
+	}
+	offset++ // skip unused bits byte
+	bitStrLen--
+
+	// Return just the raw public key DER (SEQUENCE { modulus, exponent } for RSA)
+	return spki[offset : offset+bitStrLen], nil
+}
+
+// parseASN1Length parses ASN.1 DER length encoding
+// Returns the length value and the number of bytes consumed
+func parseASN1Length(data []byte) (int, int) {
+	if len(data) == 0 {
+		return 0, 0
+	}
+	if data[0] < 128 {
+		return int(data[0]), 1
+	}
+	numBytes := int(data[0] & 0x7F)
+	if numBytes == 0 || numBytes > 4 || numBytes >= len(data) {
+		return 0, 1
+	}
+	length := 0
+	for i := 0; i < numBytes; i++ {
+		length = (length << 8) | int(data[1+i])
+	}
+	return length, 1 + numBytes
+}
+
+// parseDomainUser parses DOMAIN\user or user@domain format
+func (c *Client) parseDomainUser() (domain, user string) {
+	username := c.username
+
+	// Check for DOMAIN\user format
+	if idx := strings.Index(username, "\\"); idx != -1 {
+		return username[:idx], username[idx+1:]
+	}
+
+	// Check for user@domain format
+	if idx := strings.Index(username, "@"); idx != -1 {
+		return username[idx+1:], username[:idx]
+	}
+
+	// No domain specified
+	return c.domain, username
+}

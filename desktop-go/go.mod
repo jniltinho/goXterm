@@ -4,11 +4,11 @@ go 1.27
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/bodgit/ntlmssp v0.0.0-20240506230425-31973bb52d9b
 	github.com/creack/pty v1.1.24
 	github.com/danieljoos/wincred v1.2.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/jlaffaye/ftp v0.2.4
-	github.com/lunixbochs/struc v0.0.0-20241101090106-8d528fa2c543
 	github.com/pkg/sftp v1.13.12
 	github.com/spf13/cobra v1.10.2
 	github.com/wailsapp/wails/v3 v3.1.0
@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
@@ -32,6 +33,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
+	golang.org/x/text v0.42.0 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

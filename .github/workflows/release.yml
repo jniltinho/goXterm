@@ -1,10 +1,7 @@
-# The only workflow that builds and publishes binaries: runs on version tags (v0.1.0, v0.2.0-rc.1).
-# Checks (fmt, clippy, tests, lab, deny, distro matrix) run in ci.yml on main; tag a commit whose CI is green.
-name: release
+# Rust app release — DISABLED: releases are the Go app now (release-go.yml, v*.*.* tags). Kept for a
+# manual rebuild of the last Rust release until the Rust code is archived (openspec 13.5/13.6).
+name: release-rust
 on:
-  push:
-    tags: ['v*.*.*']
-  # Dry run on any branch: every build, check, receipt and signing step, but nothing is published.
   workflow_dispatch:
 permissions:
   contents: read
