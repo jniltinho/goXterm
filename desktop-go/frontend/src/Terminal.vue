@@ -6,7 +6,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { Events } from "@wailsio/runtime";
 import "@xterm/xterm/css/xterm.css";
 import { ref as vref } from "vue";
-import { Send, Resize, Disconnect, MonitorStart, MonitorStop, GetSettings, TermAttach, SaveTerminalOutput, ClipboardText, SetClipboardText, type Attach, type Metrics } from "./api";
+import { Send, Resize, Disconnect, MonitorStart, MonitorStop, GetSettings, TermAttach, SaveTerminalOutput, ClipboardText, SetClipboardText, type Attach, type Metrics, type TermEnd } from "./api";
 import { renderBanner } from "./banner";
 import { askConfirm } from "./ask";
 import { commandFor } from "./commands";
@@ -166,8 +166,10 @@ function wireEvents() {
     whenAttached(() => term.write(bytes));
   });
   offClose = Events.On("term:close:" + tabId, (ev: { data: unknown }) => {
-    const why = String(ev.data ?? "");
-    whenAttached(() => showStopped(why));
+    const d = ev.data as { msg?: string; end?: TermEnd | null } | string | null;
+    const why = typeof d === "string" ? d : d?.msg ?? "";
+    const end = typeof d === "object" && d ? d.end ?? null : null;
+    whenAttached(() => ended(why, end));
   });
 }
 
@@ -184,7 +186,28 @@ async function attach() {
   const queued = pending;
   pending = [];
   for (const f of queued) f();
-  if (a?.closed) showStopped(a.closeMsg);
+  retries = 0; // connected: the next drop starts the backoff again
+  if (a?.closed) ended(a.closeMsg, a.end);
+}
+
+// ended handles the end of the session as the session's options say (the Rust engine): close the
+// tab after its remote command; after a dropped connection, reconnect with backoff (2, 4 … 60 s).
+let retries = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+function ended(why: string, end: TermEnd | null) {
+  if (end?.closeTab) {
+    emit("close");
+    return;
+  }
+  showStopped(why);
+  if (end?.reconnect) scheduleReconnect();
+}
+function scheduleReconnect() {
+  const secs = Math.min(2 << Math.min(retries, 5), 60);
+  retries++;
+  term.writeln("\x1b[90m    Reconnecting automatically in " + secs + " s\x1b[0m");
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => void restart(true), secs * 1000);
 }
 
 function stopMon() {
@@ -208,7 +231,8 @@ function startMon() {
   void MonitorStart(tabId);
 }
 
-async function restart() {
+async function restart(auto = false) {
+  clearTimeout(retryTimer);
   offOut?.();
   offClose?.();
   offMon?.();
@@ -224,6 +248,7 @@ async function restart() {
     term.writeln("\r\n\x1b[31m" + String(e) + "\x1b[0m");
     emit("state", "stopped");
     stopped = true;
+    if (auto) scheduleReconnect(); // still unreachable: keep trying
     return;
   }
   emit("backend", tabId);
@@ -389,6 +414,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  clearTimeout(retryTimer);
   ro?.disconnect();
   clearInterval(staleTimer);
   window.removeEventListener("rxt-settings", onSettings);
