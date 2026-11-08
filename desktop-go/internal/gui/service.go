@@ -32,6 +32,7 @@ type App struct {
 	ascii       map[string]bool             // file tabs in the SFTP panel's ASCII mode
 	rdpSave     map[string]*passwordSaver   // RDP tabs whose typed password is saved after RdpStart
 	vncViewOnly map[string]bool             // VNC tabs whose session is view-only (no input sent)
+	vncNoClip   map[string]bool             // VNC tabs with "Share clipboard text" off
 	remote      map[string]remoteFS         // tabId → live SFTP/FTP file session
 	vnc         map[string]*vncconn.Session // tabId → live VNC session
 	rdp         map[string]*rdpconn.Session // tabId → live RDP session
@@ -263,6 +264,12 @@ func subMap(m map[string]any, key string) map[string]any {
 }
 
 func asBool(v any) bool { b, _ := v.(bool); return b }
+
+// asList reads a JSON array (nil for anything else).
+func asList(v any) []any {
+	l, _ := v.([]any)
+	return l
+}
 
 func asString(v any) string {
 	if s, ok := v.(string); ok {

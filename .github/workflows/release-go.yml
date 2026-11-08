@@ -1,11 +1,12 @@
-# Builds and publishes the Go + Wails app (desktop-go/) on go-v* tags (go-v0.9.0, go-v0.9.1-rc.1):
+# Builds and publishes the Go + Wails app (desktop-go/) on version tags (v0.9.0, v0.9.1-rc.1) — the
+# only release; the Rust release (release.yml) is disabled:
 # the Linux binary and AppImage, the Windows .exe and the universal macOS app (zip), all built in
 # Docker by `make dist-all`, plus SHA256SUMS. Like release.yml it only publishes a commit whose
 # ci.yml run is green. A manual run (workflow_dispatch) builds everything and publishes nothing.
 name: release-go
 on:
   push:
-    tags: ['go-v*.*.*']
+    tags: ['v*.*.*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,8 +24,6 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           df -h /
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # `git describe --match 'go-v*'` names the version
       - name: Require a green CI run for this commit
         if: github.event_name == 'push'
         env:
@@ -39,7 +38,7 @@ jobs:
       - name: Version from the tag
         id: version
         run: |
-          version=${GITHUB_REF_NAME#go-v}
+          version=${GITHUB_REF_NAME#v}
           [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && version=dev
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build every artifact (Linux, AppImage, Windows, macOS universal) in Docker
@@ -65,5 +64,5 @@ jobs:
           prerelease=""
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" desktop-go/dist/* --verify-tag $prerelease \
-            --title "rustXterm (Go) ${{ steps.version.outputs.version }}" --generate-notes \
+            --title "$GITHUB_REF_NAME" --generate-notes \
             --notes "Unsigned builds. macOS: unzip, then xattr -dr com.apple.quarantine \"rustXterm (Go).app\"."

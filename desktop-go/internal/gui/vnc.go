@@ -29,6 +29,7 @@ type vncTarget struct {
 	dial     func(network, addr string) (net.Conn, error)
 	done     func() // closes the gateway connection with the session
 	viewOnly bool
+	noClip   bool // "Share clipboard text" is off: no cut text in either direction
 }
 
 // vncGateway opens the session's SSH gateway ("Connect through an SSH gateway"), with the same host
@@ -75,6 +76,7 @@ func (a *App) VncConnect(sessionID int64) (*VncView, error) {
 		}
 	}
 	target.viewOnly = asBool(opts["view_only"])
+	target.noClip = !clipboardOn(opts)
 	// No saved password: ask (with "Save password"), and keep it only once the server accepted it.
 	var saver *passwordSaver
 	if password == "" {
@@ -138,6 +140,7 @@ func (a *App) vncDial(host string, port int, password string, target *vncTarget)
 		a.mu.Lock()
 		delete(a.vnc, tabID)
 		delete(a.vncViewOnly, tabID)
+		delete(a.vncNoClip, tabID)
 		a.mu.Unlock()
 		if target.done != nil {
 			target.done()
@@ -157,16 +160,24 @@ func (a *App) vncDial(host string, port int, password string, target *vncTarget)
 	if err != nil {
 		return nil, err
 	}
-	sess.OnCutText(func(text string) {
-		if a.emit != nil {
-			a.emit("vnc:clipboard:"+tabID, text)
-		}
-	})
+	if !target.noClip {
+		sess.OnCutText(func(text string) {
+			if a.emit != nil {
+				a.emit("vnc:clipboard:"+tabID, text)
+			}
+		})
+	}
 	a.mu.Lock()
 	if a.vnc == nil {
 		a.vnc = map[string]*vncconn.Session{}
 	}
 	a.vnc[tabID] = sess
+	if target.noClip {
+		if a.vncNoClip == nil {
+			a.vncNoClip = map[string]bool{}
+		}
+		a.vncNoClip[tabID] = true
+	}
 	if target.viewOnly {
 		if a.vncViewOnly == nil {
 			a.vncViewOnly = map[string]bool{}
@@ -183,8 +194,11 @@ func (a *App) vncDial(host string, port int, password string, target *vncTarget)
 
 // VncSendClipboard sends local clipboard text to the VNC server (ClientCutText).
 func (a *App) VncSendClipboard(tabID, text string) error {
+	a.mu.Lock()
+	off := a.vncNoClip[tabID]
+	a.mu.Unlock()
 	s := a.vncSession(tabID)
-	if s == nil {
+	if s == nil || off {
 		return nil
 	}
 	return s.SendCutText(text)

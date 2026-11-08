@@ -23,3 +23,15 @@ func TestRdpSize(t *testing.T) {
 		}
 	}
 }
+
+// "Share clipboard text" defaults on (Rust RdpOptions/VncOptions); only an explicit false turns it off.
+func TestClipboardOn(t *testing.T) {
+	for _, c := range []struct {
+		opts map[string]any
+		want bool
+	}{{map[string]any{}, true}, {map[string]any{"clipboard": true}, true}, {map[string]any{"clipboard": false}, false}} {
+		if got := clipboardOn(c.opts); got != c.want {
+			t.Errorf("clipboardOn(%v) = %v", c.opts, got)
+		}
+	}
+}

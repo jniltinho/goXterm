@@ -3,7 +3,7 @@ import { ordered } from "./ordered";
 import { releaseCombo, isRelease } from "./release";
 import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { Events } from "@wailsio/runtime";
-import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, RdpSyncClipboard, type RdpView } from "./api";
+import { RdpStart, RdpMouse, RdpKey, RdpDisconnect, RdpSyncClipboard, RdpFrameAck, type RdpView } from "./api";
 const input = ordered(); // pointer and key events reach the session in order
 
 const props = defineProps<{ connect: (tabW: number, tabH: number) => Promise<RdpView> }>();
@@ -18,6 +18,15 @@ const status = ref("Connecting…");
 const stopped = ref<{ reason: string } | null>(null);
 let tabId = "";
 let ctx: CanvasRenderingContext2D | null = null;
+let drawing: Promise<void> = Promise.resolve(); // serializes frame batches
+let generation = 0; // bumped per connection: batches of an earlier session are not drawn
+// decodePng turns a base64 PNG into an ImageBitmap off the main thread.
+function decodePng(b64: string): Promise<ImageBitmap> {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return createImageBitmap(new Blob([bytes], { type: "image/png" }));
+}
 let offFrame: (() => void) | undefined;
 let offReady: (() => void) | undefined;
 let offClose: (() => void) | undefined;
@@ -62,6 +71,7 @@ function pos(e: MouseEvent): [number, number] {
 }
 
 function unsubscribe() {
+  generation++; // batches still decoding belong to the old session
   offFrame?.(); offReady?.(); offClose?.();
   offFrame = offReady = offClose = undefined;
 }
@@ -88,11 +98,22 @@ async function start() {
   fitCanvas();
   ctx = c.getContext("2d");
   status.value = "Negotiating…";
-  offFrame = Events.On("rdp:frame:" + tabId, (ev: { data: unknown }) => {
-    const d = ev.data as { x: number; y: number; png: string };
-    const img = new Image();
-    img.onload = () => ctx && ctx.drawImage(img, d.x, d.y);
-    img.src = "data:image/png;base64," + d.png;
+  // One event per server update: decode its rectangles in parallel, draw them (and successive
+  // updates) strictly in order — a late decode must not paint over a newer tile.
+  // Then acknowledge the surface frames that ended in the update (the server throttles on them).
+  const gen = ++generation;
+  const tab = tabId;
+  offFrame = Events.On("rdp:frame:" + tab, (ev: { data: unknown }) => {
+    const { rects, frames } = ev.data as { rects: { x: number; y: number; png: string }[]; frames: number[] | null };
+    const decoded = Promise.all(rects.map((r) => decodePng(r.png).catch(() => null)));
+    drawing = drawing.then(async () => {
+      const bitmaps = await decoded;
+      bitmaps.forEach((b, i) => {
+        if (b && ctx && gen === generation) ctx.drawImage(b, rects[i].x, rects[i].y); // stale session: drop
+        b?.close();
+      });
+      if (frames?.length && gen === generation) await RdpFrameAck(tab, frames).catch(() => {});
+    });
     status.value = "";
   });
   offReady = Events.On("rdp:ready:" + tabId, () => { status.value = ""; emit("state", "connected"); });

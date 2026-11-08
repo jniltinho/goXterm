@@ -34,10 +34,11 @@ type Banner struct {
 // output that arrived before it was listening (base64), and the close reason if the stream already
 // ended.
 type Attach struct {
-	Banner   *Banner `json:"banner"`
-	Early    string  `json:"early"`
-	Closed   bool    `json:"closed"`
-	CloseMsg string  `json:"closeMsg"`
+	Banner   *Banner  `json:"banner"`
+	Early    string   `json:"early"`
+	Closed   bool     `json:"closed"`
+	CloseMsg string   `json:"closeMsg"`
+	End      *TermEnd `json:"end"` // how it ended, when Closed
 }
 
 // earlyTab holds a stream tab's output until the SPA attaches, so nothing is lost between connect
@@ -47,6 +48,7 @@ type earlyTab struct {
 	banner   *Banner
 	closed   bool
 	closeMsg string
+	end      *TermEnd
 }
 
 // shortcut: output beyond 1 MiB before attach is dropped; the SPA attaches milliseconds after connect.
@@ -64,7 +66,7 @@ func (a *App) TermAttach(tabID string) Attach {
 	}
 	return Attach{
 		Banner: e.banner, Early: base64.StdEncoding.EncodeToString(e.buf),
-		Closed: e.closed, CloseMsg: e.closeMsg,
+		Closed: e.closed, CloseMsg: e.closeMsg, End: e.end,
 	}
 }
 
@@ -100,12 +102,23 @@ func hostPort(host string, port, def int) string {
 	return fmt.Sprintf("%s:%d", host, port)
 }
 
+// bannerFwd is the connection path and forwarding of an SSH tab for its banner.
+type bannerFwd struct {
+	gateway    string // jump hosts, "a → b"; "" = direct
+	x11, agent bool
+}
+
 // sshBanner describes an SSH tab like the Rust app: target, the features this client actually runs
 // (✗ where not implemented yet), and the server id + host key.
-func (a *App) sshBanner(userName, host string, port, keepalive int, serverVersion, keyAlgo, keyFP string) *Banner {
+// fwd is what the session forwards (gateway hop names, X11, agent).
+func (a *App) sshBanner(userName, host string, port, keepalive int, serverVersion, keyAlgo, keyFP string, fwd bannerFwd) *Banner {
 	target := hostPort(host, port, 22)
 	if userName != "" {
 		target = userName + "@" + target
+	}
+	via := check(true, "Direct connection", "")
+	if fwd.gateway != "" {
+		via = check(true, "SSH gateway", fwd.gateway)
 	}
 	keepNote := ""
 	if keepalive > 0 {
@@ -113,11 +126,11 @@ func (a *App) sshBanner(userName, host string, port, keepalive int, serverVersio
 	}
 	lines := []BannerLine{
 		{Kind: "head", Text: "SSH session to ", Target: target},
-		check(true, "Direct connection", ""),
-		check(false, "Compression", ""),
+		via,
+		check(false, "Compression", ""), // golang.org/x/crypto/ssh has no zlib compression
 		check(true, "SFTP browser", ""),
-		check(false, "X11 forwarding", ""),
-		check(false, "Agent forwarding", ""),
+		check(fwd.x11, "X11 forwarding", ""),
+		check(fwd.agent, "Agent forwarding", ""),
 		check(keepalive > 0, "Keepalive", keepNote),
 		check(true, "Follow terminal folder", ""), // the SFTP side panel follows OSC 7 / the shell's cwd
 	}

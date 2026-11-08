@@ -5,13 +5,16 @@ description: Create a rustXterm version tag and GitHub Release. Use when the use
 
 # Releasing rustXterm
 
-Binaries are built only by `.github/workflows/release.yml` on `v*.*.*` tags. Checks (fmt, clippy,
-tests + snapshots, layers, guard, scenarios, cargo-deny, lab) run only in `ci.yml` on `main`.
+Releases are the **Go + Wails app** (`desktop-go/`). Binaries are built only by
+`.github/workflows/release-go.yml` on `v*.*.*` tags; the Go versions continue the Rust numbering
+(Rust ended at v0.8.0, Go starts at v0.9.0). The Rust release workflow (`release.yml`) is disabled
+(manual only) until the Rust code is archived. Checks run in `ci.yml` on `main` (Rust checks, lab and
+the `desktop-go` job).
 
 ## Release rule
 
-**Only release a commit whose `ci` run on `main` is green.** The release workflow enforces it (it
-refuses to publish when the tagged commit has no successful `ci` run), but check before tagging.
+**Only release a commit whose `ci` run on `main` is green.** `release-go.yml` refuses to publish when
+the tagged commit has no successful `ci` run, but check before tagging.
 
 ## Before you start
 
@@ -25,12 +28,13 @@ echo "Last tag: $LAST"
 
 ## Versioning
 
-Semantic versions with a `v` prefix: `v0.1.0`, `v0.1.1` (fixes), `v0.2.0` (features), pre-releases
-`v0.2.0-rc.1` (published as prerelease). The tag must equal `[workspace.package] version` in the root
-`Cargo.toml` (the workflow checks it).
+Semantic versions with a `v` prefix: `v0.9.0`, `v0.9.1` (fixes), `v0.10.0` (features), pre-releases
+`v0.10.0-rc.1` (published as prerelease). The tag is the version: `make` reads it with
+`git describe --exact-match --match 'v*'` and the workflow passes it to `make dist-all`; nothing to
+bump in a file.
 
 ```bash
-NEXT=v0.1.1   # choose per the changes
+NEXT=v0.9.1   # choose per the changes
 ```
 
 ## Process
@@ -38,23 +42,10 @@ NEXT=v0.1.1   # choose per the changes
 ### 1. Review changes since the last release
 
 ```bash
-git log $LAST..HEAD --oneline
-git log $LAST..HEAD --stat
+git log $LAST..HEAD --oneline -- desktop-go
 ```
 
-### 2. Bump the version (if not already)
-
-Set `version = "X.Y.Z"` in the root `Cargo.toml`, refresh the lock in Docker and commit:
-
-```bash
-scripts/cargo-docker.sh cargo update --workspace
-git commit -am "Release X.Y.Z: version bump"
-git push origin main
-```
-
-Snapshots that show the version (About dialog) may need `UPDATE_SNAPSHOTS=1`; see docs/DEVELOPMENT.md.
-
-### 3. Require green CI on that commit
+### 2. Require green CI on the commit
 
 ```bash
 SHA=$(git rev-parse HEAD)
@@ -62,25 +53,26 @@ gh run list --workflow ci.yml --commit "$SHA" --json status,conclusion -q '.[0]'
 # wait until {"conclusion":"success","status":"completed"}; never tag a red or running commit
 ```
 
-### 4. Tag and push (triggers release.yml)
+### 3. Tag and push (triggers release-go.yml)
 
 ```bash
 git tag -a $NEXT -m "Release $NEXT"
 git push origin $NEXT
 ```
 
-`release.yml` then: verifies the green CI run, checks tag == workspace version, builds the toolchain
-image and `docker build --target dist`, runs `cargo xtask dist-check dist`, and creates the GitHub
-Release with `rustxterm-X.Y.Z-x86_64`, `.AppImage`, `.tar.gz` and `SHA256SUMS`.
+`release-go.yml` then verifies the green CI run, runs `make dist-all` in Docker and creates the GitHub
+Release with `rustxterm-go-X.Y.Z-linux-amd64`, `rustxterm-go-X.Y.Z-x86_64.AppImage`,
+`rustxterm-go-X.Y.Z-windows-amd64.exe`, `rustxterm-go-X.Y.Z_macos_universal.zip`, the per-arch
+`darwin-amd64`/`darwin-arm64` binaries and `SHA256SUMS`.
 
-### 5. Monitor
+### 4. Monitor
 
 ```bash
-gh run list --workflow release.yml --limit 3
-gh release view $NEXT          # wait until the 4 assets appear
+gh run list --workflow release-go.yml --limit 3
+gh release view $NEXT          # wait until the assets appear
 ```
 
-### 6. Write the release notes
+### 5. Write the release notes
 
 Categorize commits in this exact order; omit empty sections:
 
@@ -100,15 +92,12 @@ cat > /tmp/release-notes-$NEXT.md << 'NOTES'
 
 - ...
 
-## 🔧 Improvements
-
-- ...
-
 ## 📦 Downloads
 
-- `rustxterm-X.Y.Z-x86_64` portable binary (glibc >= 2.31)
-- `rustxterm-X.Y.Z-x86_64.AppImage`
-- `rustxterm-X.Y.Z-x86_64.tar.gz` (binary, .desktop, icon, licenses)
+- `rustxterm-go-X.Y.Z-linux-amd64` (GTK 4 + WebKitGTK 6.0: Ubuntu 24.04+, Fedora 39+, Debian 13+)
+- `rustxterm-go-X.Y.Z-x86_64.AppImage`
+- `rustxterm-go-X.Y.Z-windows-amd64.exe` (WebView2)
+- `rustxterm-go-X.Y.Z_macos_universal.zip` (unsigned: `xattr -dr com.apple.quarantine "rustXterm (Go).app"`)
 - `SHA256SUMS`
 
 **Full Changelog**: https://github.com/jniltinho/rustXterm/compare/vPREV...vNEXT
@@ -116,20 +105,11 @@ NOTES
 gh release edit $NEXT --title "$NEXT" --notes-file /tmp/release-notes-$NEXT.md
 ```
 
-### 7. Verify
+### 6. Verify
 
 ```bash
 gh release view $NEXT
 ```
 
 - Title is `$NEXT`, sections present, Full Changelog range correct.
-- Four assets attached; `SHA256SUMS` matches (`sha256sum -c` after download).
-
-## Quick reference
-
-```bash
-SHA=$(git rev-parse HEAD); gh run list --workflow ci.yml --commit "$SHA" -L 1
-git tag -a $NEXT -m "Release $NEXT" && git push origin $NEXT
-gh run list --workflow release.yml -L 3; gh release view $NEXT
-gh release edit $NEXT --title "$NEXT" --notes-file /tmp/release-notes-$NEXT.md
-```
+- Assets attached; `SHA256SUMS` matches (`sha256sum -c` after download).

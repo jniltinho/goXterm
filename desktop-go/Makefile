@@ -4,7 +4,7 @@
 # Builds always refresh dist/. Migration: openspec/changes/migrate-gui-to-go-wails.
 NODE_IMAGE ?= node:24
 IMAGE      ?= rustxterm-go-linux
-VERSION    ?= $(or $(shell git describe --tags --match 'go-v*' 2>/dev/null | sed 's/^go-v//'),dev)
+VERSION    ?= $(or $(shell git describe --tags --exact-match --match 'v*' 2>/dev/null | sed 's/^v//'),dev)
 LDFLAGS    := -s -w -X rustxterm-go/cmd.version=$(VERSION)
 BIN        := rustxterm-go
 DOCKER     := docker run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 
@@ -49,15 +50,59 @@ func (a *App) Connect(sessionID int64) (string, error) {
 		password = string(secret)
 	}
 	st.Close()
-	tabID, err := a.dial(sshconn.Config{
+	cfg := sshconn.Config{
 		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
-		KeepaliveSecs: int(asInt64(sshOpt["keepalive_secs"])),
-	}, sessionID)
+		KeepaliveSecs:         int(asInt64(sshOpt["keepalive_secs"])),
+		AgentForwarding:       asBool(sshOpt["agent_forwarding"]),
+		NoPassword:            sshOpt["allow_password"] == false,
+		NoKeyboardInteractive: sshOpt["allow_keyboard_interactive"] == false,
+		X11:                   asBool(sshOpt["x11_forwarding"]),
+		RemoteCommand:         asString(sshOpt["remote_command"]),
+		StartupDir:            asString(sshOpt["startup_dir"]),
+	}
+	for _, kv := range asList(sshOpt["env"]) { // [["NAME","value"], …]
+		if p := asList(kv); len(p) == 2 {
+			cfg.Env = append(cfg.Env, [2]string{asString(p[0]), asString(p[1])})
+		}
+	}
+	cfg.Jumps = a.jumpHosts(sshOpt, cfg.User)
+	tabID, err := a.dial(cfg, sessionID, endPolicy{
+		remoteCommand: strings.TrimSpace(cfg.RemoteCommand) != "",
+		keepOpen:      asBool(sshOpt["keep_open_after_command"]),
+		autoReconnect: asBool(sshOpt["auto_reconnect"]),
+	})
 	if err == nil {
 		a.noteTab(tabID, sessionID, sv.Name, sv.Protocol)
 	}
 	return tabID, err
+}
+
+// jumpHosts turns a session's ssh.jump_hosts into gateway hops, each with its own host-key check
+// (known_hosts / trust prompt) and password prompt.
+func (a *App) jumpHosts(sshOpt map[string]any, targetUser string) []sshconn.Jump {
+	var hops []sshconn.Jump
+	for _, raw := range asList(sshOpt["jump_hosts"]) {
+		j, _ := raw.(map[string]any)
+		host := strings.TrimSpace(asString(j["host"]))
+		if host == "" {
+			continue
+		}
+		port := int(asInt64(j["port"]))
+		if port == 0 {
+			port = 22
+		}
+		user := asString(j["user"])
+		if user == "" {
+			user = targetUser
+		}
+		hops = append(hops, sshconn.Jump{
+			Host: host, Port: port, User: user, KeyFile: asString(j["key_file"]),
+			HostKey:     a.sshHostKeyCallback(host, port),
+			AskPassword: a.ask("", host, user, nil),
+		})
+	}
+	return hops
 }
 
 // HasDemo reports whether a demo SSH target is configured (RXT_DEMO_SSH), used to auto-open a lab
@@ -72,7 +117,7 @@ func (a *App) ConnectDemo() (string, error) {
 		return "", errors.New("no demo target")
 	}
 	user, pass, host, port := parseTarget(v)
-	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: pass}, 0)
+	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: pass}, 0, endPolicy{})
 }
 
 // parseTarget parses `user[:password]@host[:port]` (port defaults to 22).
@@ -127,7 +172,7 @@ func (a *App) QuickConnect(host string, port int, user, password string) (string
 	if port == 0 {
 		port = 22
 	}
-	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: password}, 0)
+	return a.dial(sshconn.Config{Host: host, Port: port, User: user, Password: password}, 0, endPolicy{})
 }
 
 // newStreamTab allocates a tabId and the output/close callbacks shared by every byte-stream terminal
@@ -177,26 +222,66 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		if err != nil {
 			msg = err.Error()
 		}
+		var end *TermEnd
+		var te tabEnd
+		if errors.As(err, &te) {
+			end = &te.end
+		}
 		a.mu.Lock()
 		delete(a.term, tabID)
 		delete(a.tails, tabID)
 		delete(a.tabInfo, tabID)
 		if e := a.early[tabID]; e != nil {
-			e.closed, e.closeMsg = true, msg
+			e.closed, e.closeMsg, e.end = true, msg, end
 			a.mu.Unlock()
 			return
 		}
 		a.mu.Unlock()
 		if a.emit != nil {
-			a.emit("term:close:"+tabID, msg)
+			a.emit("term:close:"+tabID, map[string]any{"msg": msg, "end": end})
 		}
 	}
 	return tabID, onData, onClose
 }
 
+// TermEnd tells the SPA how a terminal ended and what to do next, from the session's SSH options (as
+// the Rust engine): close the tab when its remote command exited and "Do not exit after command
+// ends" is off; reconnect with backoff after a dropped connection when "Reconnect automatically" is on.
+type TermEnd struct {
+	Dropped   bool `json:"dropped"`   // the connection was lost (not a normal exit)
+	CloseTab  bool `json:"closeTab"`  // close the tab
+	Reconnect bool `json:"reconnect"` // reconnect automatically
+}
+
+// endPolicy is the part of a session's SSH options that decides TermEnd.
+type endPolicy struct{ remoteCommand, keepOpen, autoReconnect bool }
+
+// tabEnd carries the end decision through a stream tab's onClose.
+type tabEnd struct {
+	err error
+	end TermEnd
+}
+
+func (e tabEnd) Error() string { return e.err.Error() }
+func (e tabEnd) Unwrap() error { return e.err }
+
+// endOf decides how a shell that ended with err is handled.
+func (p endPolicy) endOf(err error) TermEnd {
+	var st sshconn.ExitStatus
+	exited := errors.As(err, &st)
+	return TermEnd{Dropped: !exited, CloseTab: exited && p.remoteCommand && !p.keepOpen, Reconnect: !exited && p.autoReconnect}
+}
+
 // dial opens an SSH shell tab; sessionID > 0 (a saved session) offers "Save password" at the prompt.
-func (a *App) dial(cfg sshconn.Config, sessionID int64) (string, error) {
-	tabID, onData, onClose := a.newStreamTab()
+func (a *App) dial(cfg sshconn.Config, sessionID int64, pol endPolicy) (string, error) {
+	tabID, onData, closeTab := a.newStreamTab()
+	onClose := func(err error) {
+		if err == nil {
+			closeTab(nil)
+			return
+		}
+		closeTab(tabEnd{err: err, end: pol.endOf(err)})
+	}
 	ask, saver := a.askSaving(cfg.Host, cfg.User, sessionID)
 	cfg.AskPassword = ask
 	cfg.AskPassphrase = a.askPassphrase
@@ -220,7 +305,13 @@ func (a *App) dial(cfg sshconn.Config, sessionID int64) (string, error) {
 	if err := saver.commit(); err != nil { // logged in: keep the password the user chose to save
 		onData([]byte("\x1b[90m[rustxterm] password not saved: " + err.Error() + "\x1b[0m\r\n"))
 	}
-	a.setBanner(tabID, a.sshBanner(cfg.User, cfg.Host, cfg.Port, cfg.KeepaliveSecs, sess.ServerVersion(), keyAlgo, keyFP))
+	x11, agentFwd := sess.Forwarding()
+	var gw []string
+	for _, j := range cfg.Jumps {
+		gw = append(gw, j.Host)
+	}
+	a.setBanner(tabID, a.sshBanner(cfg.User, cfg.Host, cfg.Port, cfg.KeepaliveSecs, sess.ServerVersion(), keyAlgo, keyFP,
+		bannerFwd{gateway: strings.Join(gw, " → "), x11: x11, agent: agentFwd}))
 	a.mu.Lock()
 	a.term[tabID] = sess
 	a.mu.Unlock()
