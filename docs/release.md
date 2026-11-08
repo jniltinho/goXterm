@@ -25,11 +25,11 @@ as `archive/rust/release.yml`. The step-by-step procedure, including release not
 successful `ci.yml` run, then runs `make dist-all VERSION=X.Y.Z` in Docker, writes `SHA256SUMS` and
 creates the GitHub Release (generated notes plus the macOS quarantine hint) with:
 
-- `rustxterm-go-X.Y.Z-linux-amd64` (GTK 4 + WebKitGTK 6.0)
-- `rustxterm-go-X.Y.Z-x86_64.AppImage`
-- `rustxterm-go-X.Y.Z-windows-amd64.exe` (WebView2)
-- `rustxterm-go-X.Y.Z_macos_universal.zip` (unsigned `rustXterm (Go).app`, Apple Silicon and Intel)
-- `rustxterm-go-X.Y.Z-darwin-amd64` and `rustxterm-go-X.Y.Z-darwin-arm64`
+- `goxterm-X.Y.Z-linux-amd64` (GTK 4 + WebKitGTK 6.0)
+- `goxterm-X.Y.Z-x86_64.AppImage`
+- `goxterm-X.Y.Z-windows-amd64.exe` (WebView2)
+- `goxterm-X.Y.Z_macos_universal.zip` (unsigned `goXterm.app`, Apple Silicon and Intel)
+- `goxterm-X.Y.Z-darwin-amd64` and `goxterm-X.Y.Z-darwin-arm64`
 - `SHA256SUMS`
 
 Tags with a `-` suffix are published as pre-releases. Releases are unsigned (no Apple Developer ID or
@@ -40,7 +40,7 @@ Windows code signing).
 ```sh
 make dist-all VERSION=0.0.0-test
 (cd dist && sha256sum -- * > SHA256SUMS)
-make guard GUARD_ARGS="--artifact dist/rustxterm-go-0.0.0-test-x86_64.AppImage"
+make guard GUARD_ARGS="--artifact dist/goxterm-0.0.0-test-x86_64.AppImage"
 ```
 
 A manual run of `release-go.yml` (`workflow_dispatch`) builds everything with `VERSION=dev` and uploads

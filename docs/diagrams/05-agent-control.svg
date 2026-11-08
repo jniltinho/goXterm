@@ -17,36 +17,40 @@
 <path d="M320,302 L320,336 L176,336 L176,760 L184,760" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)"/>
 <path d="M464,852 L364,852 L364,878" fill="none" stroke="#0891b2" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-cyan)"/>
 <path d="M544,990 L564,990" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)"/>
-<path d="M924,990 L944,990" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)" stroke-dasharray="6 5"/>
+<path d="M924,990 L944,990" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" marker-end="url(#a-blue)"/>
 <rect x="28" y="1156" width="1344" height="330" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="1"/>
 <rect x="42" y="1170" width="126" height="36" rx="8" fill="#d97706" stroke="#d97706" stroke-width="0"/>
 <text x="105.0" y="1194" font-size="15" fill="#ffffff" text-anchor="middle" font-weight="700">Policy</text>
 <text x="36" y="49" font-size="24" fill="#0f172a" text-anchor="start" font-weight="700">Agent control (CLI and MCP)</text>
 <text x="36" y="79" font-size="14" fill="#475569" text-anchor="start">One binary: headless CLI and stdio MCP server; the running app serves a same-user control socket when enabled</text>
 <rect x="184" y="138" width="570" height="164" rx="10" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2" filter="url(#shadow)"/>
-<text x="202" y="167" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">rustxterm-go CLI</text>
-<text x="202" y="196" font-size="14" fill="#0f172a" text-anchor="start">sessions list | show &lt;id|name&gt;, folders list, tunnels list, version.</text>
-<text x="202" y="217" font-size="14" fill="#0f172a" text-anchor="start">--json output; exit codes 0 ok, 1 failed, 2 usage, 3 locked, 4 denied,</text>
-<text x="202" y="238" font-size="14" fill="#0f172a" text-anchor="start">5 not running, 6 agent control off.</text>
+<text x="202" y="167" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">goxterm CLI</text>
+<text x="202" y="196" font-size="13" fill="#0f172a" text-anchor="start">Offline: sessions list | show | add | edit | remove, folders, tunnels,</text>
+<text x="202" y="217" font-size="13" fill="#0f172a" text-anchor="start">export, import mobaxterm-ini. Live: open, tabs, send, read, wait, screenshot,</text>
+<text x="202" y="238" font-size="13" fill="#0f172a" text-anchor="start">files, tunnel, serial, close. --json; exit codes 0 ok, 1 failed, 2 usage, 3</text>
+<text x="202" y="259" font-size="13" fill="#0f172a" text-anchor="start">locked, 4 denied, 5 not running, 6 agent control off.</text>
 <rect x="776" y="138" width="570" height="164" rx="10" fill="#fdf2f8" stroke="#db2777" stroke-width="2" filter="url(#shadow)"/>
-<text x="794" y="167" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">rustxterm-go mcp</text>
+<text x="794" y="167" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">goxterm mcp</text>
 <text x="794" y="196" font-size="14" fill="#0f172a" text-anchor="start">JSON-RPC 2.0 over stdio (initialize, tools/list, tools/call, ping). 20</text>
 <text x="794" y="217" font-size="14" fill="#0f172a" text-anchor="start">tools; none add, edit, remove or import sessions. Live tools are listed</text>
 <text x="794" y="238" font-size="14" fill="#0f172a" text-anchor="start">only while the socket is reachable.</text>
 <rect x="184" y="410" width="1162" height="144" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow)"/>
 <text x="202" y="439" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Store reads without a running app (cli-offline, mcp-offline)</text>
 <text x="202" y="468" font-size="14" fill="#0f172a" text-anchor="start">Unlock through the keyring wrap, else the master password on the terminal or RXT_MASTER_PASSWORD. list_sessions, show_session, list_folders,</text>
-<text x="202" y="489" font-size="14" fill="#0f172a" text-anchor="start">list_tunnels: credentials only as saved / absent. export is not implemented yet.</text>
+<text x="202" y="489" font-size="14" fill="#0f172a" text-anchor="start">list_tunnels: credentials only as saved / absent; export writes TOML without credentials. Store changes (add, edit, remove, import) need the master</text>
+<text x="202" y="510" font-size="14" fill="#0f172a" text-anchor="start">password typed on a terminal.</text>
 <rect x="184" y="662" width="560" height="190" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
-<text x="202" y="691" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Control socket (cli-live, mcp-live; Linux)</text>
+<text x="202" y="691" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">Linux control socket (cli-live, mcp-live)</text>
 <text x="202" y="720" font-size="14" fill="#0f172a" text-anchor="start">$XDG_RUNTIME_DIR/rustxterm/control.sock: directory 0700, socket 0600,</text>
 <text x="202" y="741" font-size="14" fill="#0f172a" text-anchor="start">SO_PEERCRED same-UID check. Exists only while Settings › Agent control</text>
 <text x="202" y="762" font-size="14" fill="#0f172a" text-anchor="start">is on. Framing: 4-byte big-endian length + JSON, at most 1 MiB; Rust</text>
 <text x="202" y="783" font-size="14" fill="#0f172a" text-anchor="start">wire format.</text>
-<rect x="786" y="662" width="560" height="190" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" stroke-dasharray="7 5" filter="url(#shadow)"/>
+<rect x="786" y="662" width="560" height="190" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="2" filter="url(#shadow)"/>
 <text x="804" y="691" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">macOS and Windows transports</text>
-<text x="804" y="720" font-size="14" fill="#0f172a" text-anchor="start">Planned (task 3.3): Unix socket with getpeereid on macOS, named pipe</text>
-<text x="804" y="741" font-size="14" fill="#0f172a" text-anchor="start">on Windows. Until then the CLI and MCP report not running there.</text>
+<text x="804" y="720" font-size="13" fill="#0f172a" text-anchor="start">macOS: $TMPDIR/rustxterm-&lt;uid&gt;/control.sock, LOCAL_PEERCRED same-UID check.</text>
+<text x="804" y="741" font-size="13" fill="#0f172a" text-anchor="start">Windows: named pipe \\.\pipe\rustxterm-&lt;SID&gt;-control, DACL for the user's</text>
+<text x="804" y="762" font-size="13" fill="#0f172a" text-anchor="start">SID only, remote clients rejected, each connection's user, integrity and</text>
+<text x="804" y="783" font-size="13" fill="#0f172a" text-anchor="start">AppContainer checked.</text>
 <rect x="184" y="878" width="360" height="228" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
 <text x="202" y="907" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">1 · Permission matrix</text>
 <text x="202" y="936" font-size="13" fill="#0f172a" text-anchor="start">control.Allowed(group, entry), identical to the</text>
@@ -57,12 +61,12 @@
 <text x="582" y="907" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">2 · Read group</text>
 <text x="582" y="936" font-size="13" fill="#0f172a" text-anchor="start">Served by the running app from the store: list</text>
 <text x="582" y="957" font-size="13" fill="#0f172a" text-anchor="start">and show sessions, folders, tunnels.</text>
-<rect x="944" y="878" width="402" height="228" rx="10" fill="#f1f5f9" stroke="#334155" stroke-width="2" stroke-dasharray="7 5" filter="url(#shadow)"/>
+<rect x="944" y="878" width="402" height="228" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2" filter="url(#shadow)"/>
 <text x="962" y="907" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">3 · Live, content read, writes</text>
 <text x="962" y="936" font-size="13" fill="#0f172a" text-anchor="start">open, read, send, wait, screenshot, files, tunnels,</text>
-<text x="962" y="957" font-size="13" fill="#0f172a" text-anchor="start">close, serial: per-session policy check, approval and</text>
-<text x="962" y="978" font-size="13" fill="#0f172a" text-anchor="start">audit are planned (task 3.3); today they answer</text>
-<text x="962" y="999" font-size="13" fill="#0f172a" text-anchor="start">failed.</text>
+<text x="962" y="957" font-size="13" fill="#0f172a" text-anchor="start">close, serial, export: per-session policy (deny / ask</text>
+<text x="962" y="978" font-size="13" fill="#0f172a" text-anchor="start">/ allow); with ask, writes wait for an approval</text>
+<text x="962" y="999" font-size="13" fill="#0f172a" text-anchor="start">prompt. Local shells and WSL are never exposed.</text>
 <rect x="184" y="1174" width="560" height="292" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
 <text x="202" y="1203" font-size="17" fill="#0f172a" text-anchor="start" font-weight="700">policies table</text>
 <text x="202" y="1232" font-size="14" fill="#0f172a" text-anchor="start">deny (default: a session without a row), ask or allow, plus a separate</text>
@@ -75,5 +79,4 @@
 <text x="804" y="1274" font-size="13" fill="#0f172a" text-anchor="start">Live: open_session, list_tabs, read_terminal, send_input, wait_for_output,</text>
 <text x="804" y="1295" font-size="13" fill="#0f172a" text-anchor="start">screenshot_tab, file_list, file_get, file_put, tunnel_start, tunnel_stop,</text>
 <text x="804" y="1316" font-size="13" fill="#0f172a" text-anchor="start">close_tab, serial_list_ports, serial_send_break, serial_set_lines.</text>
-<text x="36" y="1508" font-size="13" fill="#475569" text-anchor="start">Dashed boxes: planned, not served by the Go app yet</text>
 </svg>

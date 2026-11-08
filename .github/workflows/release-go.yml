@@ -52,7 +52,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: github.event_name == 'workflow_dispatch'
         with:
-          name: rustxterm-go-dist
+          name: goxterm-dist
           path: dist/*
           if-no-files-found: error
       - name: Publish the GitHub Release
@@ -64,4 +64,4 @@ jobs:
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* --verify-tag $prerelease \
             --title "$GITHUB_REF_NAME" --generate-notes \
-            --notes "Unsigned builds. macOS: unzip, then xattr -dr com.apple.quarantine \"rustXterm (Go).app\"."
+            --notes "Unsigned builds. macOS: unzip, then xattr -dr com.apple.quarantine \"goXterm.app\"."

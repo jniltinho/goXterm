@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/icons/rustxterm.svg" width="96" alt="rustXterm logo">
+<img src="assets/icons/rustxterm.svg" width="96" alt="goXterm logo">
 
-# rustXterm
+# goXterm
 
 **Every remote session you use, in one window.**
 
@@ -28,7 +28,7 @@ is the desktop app, the CLI and the MCP server.
 
 </div>
 
-## Why rustXterm
+## Why goXterm
 
 - **One app instead of five.** Terminals, file transfers and remote desktops live side by side in tabs,
   organized in a session tree with colored folders.
@@ -39,7 +39,7 @@ is the desktop app, the CLI and the MCP server.
 - **Secure by default.** Sessions and passwords are encrypted at rest under a master password, optionally
   unlocked by the system keyring; unknown host keys and certificates are shown to you before you log in;
   tunnels bind to loopback unless you confirm otherwise.
-- **Bring your sessions.** Import a MobaXterm.ini file (password sections are never read) or a rustXterm
+- **Bring your sessions.** Import a MobaXterm.ini file (password sections are never read) or a rustXterm/goXterm
   TOML export.
 - **One codebase, three platforms.** Go + [Wails v3](https://v3.wails.io/) on the system webview
   (WebKitGTK, WebView2, WKWebView); every protocol is implemented in Go, with no external clients to
@@ -60,7 +60,7 @@ is the desktop app, the CLI and the MCP server.
 | **Encrypted store** | Sessions, folders, credentials, trust records and agent policies in an SQLCipher 4 database whose key is wrapped by your master password (Argon2id + XChaCha20-Poly1305) and optionally by the system keyring (Secret Service, macOS Keychain, Windows Credential Manager); same formats as the archived Rust app, so existing data opens unchanged |
 | **Import and export** | Import sessions from MobaXterm.ini (SSH, SFTP, FTP/FTPS, RDP, VNC, Telnet, Serial, WSL, with folders) after a preview; TOML export and import without passwords |
 | **Skins** | Light, Dark, Windows XP, macOS, macOS Dark and Mac OS Retro, plus System (follows the OS light/dark setting live) |
-| **Agent control** | `rustxterm-go` CLI and stdio MCP server (store reads today), a same-user control socket on Linux that stays off until you enable it, and a per-session Deny / Ask / Allow agent policy |
+| **Agent control** | `goxterm` CLI and stdio MCP server (store reads today), a same-user control socket on Linux that stays off until you enable it, and a per-session Deny / Ask / Allow agent policy |
 
 Status: Linux x86_64 is the primary target; every screen and protocol is tested there against the Docker
 lab. Windows x86_64 and macOS (universal) builds ship with every release and were verified interactively
@@ -96,11 +96,11 @@ Download from [GitHub Releases](https://github.com/jniltinho/goXterm/releases). 
 
 | Asset | Platform |
 |---|---|
-| `rustxterm-go-X.Y.Z-linux-amd64` | Linux x86_64 binary (needs GTK 4 and WebKitGTK 6.0: Ubuntu 24.04+, Fedora 39+, Debian 13+) |
-| `rustxterm-go-X.Y.Z-x86_64.AppImage` | The same Linux app as an AppImage (uses the system GTK 4 / WebKitGTK 6.0) |
-| `rustxterm-go-X.Y.Z-windows-amd64.exe` | Windows x86_64 (WebView2) |
-| `rustxterm-go-X.Y.Z_macos_universal.zip` | macOS app bundle `rustXterm (Go).app`, Apple Silicon and Intel |
-| `rustxterm-go-X.Y.Z-darwin-amd64`, `rustxterm-go-X.Y.Z-darwin-arm64` | macOS per-architecture binaries |
+| `goxterm-X.Y.Z-linux-amd64` | Linux x86_64 binary (needs GTK 4 and WebKitGTK 6.0: Ubuntu 24.04+, Fedora 39+, Debian 13+) |
+| `goxterm-X.Y.Z-x86_64.AppImage` | The same Linux app as an AppImage (uses the system GTK 4 / WebKitGTK 6.0) |
+| `goxterm-X.Y.Z-windows-amd64.exe` | Windows x86_64 (WebView2) |
+| `goxterm-X.Y.Z_macos_universal.zip` | macOS app bundle `goXterm.app`, Apple Silicon and Intel |
+| `goxterm-X.Y.Z-darwin-amd64`, `goxterm-X.Y.Z-darwin-arm64` | macOS per-architecture binaries |
 | `SHA256SUMS` | Checksums for all of the above |
 
 **Linux**
@@ -108,21 +108,21 @@ Download from [GitHub Releases](https://github.com/jniltinho/goXterm/releases). 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS
 sudo apt install libgtk-4-1 libwebkitgtk-6.0-4     # Debian/Ubuntu, if not installed yet
-chmod +x rustxterm-go-X.Y.Z-x86_64.AppImage
-./rustxterm-go-X.Y.Z-x86_64.AppImage
+chmod +x goxterm-X.Y.Z-x86_64.AppImage
+./goxterm-X.Y.Z-x86_64.AppImage
 ```
 
 If the window stays blank or flickers with your GPU driver, start with `--safe-gpu` (or set
 `RXT_SAFE_GPU=1`) to turn off webview GPU acceleration.
 
-**Windows:** run `rustxterm-go-X.Y.Z-windows-amd64.exe`. It needs the Microsoft Edge WebView2 runtime,
+**Windows:** run `goxterm-X.Y.Z-windows-amd64.exe`. It needs the Microsoft Edge WebView2 runtime,
 which Windows 10 and 11 include. The build is unsigned, so SmartScreen may ask for confirmation.
 
-**macOS:** unzip `rustxterm-go-X.Y.Z_macos_universal.zip`, move `rustXterm (Go).app` to Applications and
+**macOS:** unzip `goxterm-X.Y.Z_macos_universal.zip`, move `goXterm.app` to Applications and
 clear the quarantine flag of the unsigned app once:
 
 ```sh
-xattr -dr com.apple.quarantine "rustXterm (Go).app"
+xattr -dr com.apple.quarantine "goXterm.app"
 ```
 
 macOS 15 denies Local Network access to unsigned apps, so hosts on the Mac's own subnet are unreachable
@@ -130,7 +130,7 @@ from this build; routed hosts work. The Keychain holds the optional store key.
 
 ## Quick start
 
-1. Start rustXterm and choose a master password. It encrypts all sessions and credentials and
+1. Start goXterm and choose a master password. It encrypts all sessions and credentials and
    **cannot be recovered**. Tick **Unlock with system keyring** to skip the prompt on later starts.
 2. Create a session with **New session**, or type `user@host` in **Quick connect**. The **+** after
    the last tab opens a local terminal on your own computer.
@@ -172,10 +172,10 @@ Offline reads unlock through the keyring, else the master password typed on a te
 typed on an interactive terminal (never the keyring, a pipe or the environment) and are audited. The
 other commands talk to the running app over the agent-control socket and never start the GUI.
 
-MCP clients start `rustxterm-go mcp` over stdio:
+MCP clients start `goxterm mcp` over stdio:
 
 ```json
-{ "mcpServers": { "rustxterm": { "command": "rustxterm-go", "args": ["mcp"] } } }
+{ "mcpServers": { "rustxterm": { "command": "goxterm", "args": ["mcp"] } } }
 ```
 
 The MCP server defines 20 tools and none that add, edit, remove or import sessions. The read-only tools
@@ -205,7 +205,7 @@ an approval prompt in the app.
 | 2 | Usage error |
 | 3 | Store locked |
 | 4 | Denied by policy or approval |
-| 5 | rustXterm is not running |
+| 5 | goXterm is not running |
 | 6 | Agent control is off |
 
 With `--json`, errors are printed as `{"error":{"code":N,"message":"..."}}`.
@@ -254,7 +254,7 @@ The [developer guide](docs/DEVELOPMENT.md) covers the layout, every `make` targe
 
 ## History
 
-rustXterm started as a native Rust/egui application (releases up to v0.8.0). It was rewritten in Go +
+goXterm started as rustXterm, a native Rust/egui application (releases up to v0.8.0). It was rewritten in Go +
 Wails v3 to reach parity on Linux, Windows and macOS with one codebase, and the Go app continues the
 version numbering from v0.9.0. The Rust app is archived, read-only, in
 [`archive/rust/`](archive/rust/README.md); the Go app keeps its store, settings, known hosts and keyring
@@ -276,12 +276,12 @@ formats.
 
 Bug reports, ideas and pull requests are welcome: open an
 [issue](https://github.com/jniltinho/goXterm/issues). The [developer guide](docs/DEVELOPMENT.md)
-explains the Docker-only workflow and the test lab. If rustXterm is useful to you, a ⭐ helps other
+explains the Docker-only workflow and the test lab. If goXterm is useful to you, a ⭐ helps other
 people find it.
 
 ## License
 
-rustXterm is released under the [MIT License](LICENSE).
+goXterm is released under the [MIT License](LICENSE).
 
 Every icon, image, font and fixture is listed with its origin and license in
 [ATTRIBUTION.md](ATTRIBUTION.md). The application icon set in `assets/icons/app/` is original and MIT
@@ -290,7 +290,7 @@ licensed; the distribution logos in `assets/icons/app/brands/` are trademarks of
 <details>
 <summary>Acknowledgements</summary>
 
-rustXterm stands on great open-source work, including [Wails](https://github.com/wailsapp/wails),
+goXterm stands on great open-source work, including [Wails](https://github.com/wailsapp/wails),
 [Vue](https://vuejs.org/), [Tailwind CSS](https://tailwindcss.com/), [Vite+](https://viteplus.dev/),
 [xterm.js](https://xtermjs.org/), the Go [x/crypto](https://pkg.go.dev/golang.org/x/crypto) SSH packages,
 [pkg/sftp](https://github.com/pkg/sftp), [jlaffaye/ftp](https://github.com/jlaffaye/ftp),
