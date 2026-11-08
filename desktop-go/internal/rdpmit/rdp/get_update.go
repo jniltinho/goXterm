@@ -43,7 +43,13 @@ func (c *Client) GetUpdate() (*Update, error) {
 			// Non-bitmap X224 update, try again
 			return c.GetUpdate()
 		case errors.Is(err, pdu.ErrDeactivateAll):
-			return nil, err
+			// rustxterm: deactivation-reactivation (MS-RDPBCGR 1.3.1.3): Windows deactivates right
+			// after the logon (2008 R2 always) and sends a new Demand Active; redo the capabilities
+			// exchange and finalization and keep the session instead of closing it.
+			if err := c.reactivate(); err != nil {
+				return nil, fmt.Errorf("reactivation: %w", err)
+			}
+			return c.GetUpdate()
 
 		default:
 			return nil, fmt.Errorf("get X.224 update: %w", err)
@@ -200,4 +206,19 @@ func (c *Client) handleSlowPathGraphicsUpdate(wire io.Reader) (*Update, error) {
 	copy(fpData[5:], updateData)
 
 	return &Update{Data: fpData}, nil
+}
+
+// reactivate runs the capabilities exchange and connection finalization again after a Deactivate
+// All, then asks for a full redraw.
+func (c *Client) reactivate() error {
+	if err := c.capabilitiesExchange(); err != nil {
+		return err
+	}
+	if err := c.connectionFinalization(); err != nil {
+		return err
+	}
+	if err := c.sendRefreshRect(); err != nil {
+		logging.Warn("RDP: refresh after reactivation: %v", err)
+	}
+	return nil
 }

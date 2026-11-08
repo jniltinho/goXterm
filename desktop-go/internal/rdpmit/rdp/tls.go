@@ -55,6 +55,10 @@ func (c *Client) handshakeTLS(tlsConfig *tls.Config) error {
 	// Set handshake timeout to prevent hanging
 	_ = c.conn.SetDeadline(time.Now().Add(30 * time.Second))
 	if err := tlsConn.Handshake(); err != nil {
+		// rustxterm: name the fix when an old server offers only TLS 1.0/1.1 (Windows 2008 era)
+		if tlsConfig.MinVersion >= tls.VersionTLS12 && strings.Contains(err.Error(), "unsupported protocol version") {
+			return fmt.Errorf("the server only offers legacy TLS (TLS 1.0/1.1): tick \"Allow legacy TLS 1.0/1.1\" in the session's RDP options (%w)", err)
+		}
 		return fmt.Errorf("TLS handshake failed: %w", err)
 	}
 	_ = c.conn.SetDeadline(time.Time{})

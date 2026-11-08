@@ -47,4 +47,11 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   session's keyboard layout (0 = server default) in the core data and input capabilities (upstream
   always sent US). The NLA-required negotiation error names the app's option instead of an
   environment variable.
+- `rdp/get_update.go`, `rdp/capabilities_exchange.go`: a Deactivate All is answered with the
+  deactivation-reactivation sequence (capabilities exchange, finalization, refresh) instead of closing
+  the session — Windows Server 2008 R2 deactivates right after every logon. The capabilities
+  exchange waits for the Demand Active and skips other PDUs (upstream decoded the first one blindly).
+- `rdp/tls.go`: a TLS 1.0-only server reports which session option to tick.
+- `protocol/pdu/secure_settings_exchange.go`: performance flags as the Rust app sent them (no full
+  window drag, no menu animations, font smoothing); upstream sent 0.
 - `rdp/security_test.go` (new): tests for the changes above.
