@@ -5,9 +5,12 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
+	"image"
+	"image/draw"
 	"image/png"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -181,12 +184,16 @@ func TestRealRDP(t *testing.T) {
 	if proto == "" {
 		proto = NLA
 	}
-	s, frame, closed := dial(t, Config{
+	cfg := Config{
 		Host: os.Getenv("RXT_RDP_HOST"), Port: port,
 		User: os.Getenv("RXT_RDP_USER"), Password: os.Getenv("RXT_RDP_PASS"),
 		Width: envInt("RXT_RDP_W", 1024), Height: envInt("RXT_RDP_H", 768), Protocol: proto,
 		LegacyTLS: os.Getenv("RXT_RDP_LEGACY") != "", KeyboardLayout: uint32(layout),
-	})
+	}
+	s, frame, closed := dial(t, cfg)
+	if path := os.Getenv("RXT_RDP_SNAPSHOT"); path != "" { // compose every rectangle, save at the end
+		s, frame, closed = snapshotDial(t, cfg, path)
+	}
 	defer s.Close()
 	if err := s.Start(); err != nil {
 		t.Fatalf("start: %v", err)
@@ -206,6 +213,45 @@ func TestRealRDP(t *testing.T) {
 		}
 		t.Logf("held %v: %d more updates, %d px (first rectangle of each)", d, n, area)
 	}
+}
+
+// snapshotDial is dial that also draws every rectangle onto one image and writes it to path when
+// the session closes (for a visual check of the decoders against a real server).
+func snapshotDial(t *testing.T, cfg Config, path string) (*Session, chan Rect, chan error) {
+	frame, closed := make(chan Rect, 1), make(chan error, 1)
+	var mu sync.Mutex
+	canvas := image.NewRGBA(image.Rect(0, 0, cfg.Width, cfg.Height))
+	s, _, _, err := Connect(cfg, func(rs []Rect) {
+		mu.Lock()
+		for _, r := range rs {
+			if img, err := png.Decode(bytes.NewReader(r.PNG)); err == nil {
+				draw.Draw(canvas, image.Rect(r.X, r.Y, r.X+r.W, r.Y+r.H), img, image.Point{}, draw.Src)
+			}
+		}
+		mu.Unlock()
+		select {
+		case frame <- rs[0]:
+		default:
+		}
+	}, nil, func(e error) {
+		select {
+		case closed <- e:
+		default:
+		}
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		var buf bytes.Buffer
+		_ = png.Encode(&buf, canvas)
+		if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+			t.Errorf("snapshot: %v", err)
+		}
+	})
+	return s, frame, closed
 }
 
 // envInt reads a positive integer from the environment, or def.
