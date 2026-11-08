@@ -28,9 +28,9 @@ func labConfig(t *testing.T) Config {
 func dial(t *testing.T, cfg Config) (*Session, chan Rect, chan error) {
 	frame := make(chan Rect, 1)
 	closed := make(chan error, 1)
-	s, w, h, err := Connect(cfg, func(r Rect) {
+	s, w, h, err := Connect(cfg, func(rs []Rect) {
 		select {
-		case frame <- r:
+		case frame <- rs[0]:
 		default:
 		}
 	}, nil, func(e error) {

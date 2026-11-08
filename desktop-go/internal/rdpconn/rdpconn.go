@@ -11,6 +11,7 @@ import (
 	"image"
 	"image/png"
 	"net"
+	"runtime"
 	"strconv"
 	"sync"
 
@@ -61,7 +62,7 @@ type Config struct {
 	VerifyTLS func(tls.ConnectionState) error
 }
 
-// Rect is a changed region handed to onFrame as a PNG.
+// Rect is a changed region as a PNG; onFrame gets all rectangles of one update together, in order.
 type Rect struct {
 	X, Y, W, H int
 	PNG        []byte
@@ -70,7 +71,7 @@ type Rect struct {
 // Session is an RDP connection: Connect prepares it, Start dials and logs in.
 type Session struct {
 	cfg     Config
-	onFrame func(Rect)
+	onFrame func([]Rect)
 	onReady func()
 	onClose func(error)
 	clip    Clip
@@ -101,7 +102,7 @@ func tlsConfig(cfg Config) *tls.Config {
 
 // Connect prepares the session but does not dial or log in yet; call Start after the caller has
 // subscribed to frame events. It returns the requested desktop size.
-func Connect(cfg Config, onFrame func(Rect), onReady func(), onClose func(error)) (*Session, int, int, error) {
+func Connect(cfg Config, onFrame func([]Rect), onReady func(), onClose func(error)) (*Session, int, int, error) {
 	if cfg.Width <= 0 {
 		cfg.Width = 1024
 	}
@@ -161,10 +162,12 @@ func (s *Session) loop(c *rdp.Client) {
 			s.finish(err)
 			return
 		}
+		var rects []Rect
 		for _, b := range fp.bitmapUpdates(u.Data) {
-			for _, r := range bitmapRects(b) {
-				s.onFrame(r)
-			}
+			rects = append(rects, bitmapRects(b)...)
+		}
+		if len(rects) > 0 {
+			s.onFrame(rects)
 		}
 	}
 }
@@ -248,14 +251,23 @@ const (
 	noCompressionHdr  = 0x0400 // NO_BITMAP_COMPRESSION_HDR
 )
 
-// bitmapRects decodes a TS_UPDATE_BITMAP_DATA (MS-RDPBCGR 2.2.9.1.1.3.1.2) into PNG rectangles.
+// bitmapRect is one rectangle of a bitmap update, still encoded.
+type bitmapRect struct {
+	data                                []byte
+	left, top, right, bottom, w, h, bpp int
+	compressed, noHdr                   bool
+}
+
+// bitmapRects decodes a TS_UPDATE_BITMAP_DATA (MS-RDPBCGR 2.2.9.1.1.3.1.2) into PNG rectangles, in
+// update order. The rectangles are decoded and PNG-encoded in parallel: done one by one on the
+// receive goroutine, a full-screen redraw (hundreds of 64×64 tiles) held up reading the socket.
 func bitmapRects(p []byte) []Rect {
 	if len(p) < 4 || binary.LittleEndian.Uint16(p) != 1 { // UPDATETYPE_BITMAP
 		return nil
 	}
 	n := int(binary.LittleEndian.Uint16(p[2:]))
 	p = p[4:]
-	var out []Rect
+	var jobs []bitmapRect
 	for ; n > 0 && len(p) >= 18; n-- {
 		v := func(i int) int { return int(binary.LittleEndian.Uint16(p[2*i:])) }
 		left, top, right, bottom, w, h, bpp, flags, length := v(0), v(1), v(2), v(3), v(4), v(5), v(6), v(7), v(8)
@@ -276,8 +288,25 @@ func bitmapRects(p []byte) []Rect {
 		if w <= 0 || h <= 0 {
 			continue
 		}
-		rgba := codec.ProcessBitmap(data, w, h, bpp, compressed, 0, noHdr)
-		if r, ok := encode(rgba, w, h, left, top, right, bottom); ok {
+		jobs = append(jobs, bitmapRect{data, left, top, right, bottom, w, h, bpp, compressed, noHdr})
+	}
+	rects, ok := make([]Rect, len(jobs)), make([]bool, len(jobs))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
+	for i := range jobs {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int) {
+			defer func() { <-sem; wg.Done() }()
+			j := jobs[i]
+			rgba := codec.ProcessBitmap(j.data, j.w, j.h, j.bpp, j.compressed, 0, j.noHdr)
+			rects[i], ok[i] = encode(rgba, j.w, j.h, j.left, j.top, j.right, j.bottom)
+		}(i)
+	}
+	wg.Wait()
+	out := rects[:0]
+	for i, r := range rects {
+		if ok[i] {
 			out = append(out, r)
 		}
 	}
@@ -300,7 +329,7 @@ func encode(rgba []byte, w, h, left, top, right, bottom int) (Rect, bool) {
 	}
 	img := (&image.RGBA{Pix: rgba, Stride: w * 4, Rect: image.Rect(0, 0, w, h)}).SubImage(image.Rect(0, 0, vw, vh))
 	var buf bytes.Buffer
-	if png.Encode(&buf, img) != nil {
+	if (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(&buf, img) != nil {
 		return Rect{}, false
 	}
 	return Rect{X: left, Y: top, W: vw, H: vh, PNG: buf.Bytes()}, true
