@@ -19,7 +19,7 @@ const mod = "rustxterm-go/"
 // under internal/grdp import within grdp freely. Anything not listed here is refused.
 var allowed = map[string][]string{
 	"main":                {"cmd"},
-	"cmd":                 {"internal/control", "internal/gui", "internal/store"},
+	"cmd":                 {"internal/control", "internal/gui", "internal/mobaini", "internal/store"},
 	"internal/gui":        {"internal/*"}, // the GUI composes the core
 	"internal/ftpconn":    {"internal/fsentry"},
 	"internal/sftpconn":   {"internal/fsentry", "internal/sshconn"},
