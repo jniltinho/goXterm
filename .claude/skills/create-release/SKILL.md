@@ -61,8 +61,8 @@ git push origin $NEXT
 ```
 
 `release-go.yml` then verifies the green CI run, runs `make dist-all` in Docker and creates the GitHub
-Release with `rustxterm-go-X.Y.Z-linux-amd64`, `rustxterm-go-X.Y.Z-x86_64.AppImage`,
-`rustxterm-go-X.Y.Z-windows-amd64.exe`, `rustxterm-go-X.Y.Z_macos_universal.zip`, the per-arch
+Release with `goxterm-X.Y.Z-linux-amd64`, `goxterm-X.Y.Z-x86_64.AppImage`,
+`goxterm-X.Y.Z-windows-amd64.exe`, `goxterm-X.Y.Z_macos_universal.zip`, the per-arch
 `darwin-amd64`/`darwin-arm64` binaries and `SHA256SUMS`.
 
 ### 4. Monitor
@@ -94,10 +94,10 @@ cat > /tmp/release-notes-$NEXT.md << 'NOTES'
 
 ## 📦 Downloads
 
-- `rustxterm-go-X.Y.Z-linux-amd64` (GTK 4 + WebKitGTK 6.0: Ubuntu 24.04+, Fedora 39+, Debian 13+)
-- `rustxterm-go-X.Y.Z-x86_64.AppImage`
-- `rustxterm-go-X.Y.Z-windows-amd64.exe` (WebView2)
-- `rustxterm-go-X.Y.Z_macos_universal.zip` (unsigned: `xattr -dr com.apple.quarantine "rustXterm (Go).app"`)
+- `goxterm-X.Y.Z-linux-amd64` (GTK 4 + WebKitGTK 6.0: Ubuntu 24.04+, Fedora 39+, Debian 13+)
+- `goxterm-X.Y.Z-x86_64.AppImage`
+- `goxterm-X.Y.Z-windows-amd64.exe` (WebView2)
+- `goxterm-X.Y.Z_macos_universal.zip` (unsigned: `xattr -dr com.apple.quarantine "goXterm.app"`)
 - `SHA256SUMS`
 
 **Full Changelog**: https://github.com/jniltinho/goXterm/compare/vPREV...vNEXT

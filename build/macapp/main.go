@@ -1,7 +1,7 @@
-// Command macapp packs the two macOS slices into a universal "rustXterm (Go).app" and zips it, on
+// Command macapp packs the two macOS slices into a universal "goXterm.app" and zips it, on
 // Linux and without Apple tools (lipo, iconutil): the fat Mach-O, Info.plist, PkgInfo and a PNG
 // .icns are written in Go. The bundle is unsigned beyond the Go linker's ad-hoc slice signatures, so
-// a downloaded copy needs: xattr -dr com.apple.quarantine "rustXterm (Go).app".
+// a downloaded copy needs: xattr -dr com.apple.quarantine "goXterm.app".
 //
 // Usage: go run ./build/macapp -version V -icon logo.png -out app.zip darwin-amd64 darwin-arm64
 package main
@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	appDir   = "rustXterm (Go).app/Contents/"
-	execName = "rustxterm-go"
+	appDir   = "goXterm.app/Contents/"
+	execName = "goxterm"
 	align    = 14 // 2^14: the page alignment lipo uses for arm64 and x86_64 slices
 )
 
@@ -111,9 +111,9 @@ func plist(version string, icon bool) string {
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>rustXterm (Go)</string>
+	<string>goXterm</string>
 	<key>CFBundleDisplayName</key>
-	<string>rustXterm (Go)</string>
+	<string>goXterm</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.jniltinho.rustxterm.go</string>
 	<key>CFBundleVersion</key>

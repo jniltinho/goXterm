@@ -57,7 +57,7 @@ Every icon, image, font and test fixture committed to this repository has a row 
 | `assets/fonts/terminus/COPYING` | License text `terminus-ttf-4.49.3/COPYING` from the same Terminus TTF 4.49.3 zip, sha256 `bad278e9c6ac3cfcf8230e279be8b339901c6c64cc9c5c19414c047bf55fc02c` | OFL-1.1 |
 | `assets/icons/rustxterm.svg` | Original rustXterm application icon, drawn by rustXterm developers | MIT |
 | `assets/icons/rustxterm-256.png` | 256 px render of `assets/icons/rustxterm.svg` (window icon) | MIT |
-| `build/linux/rustxterm-go.png` | Copy of `assets/icons/rustxterm-256.png`, used as the AppImage icon | MIT |
+| `build/linux/goxterm.png` | Copy of `assets/icons/rustxterm-256.png`, used as the AppImage icon | MIT |
 | `internal/rdpmit/**` | RDP client vendored from rcarmo/go-rdp (https://github.com/rcarmo/go-rdp, branch `master`, commit `5b081feb69ef89d1baae663a28f0d8d8156c4156`), `internal/` subset, with rustXterm changes listed in `internal/rdpmit/README.md`; full text in `internal/rdpmit/LICENSE` | MIT |
 | `archive/rust/vendor/picky/**` | picky 7.0.0-rc.25 by Devolutions Inc. (crates.io), manifest dependency requirements relaxed (see `archive/rust/vendor/README.md`) | MIT OR Apache-2.0 |
 | `archive/rust/vendor/sspi/**` | sspi 0.21.3 by Devolutions Inc. (crates.io), macOS/iOS-only pinned dependencies removed from the manifest (see `archive/rust/vendor/README.md`) | MIT OR Apache-2.0 |

@@ -1,4 +1,4 @@
-# rustXterm (Go + Wails v3). ONE binary = desktop window + CLI + MCP server (Cobra): no subcommand
+# goXterm (Go + Wails v3). ONE binary = desktop window + CLI + MCP server (Cobra): no subcommand
 # opens the window, subcommands are the CLI/MCP. Everything builds in Docker (only docker + make).
 # The binary is CGO: GTK 4 + WebKitGTK 6.0 (the Wails window) and SQLCipher (reads the Rust store).
 # Builds always refresh dist/. History: openspec/changes/migrate-gui-to-go-wails; the Rust app is in archive/rust/.
@@ -6,7 +6,7 @@ NODE_IMAGE ?= node:24
 IMAGE      ?= rustxterm-go-linux
 VERSION    ?= $(or $(shell git describe --tags --exact-match --match 'v*' 2>/dev/null | sed 's/^v//'),dev)
 LDFLAGS    := -s -w -X rustxterm-go/cmd.version=$(VERSION)
-BIN        := rustxterm-go
+BIN        := goxterm
 DOCKER     := docker run --rm --user $(shell id -u):$(shell id -g) -e HOME=/tmp
 GO_ENV     := -e GOFLAGS=-buildvcs=false -e GOCACHE=/src/.cache/go-build -e GOMODCACHE=/src/.cache/mod -e CGO_ENABLED=1
 RUN         = $(DOCKER) -v $(CURDIR):/src -w /src $(GO_ENV) $(IMAGE)
@@ -68,12 +68,12 @@ windows: image frontend ## Windows amd64 (WebView2, CGO-free) → dist/
 
 # shortcut: the universal app carries only the Go linker ad-hoc slice signatures; Developer ID
 # signing + notarization is task 13.3.
-macos: image frontend ## macOS amd64+arm64 + universal "rustXterm (Go).app" zip (purego, CGO-free) → dist/
+macos: image frontend ## macOS amd64+arm64 + universal "goXterm.app" zip (purego, CGO-free) → dist/
 	$(RUN) sh -c 'for a in amd64 arm64; do CGO_ENABLED=0 GOOS=darwin GOARCH=$$a go build -tags "production purego" \
 	  -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BIN)-$(VERSION)-darwin-$$a . || exit 1; done'
 	$(RUN) go run ./build/macapp -version $(VERSION) -icon frontend/public/icons/logo.png \
 	  -out dist/$(BIN)-$(VERSION)_macos_universal.zip dist/$(BIN)-$(VERSION)-darwin-amd64 dist/$(BIN)-$(VERSION)-darwin-arm64
-	@echo 'Unsigned universal app: xattr -dr com.apple.quarantine "rustXterm (Go).app"' 
+	@echo 'Unsigned universal app: xattr -dr com.apple.quarantine "goXterm.app"' 
 
 dist-all: appimage windows macos ## Linux binary + AppImage, Windows .exe, macOS per-arch — all in dist/
 

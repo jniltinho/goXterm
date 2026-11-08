@@ -67,10 +67,10 @@ Every target runs in Docker. `VERSION` defaults to the exact `v*` tag of `HEAD` 
 | `make layers` | `go test ./internal/archtest`: import rules and skin token parity |
 | `make embed-stub` | Placeholder `internal/gui/dist/index.html` so compile-only targets work on a fresh checkout |
 | `make frontend` | Copy icons and fonts into `frontend/public/`, then `npm ci` and `vp build --mode desktop` into `internal/gui/dist` |
-| `make build` | Frontend + `dist/rustxterm-go-VERSION-linux-amd64` (CGO, GTK 4 / WebKitGTK 6.0) |
-| `make appimage` | `dist/rustxterm-go-VERSION-x86_64.AppImage` (system GTK / WebKitGTK) |
-| `make windows` | `dist/rustxterm-go-VERSION-windows-amd64.exe` (WebView2, CGO-free) |
-| `make macos` | `dist/rustxterm-go-VERSION-darwin-{amd64,arm64}` and `dist/rustxterm-go-VERSION_macos_universal.zip` (purego, CGO-free; `build/macapp` builds the universal `rustXterm (Go).app`) |
+| `make build` | Frontend + `dist/goxterm-VERSION-linux-amd64` (CGO, GTK 4 / WebKitGTK 6.0) |
+| `make appimage` | `dist/goxterm-VERSION-x86_64.AppImage` (system GTK / WebKitGTK) |
+| `make windows` | `dist/goxterm-VERSION-windows-amd64.exe` (WebView2, CGO-free) |
+| `make macos` | `dist/goxterm-VERSION-darwin-{amd64,arm64}` and `dist/goxterm-VERSION_macos_universal.zip` (purego, CGO-free; `build/macapp` builds the universal `goXterm.app`) |
 | `make dist-all` | `appimage`, `windows` and `macos` |
 | `make guard` | Publication guard (`go run ./build/guard`); `GUARD_ARGS=--ci` as CI runs it, `--artifact PATH` to scan a release file |
 | `make lab-test` | Go `TestLab*` tests against the running lab (host network) |
@@ -138,8 +138,8 @@ session):
 
 ```sh
 make build
-./dist/rustxterm-go-dev-linux-amd64                # the window
-./dist/rustxterm-go-dev-linux-amd64 sessions list  # the CLI
+./dist/goxterm-dev-linux-amd64                # the window
+./dist/goxterm-dev-linux-amd64 sessions list  # the CLI
 ```
 
 To keep test data away from your real sessions, point `XDG_CONFIG_HOME` and `XDG_DATA_HOME` at scratch

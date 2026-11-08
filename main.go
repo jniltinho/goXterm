@@ -1,4 +1,4 @@
-// rustXterm (Go): one binary for the desktop app, the CLI and the MCP server. See README.md.
+// goXterm: one binary for the desktop app, the CLI and the MCP server. See README.md.
 // Migration tracked by openspec/changes/migrate-gui-to-go-wails.
 package main
 

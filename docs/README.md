@@ -24,7 +24,7 @@ requirements live in OpenSpec under [`openspec/`](../openspec/); the Go app was 
 
 ## Architecture
 
-rustXterm is one Go module (`rustxterm-go`) built with Wails v3. `main.go` hands over to `cmd/` (Cobra):
+rustXterm is one Go module (`goxterm`) built with Wails v3. `main.go` hands over to `cmd/` (Cobra):
 with no subcommand it opens the desktop window (`internal/gui`), otherwise it runs the CLI or the MCP
 server headless. The core is GUI-free packages under `internal/`; only `internal/gui` imports Wails.
 `make layers` runs `internal/archtest`, which refuses any import outside this table and checks that every
@@ -90,7 +90,7 @@ A forgotten master password is unrecoverable by design.
 
 ## Agent control (CLI and MCP)
 
-Scripts and AI agents use the `rustxterm-go` CLI or the stdio MCP server (`rustxterm-go mcp`), both
+Scripts and AI agents use the `goxterm` CLI or the stdio MCP server (`goxterm mcp`), both
 headless. Store reads (`sessions list|show`, `folders list`, `tunnels list` and the matching MCP tools)
 work offline: they unlock the store through the keyring wrap or the master password. When **Settings ›
 Agent control** is on, the running app listens on a same-user Unix socket
@@ -134,7 +134,7 @@ Font zoom: Ctrl+wheel, Ctrl+= / Ctrl++ and Ctrl+- change the font size, Ctrl+0 r
 Builds, lints and tests run only in Docker through `make` (`rustxterm-go-linux` image from
 `build/linux.Dockerfile`, `node:24` for the frontend). The Linux binary links GTK 4 and WebKitGTK 6.0
 (CGO); Windows (WebView2) and macOS (Wails purego backend) cross-build CGO-free from the same image, and
-`build/macapp` assembles the universal `rustXterm (Go).app` zip. `ci.yml` runs on `main` and pull requests
+`build/macapp` assembles the universal `goXterm.app` zip. `ci.yml` runs on `main` and pull requests
 (jobs `checks`, `lab`, `build`) and never publishes; `release-go.yml` runs `make dist-all` on `v*.*.*` tags,
 only for a commit whose `ci` run is green, and publishes the GitHub Release with `SHA256SUMS`.
 

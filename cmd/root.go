@@ -1,4 +1,4 @@
-// Package cmd is the command line of the single rustxterm-go binary: with no subcommand it opens the desktop app;
+// Package cmd is the command line of the single goxterm binary: with no subcommand it opens the desktop app;
 // the subcommands are the CLI and the MCP server (mcp). Protocols, the store and MCP are filled in by the later
 // phases of migrate-gui-to-go-wails; this is the scaffold.
 package cmd
@@ -23,8 +23,8 @@ var flags struct {
 }
 
 var rootCmd = &cobra.Command{
-	Use:           "rustxterm-go",
-	Short:         "rustXterm: desktop app, command line and MCP server",
+	Use:           "goxterm",
+	Short:         "goXterm: desktop app, command line and MCP server",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Args:          noArgs, // an unknown subcommand is a usage error (2), as with clap

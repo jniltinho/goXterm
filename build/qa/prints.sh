@@ -11,11 +11,11 @@ cfg=${XDG_CONFIG_HOME:-/tmp/cfg}/rustxterm/config.toml
 mkdir -p "$out"; rm -f "$out"/*.png
 
 pgrep -x Xvfb >/dev/null || { Xvfb :99 -screen 0 1400x900x24 >/dev/null 2>&1 & sleep 2; }
-pkill -f rustxterm-go-dev-linux || true; sleep 1
+pkill -f goxterm-dev-linux || true; sleep 1
 # The skin under test, the Sessions page, a 320 px sidebar and the monitor bar on.
 sed -i -e "s/^theme = .*/theme = \"$skin\"/" -e 's/^sidebar_page = .*/sidebar_page = "sessions"/' \
   -e 's/^sidebar_width = .*/sidebar_width = 320.0/' -e 's/^remote_monitoring = .*/remote_monitoring = true/' "$cfg"
-(cd /w && dbus-run-session -- ./dist/rustxterm-go-dev-linux-amd64 --safe-gpu >/tmp/prints-app.log 2>&1 &)
+(cd /w && dbus-run-session -- ./dist/goxterm-dev-linux-amd64 --safe-gpu >/tmp/prints-app.log 2>&1 &)
 
 n=0
 shot() { n=$((n + 1)); sleep "${2:-1}"; xdotool mousemove 1395 895; import -window root "$out/$(printf %02d $n)-$1.png"; }
@@ -53,5 +53,5 @@ dbl 187 307; shot ssh-sftp-monitor 7
 click 77 170; dbl 176 499; shot rdp 9
 dbl 208 283; shot vnc 7
 dbl 176 475; shot ftp 6
-pkill -f rustxterm-go-dev-linux || true
+pkill -f goxterm-dev-linux || true
 echo "$n screenshots in $out"
