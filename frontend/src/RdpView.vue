@@ -18,6 +18,14 @@ const status = ref("Connecting…");
 const stopped = ref<{ reason: string } | null>(null);
 let tabId = "";
 let ctx: CanvasRenderingContext2D | null = null;
+let drawing: Promise<void> = Promise.resolve(); // serializes frame batches
+// decodePng turns a base64 PNG into an ImageBitmap off the main thread.
+function decodePng(b64: string): Promise<ImageBitmap> {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return createImageBitmap(new Blob([bytes], { type: "image/png" }));
+}
 let offFrame: (() => void) | undefined;
 let offReady: (() => void) | undefined;
 let offClose: (() => void) | undefined;
@@ -88,11 +96,18 @@ async function start() {
   fitCanvas();
   ctx = c.getContext("2d");
   status.value = "Negotiating…";
+  // One event per server update: decode its rectangles in parallel, draw them (and successive
+  // updates) strictly in order — a late decode must not paint over a newer tile.
   offFrame = Events.On("rdp:frame:" + tabId, (ev: { data: unknown }) => {
-    const d = ev.data as { x: number; y: number; png: string };
-    const img = new Image();
-    img.onload = () => ctx && ctx.drawImage(img, d.x, d.y);
-    img.src = "data:image/png;base64," + d.png;
+    const rects = ev.data as { x: number; y: number; png: string }[];
+    const decoded = Promise.all(rects.map((r) => decodePng(r.png).catch(() => null)));
+    drawing = drawing.then(async () => {
+      const bitmaps = await decoded;
+      bitmaps.forEach((b, i) => {
+        if (b && ctx) ctx.drawImage(b, rects[i].x, rects[i].y);
+        b?.close();
+      });
+    });
     status.value = "";
   });
   offReady = Events.On("rdp:ready:" + tabId, () => { status.value = ""; emit("state", "connected"); });

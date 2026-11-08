@@ -138,12 +138,15 @@ func (a *App) rdpDial(cfg rdpconn.Config, clipboard bool) (*RdpView, error) {
 	tabID := "r" + strconv.Itoa(a.seq)
 	a.mu.Unlock()
 
-	onFrame := func(r rdpconn.Rect) {
-		if a.emit != nil {
-			a.emit("rdp:frame:"+tabID, map[string]any{
-				"x": r.X, "y": r.Y, "png": base64.StdEncoding.EncodeToString(r.PNG),
-			})
+	onFrame := func(rs []rdpconn.Rect) { // one event per update: the SPA draws its rectangles in order
+		if a.emit == nil {
+			return
 		}
+		out := make([]map[string]any, len(rs))
+		for i, r := range rs {
+			out[i] = map[string]any{"x": r.X, "y": r.Y, "png": base64.StdEncoding.EncodeToString(r.PNG)}
+		}
+		a.emit("rdp:frame:"+tabID, out)
 	}
 	onReady := func() {
 		if a.emit != nil {

@@ -255,14 +255,13 @@ func NewClientInfo(domain, username, password string) *ClientInfo {
 			// INFO_AUTOLOGON is REQUIRED for automatic login without showing the login dialog
 			Flags: InfoFlagMouse | InfoFlagUnicode | InfoFlagDisableCtrlAltDel | InfoFlagEnableWindowsKey |
 				InfoFlagLogonErrors | InfoFlagMaximizeShell | InfoFlagMouseHasWheel | InfoFlagAutoLogon,
-			Domain:    domain,
-			Username:  username,
-			Password:  password,
-			ExtraInfo: ExtendedInfoPacket{
-				//// PERF_DISABLE_WALLPAPER, PERF_DISABLE_FULLWINDOWDRAG, PERF_DISABLE_MENUANIMATIONS,
-				//// PERF_DISABLE_THEMING, PERF_DISABLE_CURSOR_SHADOW, PERF_DISABLE_CURSORSETTINGS
-				//PerformanceFlags: 0x00000001 | 0x00000002 | 0x00000004 | 0x00000008 | 0x00000020 | 0x00000040,
-			},
+			Domain:   domain,
+			Username: username,
+			Password: password,
+			// rustxterm: PERF_DISABLE_FULLWINDOWDRAG | PERF_DISABLE_MENUANIMATIONS |
+			// PERF_ENABLE_FONT_SMOOTHING, as the Rust app (IronRDP's default) sent; upstream sent 0, which
+			// streams every window drag and menu animation and is slow over the internet.
+			ExtraInfo: ExtendedInfoPacket{PerformanceFlags: 0x00000002 | 0x00000004 | 0x00000080},
 		},
 	}
 }
