@@ -19,15 +19,20 @@ if [ "${RXT_MOUNT_PRINTS:-0}" = 1 ]; then
     prints="--mount type=bind,source=$root/docs/prints,destination=/work/docs/prints"
 fi
 mask="--mount type=tmpfs,destination=/work/base $prints"
-[ "${RXT_MOUNT_BASE:-0}" = 1 ] && mask="--mount type=bind,source=$root/base,destination=/work/base,readonly $prints"
+[ "${RXT_MOUNT_BASE:-0}" = 1 ] && [ -d "$root/base" ] && mask="--mount type=bind,source=$root/base,destination=/work/base,readonly $prints"
 [ $# -eq 0 ] && set -- cargo build --workspace
 net=${RXT_DOCKER_NET:-bridge}
 tty=""; [ -t 0 ] && tty="-t"
 # RXT_DOCKER_CPUS limits the container CPUs (gate measurements on a 4-core reference).
 cpus=""; [ -n "${RXT_DOCKER_CPUS:-}" ] && cpus="--cpus=$RXT_DOCKER_CPUS"
+# In a git worktree .git is a file pointing into the main repository: mount that at the same path so
+# git (and `xtask guard`) work inside the container.
+gitdir=""
+common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+[ -n "$common" ] && [ "$common" != "$root/.git" ] && gitdir="-v $common:$common:ro"
 # shellcheck disable=SC2086
 exec docker run --rm -i $tty $cpus --network "$net" --user "$(id -u):$(id -g)" \
-    -v "$root:/work" $mask -w /work \
+    -v "$root:/work" $gitdir $mask -w /work \
     -e HOME=/work/target/home -e CARGO_HOME=/work/target/cargo-home \
     -e CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target/docker}" \
     -e CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}" -e RUST_BACKTRACE=1 -e RUST_LOG -e INSTA_UPDATE -e UPDATE_SNAPSHOTS \
