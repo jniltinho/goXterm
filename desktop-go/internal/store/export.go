@@ -91,6 +91,27 @@ func (s *Store) ExportTOML() (string, error) {
 	return b.String(), nil
 }
 
+// Export is the export document as JSON for agents (Rust Export::new): format, version, folders,
+// sessions and tunnels, no credentials.
+func (s *Store) Export() (map[string]any, error) {
+	fs, err := s.Folders()
+	if err != nil {
+		return nil, err
+	}
+	ss, err := s.Sessions()
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range ss {
+		delete(m, "password") // the "saved"/"absent" marker is not session data
+	}
+	ts, err := s.Tunnels()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"format": exportFormat, "version": exportVersion, "folders": fs, "sessions": ss, "tunnels": ts}, nil
+}
+
 // credentialKeys never come in from a file (Rust sessions have no such fields).
 var credentialKeys = []string{"password", "passphrase", "secret", "credentials"}
 

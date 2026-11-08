@@ -49,11 +49,15 @@ func (a *App) Connect(sessionID int64) (string, error) {
 		password = string(secret)
 	}
 	st.Close()
-	return a.dial(sshconn.Config{
+	tabID, err := a.dial(sshconn.Config{
 		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
 		KeepaliveSecs: int(asInt64(sshOpt["keepalive_secs"])),
 	}, sessionID)
+	if err == nil {
+		a.noteTab(tabID, sessionID, sv.Name, sv.Protocol)
+	}
+	return tabID, err
 }
 
 // HasDemo reports whether a demo SSH target is configured (RXT_DEMO_SSH), used to auto-open a lab
@@ -140,9 +144,16 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		a.early = map[string]*earlyTab{}
 	}
 	a.early[tabID] = &earlyTab{}
+	if a.tails == nil {
+		a.tails = map[string]*tail{}
+	}
+	a.tails[tabID] = &tail{}
 	a.mu.Unlock()
 	onData := func(b []byte) {
 		a.mu.Lock()
+		if t := a.tails[tabID]; t != nil {
+			t.feed(b)
+		}
 		if e := a.early[tabID]; e != nil {
 			if len(e.buf) < earlyCap {
 				e.buf = append(e.buf, b...)
@@ -168,6 +179,8 @@ func (a *App) newStreamTab() (string, func([]byte), func(error)) {
 		}
 		a.mu.Lock()
 		delete(a.term, tabID)
+		delete(a.tails, tabID)
+		delete(a.tabInfo, tabID)
 		if e := a.early[tabID]; e != nil {
 			e.closed, e.closeMsg = true, msg
 			a.mu.Unlock()

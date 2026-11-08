@@ -17,6 +17,7 @@ type Settings struct {
 	Theme                    string  `toml:"theme" json:"theme"`
 	LogLevel                 string  `toml:"log_level" json:"logLevel"`
 	AgentControl             bool    `toml:"agent_control" json:"agentControl"`
+	AgentWorkspace           string  `toml:"agent_workspace" json:"agentWorkspace"` // agent file transfers; "" = <data dir>/agent-files
 	CopyOnSelect             bool    `toml:"copy_on_select" json:"copyOnSelect"`
 	RightClickPaste          bool    `toml:"right_click_paste" json:"rightClickPaste"`
 	PasteGuard               bool    `toml:"paste_guard" json:"pasteGuard"`

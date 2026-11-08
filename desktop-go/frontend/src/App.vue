@@ -9,7 +9,7 @@ import {
   RdpConnect, ConnectRdpDemo, HasRdpDemo,
   type Session, type Folder, type RemoteSession, type VncView, type RdpView,
 } from "./api";
-import { SetMultiExec, SelectMultiExec, WslConnect, SetFolderIcon, MoveSession } from "./api";
+import { SetMultiExec, SelectMultiExec, WslConnect, SetFolderIcon, MoveSession, AgentApprove } from "./api";
 import FolderDialog from "./FolderDialog.vue";
 import { commandFor, shortcutMap, DEFAULT_SHORTCUTS } from "./commands";
 import ImportDialog from "./ImportDialog.vue";
@@ -163,6 +163,25 @@ async function openDemos() {
 onMounted(async () => {
   Events.On("ssh:trust", (ev: { data: unknown }) => { trustQ.value = [...trustQ.value, ev.data as TrustReq]; });
   Events.On("ssh:password", (ev: { data: unknown }) => { passValue.value = ""; passQ.value = [...passQ.value, ev.data as PassReq]; });
+  // Agent control: a tab an agent opened (already connected in Go), a tab it closed, and approvals
+  // for sessions whose agent policy is "ask" (unanswered requests are denied after 60 s).
+  Events.On("agent:open", (ev: { data: unknown }) => {
+    const d = ev.data as { tabId: string; session: number; name: string; protocol: string };
+    const s = sessions.value.find((x) => x.id === d.session);
+    const again = d.protocol === "telnet" ? () => TelnetConnect(d.session) : d.protocol === "serial" ? () => SerialConnect(d.session) : () => Connect(d.session);
+    let fresh = true; // the first attach takes the agent's tab, a reconnect dials again
+    const icon = d.protocol === "serial" ? "plug" : d.protocol === "telnet" ? "terminal" : "ssh";
+    openTerm(d.name, icon, () => (fresh ? ((fresh = false), Promise.resolve(d.tabId)) : again()), d.protocol === "ssh", s ? sessionUrl(s) : "");
+  });
+  Events.On("agent:close", (ev: { data: unknown }) => {
+    const id = Object.keys(tabBackend.value).find((k) => tabBackend.value[k] === (ev.data as { tabId: string }).tabId);
+    if (id) closeTab(id);
+  });
+  Events.On("agent:approval", async (ev: { data: unknown }) => {
+    const d = ev.data as { id: number; client: string; command: string; session: string; target: string };
+    const what = `${d.client || "An agent"} asks to run "${d.command}"${d.session ? ` on ${d.session}` : ""}${d.target ? ` (${d.target})` : ""}.`;
+    void AgentApprove(d.id, await askConfirm("Agent request", what + " Allow it once?", "Allow"));
+  });
   rootOpen.value = loadJSON("rxt-root-open", true);
   watch(rootOpen, (v) => saveJSON("rxt-root-open", v));
   await loadUI();

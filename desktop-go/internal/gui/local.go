@@ -16,5 +16,6 @@ func (a *App) LocalShell() (string, error) {
 	a.mu.Lock()
 	a.term[tabID] = sess
 	a.mu.Unlock()
+	a.noteTab(tabID, 0, "", "local") // never available to agents
 	return tabID, nil
 }

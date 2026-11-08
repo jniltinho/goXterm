@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package control
 
@@ -11,12 +11,11 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
-// shortcut: Unix socket (Linux). macOS uses the same Unix-socket transport (add a build tag for it);
-// Windows uses a named pipe with a matching peer-identity check — both migrate-gui-to-go-wails task 3.3.
+// Unix-socket transport (Linux and macOS, Rust platform-linux / platform-macos control): a 0600
+// socket in a private 0700 runtime directory, same-UID peers only (SO_PEERCRED / LOCAL_PEERCRED).
+// RuntimeDir and peerUID are per OS (peer_linux.go, peer_darwin.go).
 
 // socketName is the control socket file inside the runtime directory (matches the Rust SOCKET).
 const socketName = "control.sock"
@@ -26,15 +25,6 @@ const otherUser = "agent control serves only the user running rustXterm"
 
 // refusalLinger is how long a refused client gets to read its denied response.
 const refusalLinger = time.Second
-
-// RuntimeDir returns $XDG_RUNTIME_DIR/rustxterm, where the control socket lives.
-func RuntimeDir() (string, error) {
-	base := os.Getenv("XDG_RUNTIME_DIR")
-	if base == "" || !filepath.IsAbs(base) {
-		return "", errors.New("no runtime directory ($XDG_RUNTIME_DIR) for agent control")
-	}
-	return filepath.Join(base, "rustxterm"), nil
-}
 
 // Listener accepts same-user control connections. Dropping it (Close) removes the socket file.
 type Listener struct {
@@ -75,7 +65,7 @@ func Listen(dir string) (*Listener, error) {
 }
 
 // Accept returns the next same-user connection, refusing (with a denied reason) peers of another user.
-func (l *Listener) Accept() (net.Conn, error) {
+func (l *Listener) Accept() (Conn, error) {
 	for {
 		c, err := l.ln.AcceptUnix()
 		if err != nil {
@@ -97,7 +87,7 @@ func (l *Listener) Close() error {
 }
 
 // Connect dials the control socket in dir, requiring the server to be this same user.
-func Connect(dir string) (net.Conn, error) {
+func Connect(dir string) (Conn, error) {
 	path := filepath.Join(dir, socketName)
 	if _, err := os.Lstat(path); err != nil {
 		return nil, errNotRunning
@@ -133,25 +123,6 @@ func Live() bool {
 	}
 	_, err = os.Lstat(filepath.Join(dir, socketName))
 	return err == nil
-}
-
-// peerUID reads the connected peer's UID via SO_PEERCRED.
-func peerUID(c *net.UnixConn) (uint32, error) {
-	raw, err := c.SyscallConn()
-	if err != nil {
-		return 0, err
-	}
-	var ucred *unix.Ucred
-	var cerr error
-	if err := raw.Control(func(fd uintptr) {
-		ucred, cerr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
-	}); err != nil {
-		return 0, err
-	}
-	if cerr != nil {
-		return 0, cerr
-	}
-	return ucred.Uid, nil
 }
 
 // privateDir creates dir as 0700 if missing, then requires a real directory owned by uid with no

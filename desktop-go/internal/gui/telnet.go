@@ -18,7 +18,11 @@ func (a *App) TelnetConnect(sessionID int64) (string, error) {
 	if sv.Protocol != "telnet" {
 		return "", fmt.Errorf("session %d is not telnet", sessionID)
 	}
-	return a.telnetDial(sv.Host, sv.Port)
+	tabID, err := a.telnetDial(sv.Host, sv.Port)
+	if err == nil {
+		a.noteTab(tabID, sessionID, sv.Name, sv.Protocol)
+	}
+	return tabID, err
 }
 
 // TelnetQuickConnect opens a Telnet terminal to host:port (quick-connect bar and tests).

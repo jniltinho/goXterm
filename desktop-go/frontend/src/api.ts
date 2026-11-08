@@ -135,6 +135,8 @@ export const Disconnect = (tabId: string) => call<void>("Disconnect", tabId);
 // MultiExec: with it on, input typed in a selected terminal goes to every selected terminal.
 export const SetMultiExec = (enabled: boolean) => call<void>("SetMultiExec", enabled);
 export const SelectMultiExec = (tabId: string, selected: boolean) => call<void>("SelectMultiExec", tabId, selected);
+// The user's answer to an agent approval prompt ("agent:approval").
+export const AgentApprove = (id: number, approve: boolean) => call<void>("AgentApprove", id, approve);
 export const HasDemo = () => call<boolean>("HasDemo");
 export const ConnectDemo = () => call<string>("ConnectDemo");
 

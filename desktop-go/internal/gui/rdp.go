@@ -70,6 +70,9 @@ func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 		a.rdpSave[view.TabID] = saver // stored by RdpStart once the login worked
 		a.mu.Unlock()
 	}
+	if err == nil {
+		a.noteTab(view.TabID, sessionID, asString(m["name"]), "rdp")
+	}
 	return view, err
 }
 

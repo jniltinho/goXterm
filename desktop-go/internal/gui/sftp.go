@@ -54,7 +54,11 @@ func (a *App) SftpConnect(sessionID int64) (*SftpSession, error) {
 		return nil, err
 	}
 	_ = saver.commit() // a failed save only means the next login asks again
-	return a.registerRemote(c, "s")
+	view, err := a.registerRemote(c, "s")
+	if err == nil {
+		a.noteTab(view.TabID, sessionID, asString(m["name"]), "sftp")
+	}
+	return view, err
 }
 
 // FtpConnect opens an FTP/FTPS session (mode "plain"/"explicit"/"implicit") for a saved session.
@@ -88,7 +92,11 @@ func (a *App) FtpConnect(sessionID int64, mode string) (*SftpSession, error) {
 	if saver != nil {
 		_ = saver.commit()
 	}
-	return a.registerRemote(c, "f")
+	view, err := a.registerRemote(c, "f")
+	if err == nil {
+		a.noteTab(view.TabID, sessionID, sv.Name, "ftp")
+	}
+	return view, err
 }
 
 // HasSftpDemo / ConnectSftpDemo auto-open an SFTP pane to RXT_DEMO_SSH (lab/demo only).

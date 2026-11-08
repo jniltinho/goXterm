@@ -1,10 +1,9 @@
-//go:build !linux
+//go:build !linux && !darwin && !windows
 
 package control
 
 import (
 	"errors"
-	"net"
 )
 
 // shortcut: non-Linux transport stubs so the app cross-compiles. macOS gets the Unix-socket transport
@@ -15,13 +14,13 @@ var errUnsupported = errors.New("agent control is not available on this platform
 // Listener is the control listener; on this platform it is a stub that never starts.
 type Listener struct{}
 
-func (l *Listener) Accept() (net.Conn, error) { return nil, errUnsupported }
-func (l *Listener) Close() error              { return nil }
+func (l *Listener) Accept() (Conn, error) { return nil, errUnsupported }
+func (l *Listener) Close() error          { return nil }
 
 // RuntimeDir / Listen / Connect report unsupported until the platform transport lands.
 func RuntimeDir() (string, error)      { return "", errUnsupported }
 func Listen(string) (*Listener, error) { return nil, errUnsupported }
-func Connect(string) (net.Conn, error) { return nil, errUnsupported }
+func Connect(string) (Conn, error)     { return nil, errUnsupported }
 
 // IsNotRunning reports whether err means there is no running instance to connect to.
 func IsNotRunning(err error) bool { return errors.Is(err, errUnsupported) }

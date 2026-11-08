@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"go.bug.st/serial"
 )
@@ -95,6 +96,39 @@ func (s *Session) Write(p []byte) error {
 	}
 	_, err := s.port.Write(p)
 	return err
+}
+
+// SendBreak holds a break condition on the line for ms milliseconds (agent serial_send_break).
+func (s *Session) SendBreak(ms uint64) error {
+	if err := s.open(); err != nil {
+		return err
+	}
+	return s.port.Break(time.Duration(ms) * time.Millisecond)
+}
+
+// SetLines sets DTR and/or RTS; a nil value leaves that line as it is (agent serial_set_lines).
+func (s *Session) SetLines(dtr, rts *bool) error {
+	if err := s.open(); err != nil {
+		return err
+	}
+	if dtr != nil {
+		if err := s.port.SetDTR(*dtr); err != nil {
+			return err
+		}
+	}
+	if rts != nil {
+		return s.port.SetRTS(*rts)
+	}
+	return nil
+}
+
+func (s *Session) open() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return fmt.Errorf("the serial port has closed")
+	}
+	return nil
 }
 
 // Resize is a no-op: a serial console has no window size.
