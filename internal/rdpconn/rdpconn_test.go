@@ -169,7 +169,8 @@ func TestLabRDPClipboard(t *testing.T) {
 // (connectivity/decode check only — no input is sent, nothing on the server is changed). All
 // connection details, including the password, come from env so no credentials live in the source.
 // Skipped unless RXT_RDP_REAL=1. Env: RXT_RDP_HOST, RXT_RDP_PORT (default 3389), RXT_RDP_USER,
-// RXT_RDP_PASS, RXT_RDP_PROTO (ssl|nla|std, default nla), RXT_RDP_LAYOUT (keyboard layout, e.g. 0x0416).
+// RXT_RDP_PASS, RXT_RDP_PROTO (ssl|nla|std, default nla), RXT_RDP_LAYOUT (keyboard layout, e.g. 0x0416),
+// RXT_RDP_W / RXT_RDP_H (desktop size, default 1024x768), RXT_RDP_HOLD (stay connected, e.g. 15s).
 func TestRealRDP(t *testing.T) {
 	if os.Getenv("RXT_RDP_REAL") == "" {
 		t.Skip("set RXT_RDP_REAL=1 with RXT_RDP_HOST/USER/PASS to run")
@@ -183,7 +184,7 @@ func TestRealRDP(t *testing.T) {
 	s, frame, closed := dial(t, Config{
 		Host: os.Getenv("RXT_RDP_HOST"), Port: port,
 		User: os.Getenv("RXT_RDP_USER"), Password: os.Getenv("RXT_RDP_PASS"),
-		Width: 1024, Height: 768, Protocol: proto,
+		Width: envInt("RXT_RDP_W", 1024), Height: envInt("RXT_RDP_H", 768), Protocol: proto,
 		LegacyTLS: os.Getenv("RXT_RDP_LEGACY") != "", KeyboardLayout: uint32(layout),
 	})
 	defer s.Close()
@@ -191,6 +192,28 @@ func TestRealRDP(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	waitFrame(t, frame, closed, 30*time.Second)
+	if d, _ := time.ParseDuration(os.Getenv("RXT_RDP_HOLD")); d > 0 { // stay connected, e.g. 15s
+		n, area, end := 0, 0, time.After(d)
+		for held := true; held; {
+			select {
+			case err := <-closed:
+				t.Fatalf("closed while held: %v", err)
+			case r := <-frame:
+				n, area = n+1, area+r.W*r.H
+			case <-end:
+				held = false
+			}
+		}
+		t.Logf("held %v: %d more updates, %d px (first rectangle of each)", d, n, area)
+	}
+}
+
+// envInt reads a positive integer from the environment, or def.
+func envInt(k string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(k)); err == nil && v > 0 {
+		return v
+	}
+	return def
 }
 
 // TestEncodeCropsPadding: an update whose bitmap is padded to 4 px wide but covers 2 px on screen

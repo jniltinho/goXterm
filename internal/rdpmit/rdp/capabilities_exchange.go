@@ -1,18 +1,45 @@
 package rdp
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+
+	"rustxterm-go/internal/rdpmit/logging"
 	"rustxterm-go/internal/rdpmit/protocol/pdu"
 )
 
-func (c *Client) capabilitiesExchange() error {
-	_, wire, err := c.mcsLayer.Receive()
-	if err != nil {
-		return err
-	}
+// maxSkippedBeforeDemandActive bounds the PDUs skipped while waiting for the Demand Active.
+const maxSkippedBeforeDemandActive = 64
 
+func (c *Client) capabilitiesExchange() error {
+	// rustxterm: wait for the Demand Active, skipping any other PDU the server sends first (upstream
+	// decoded the first PDU as a Demand Active and failed with EOF on anything else).
 	var resp pdu.ServerDemandActive
-	if err = resp.Deserialize(wire); err != nil {
-		return err
+	for skipped := 0; ; skipped++ {
+		_, wire, err := c.mcsLayer.Receive()
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return fmt.Errorf("the server closed the connection before the session started (%w)", err)
+		}
+		if err != nil {
+			return err
+		}
+		b, err := io.ReadAll(wire)
+		if err != nil {
+			return err
+		}
+		var h pdu.ShareControlHeader
+		if h.Deserialize(bytes.NewReader(b)) == nil && h.PDUType.IsDemandActive() {
+			if err = resp.Deserialize(bytes.NewReader(b)); err != nil {
+				return fmt.Errorf("demand active: %w", err)
+			}
+			break
+		}
+		if skipped >= maxSkippedBeforeDemandActive {
+			return errors.New("no Demand Active from the server")
+		}
+		logging.Debug("RDP: skipping PDU type 0x%04X (%d bytes) before Demand Active", uint16(h.PDUType), len(b))
 	}
 
 	c.shareID = resp.ShareID
