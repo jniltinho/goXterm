@@ -227,3 +227,16 @@ func TestLabX11Forwarding(t *testing.T) {
 		t.Fatalf("no X11 connection reached the local display; output %q", out)
 	}
 }
+
+// TestLabNoPassword: with password and keyboard-interactive turned off, a password-only account is
+// refused without the prompt ever being called.
+func TestLabNoPassword(t *testing.T) {
+	lab(t)
+	asked := false
+	_, err := DialClient(Config{Host: "127.0.0.1", Port: 2222, User: "alice", HostKey: ssh.InsecureIgnoreHostKey(),
+		AskPassword: func() (string, error) { asked = true; return "lab-alice-pass", nil },
+		NoPassword:  true, NoKeyboardInteractive: true})
+	if err == nil || asked {
+		t.Fatalf("err = %v, asked = %v: want a refusal without a prompt", err, asked)
+	}
+}

@@ -53,11 +53,13 @@ func (a *App) Connect(sessionID int64) (string, error) {
 	cfg := sshconn.Config{
 		Host: sv.Host, Port: sv.Port, User: sv.User, Password: password,
 		KeyFile: asString(sshOpt["key_file"]), UseAgent: asBool(sshOpt["use_agent"]),
-		KeepaliveSecs:   int(asInt64(sshOpt["keepalive_secs"])),
-		AgentForwarding: asBool(sshOpt["agent_forwarding"]),
-		X11:             asBool(sshOpt["x11_forwarding"]),
-		RemoteCommand:   asString(sshOpt["remote_command"]),
-		StartupDir:      asString(sshOpt["startup_dir"]),
+		KeepaliveSecs:         int(asInt64(sshOpt["keepalive_secs"])),
+		AgentForwarding:       asBool(sshOpt["agent_forwarding"]),
+		NoPassword:            sshOpt["allow_password"] == false,
+		NoKeyboardInteractive: sshOpt["allow_keyboard_interactive"] == false,
+		X11:                   asBool(sshOpt["x11_forwarding"]),
+		RemoteCommand:         asString(sshOpt["remote_command"]),
+		StartupDir:            asString(sshOpt["startup_dir"]),
 	}
 	for _, kv := range asList(sshOpt["env"]) { // [["NAME","value"], …]
 		if p := asList(kv); len(p) == 2 {
