@@ -100,7 +100,7 @@ cat > /tmp/release-notes-$NEXT.md << 'NOTES'
 - `rustxterm-go-X.Y.Z_macos_universal.zip` (unsigned: `xattr -dr com.apple.quarantine "rustXterm (Go).app"`)
 - `SHA256SUMS`
 
-**Full Changelog**: https://github.com/jniltinho/rustXterm/compare/vPREV...vNEXT
+**Full Changelog**: https://github.com/jniltinho/goXterm/compare/vPREV...vNEXT
 NOTES
 gh release edit $NEXT --title "$NEXT" --notes-file /tmp/release-notes-$NEXT.md
 ```

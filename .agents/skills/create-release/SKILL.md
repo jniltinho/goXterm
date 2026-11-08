@@ -111,7 +111,7 @@ cat > /tmp/release-notes-$NEXT.md << 'NOTES'
 - `rustxterm-X.Y.Z-x86_64.tar.gz` (binary, .desktop, icon, licenses)
 - `SHA256SUMS`
 
-**Full Changelog**: https://github.com/jniltinho/rustXterm/compare/vPREV...vNEXT
+**Full Changelog**: https://github.com/jniltinho/goXterm/compare/vPREV...vNEXT
 NOTES
 gh release edit $NEXT --title "$NEXT" --notes-file /tmp/release-notes-$NEXT.md
 ```
