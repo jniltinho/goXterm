@@ -258,6 +258,12 @@ func subMap(m map[string]any, key string) map[string]any {
 
 func asBool(v any) bool { b, _ := v.(bool); return b }
 
+// asList reads a JSON array (nil for anything else).
+func asList(v any) []any {
+	l, _ := v.([]any)
+	return l
+}
+
 func asString(v any) string {
 	if s, ok := v.(string); ok {
 		return s
