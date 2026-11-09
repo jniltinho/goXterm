@@ -23,8 +23,8 @@
 
 ## 4. RemoteFX and alpha (milestone 4)
 
-- [ ] 4.1 Vendor go-rdp `codec/rfx` with its tests; fix per-context entropy mode, quant index checks, tile bounds, region clipping
-- [ ] 4.2 CAVIDEO in WireToSurface1; CODEC_ALPHA (raw and RLE)
+- [x] 4.1 Vendor go-rdp `codec/rfx` with its tests; fix per-context entropy mode, quant index checks, tile bounds, region clipping
+- [x] 4.2 CAVIDEO in WireToSurface1; CODEC_ALPHA (raw and RLE)
 
 ## 5. Live verification and enabling (milestone 5)
 

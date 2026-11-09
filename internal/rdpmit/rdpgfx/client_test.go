@@ -6,6 +6,7 @@ import (
 	"errors"
 	"image"
 	"math/rand"
+	"os"
 	"testing"
 )
 
@@ -286,5 +287,47 @@ func TestClearCodecOnSurface(t *testing.T) {
 	if err := h.c.Data(raw(pdu(cmdWireToSurface1, uint16(1), uint16(codecClear), uint8(pixelXRGB),
 		uint16(0), uint16(0), uint16(1), uint16(1), uint32(2), []byte{0, 7}))); err == nil || !errors.Is(err, Err) {
 		t.Fatalf("bad stream: %v", err)
+	}
+}
+
+func TestAlphaCodec(t *testing.T) {
+	h := newHarness(t)
+	h.send(t, confirm(CapVersion81, capsThin), reset(16, 16),
+		pdu(cmdCreateSurface, uint16(1), uint16(16), uint16(16), uint8(pixelARGB)))
+	s := h.c.surfaces[1]
+	alphaAt := func(x, y int) byte { return s.pix[(y*s.pw+x)*4+3] }
+	// raw 2×2 at (1,1), then RLE 3×1 at (0,5): 0x10 ×2, 0x20 ×1 (with the 0xFF long-count form)
+	h.send(t, pdu(cmdWireToSurface1, uint16(1), uint16(codecAlpha), uint8(pixelARGB),
+		uint16(1), uint16(1), uint16(3), uint16(3), uint32(8), []byte{0x4C, 0x41, 0, 0, 1, 2, 3, 4}))
+	h.send(t, pdu(cmdWireToSurface1, uint16(1), uint16(codecAlpha), uint8(pixelARGB),
+		uint16(0), uint16(5), uint16(3), uint16(6), uint32(10), []byte{0x4C, 0x41, 1, 0, 0x10, 0xFF, 2, 0, 0x20, 1}))
+	if alphaAt(1, 1) != 1 || alphaAt(2, 2) != 4 || alphaAt(0, 5) != 0x10 || alphaAt(1, 5) != 0x10 || alphaAt(2, 5) != 0x20 || alphaAt(3, 5) != 0xFF {
+		t.Fatalf("alpha %d %d %d %d %d %d", alphaAt(1, 1), alphaAt(2, 2), alphaAt(0, 5), alphaAt(1, 5), alphaAt(2, 5), alphaAt(3, 5))
+	}
+	if err := h.c.Data(raw(pdu(cmdWireToSurface1, uint16(1), uint16(codecAlpha), uint8(pixelARGB),
+		uint16(0), uint16(0), uint16(2), uint16(1), uint32(6), []byte{0x4C, 0x41, 1, 0, 9, 3}))); err == nil {
+		t.Fatal("alpha run past the destination accepted")
+	}
+}
+
+func TestRemoteFXOnSurface(t *testing.T) {
+	h := newHarness(t)
+	hdr, _ := os.ReadFile("../codec/rfx/testdata/msrdprfx-header.bin")
+	data, _ := os.ReadFile("../codec/rfx/testdata/msrdprfx-data.bin")
+	msg := append(hdr, data...)
+	h.send(t, confirm(CapVersion81, capsThin), reset(128, 128),
+		pdu(cmdCreateSurface, uint16(1), uint16(128), uint16(128), uint8(pixelXRGB)),
+		pdu(cmdMapSurfaceToOutput, uint16(1), uint16(0), uint32(0), uint32(0)))
+	h.send(t, pdu(cmdStartFrame, uint32(0), uint32(3)),
+		pdu(cmdWireToSurface1, uint16(1), uint16(codecCAVideo), uint8(pixelXRGB),
+			uint16(32), uint16(16), uint16(96), uint16(80), uint32(len(msg)), msg),
+		pdu(cmdEndFrame, uint32(3)))
+	f := h.frames[len(h.frames)-1]
+	if len(f.Dirty) != 1 || f.Dirty[0] != image.Rect(32, 16, 96, 80) {
+		t.Fatalf("dirty %v", f.Dirty)
+	}
+	// reference pixel 0 of MS-RDPRFX 4.2.4.4 is 0x229CDF, drawn at the destination origin
+	if got := pixelAt(f, 32, 16); got[0] < 0x21 || got[0] > 0x23 || got[2] < 0xDE || got[2] > 0xE0 {
+		t.Fatalf("pixel %v", got)
 	}
 }

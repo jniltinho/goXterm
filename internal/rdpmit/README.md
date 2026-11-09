@@ -112,3 +112,14 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   ClearCodec decoder with residual, bands/vBar and shortVBar caches, subcodecs (uncompressed,
   NSCodec, RLEX) and glyph cache, all bounded; tests with the MS-RDPEGFX 4.1.1.1 examples.
   `codec/nscodec.go`: `DecodeNSCodec` (top-down, alpha plane kept) for the NSCodec subcodec.
+- `codec/rfx`: upstream `internal/codec/rfx` vendored (non-test `differential.go`, `dwt.go`,
+  `quant.go`, `rfx.go`, `rlgr.go`, `tile.go`, `ycbcr.go` and their tests; the tests import
+  `codec/rfx/internal/{assert,require}`, a small stand-in for testify). Changed: `DecodeTile` takes
+  the context's entropy mode for all three components (upstream fixed RLGR1 for Y and RLGR3 for
+  chroma); `DecodeTileWithBuffers` removed; the DWT buffer is per call (upstream shared a package
+  buffer, a data race). Not copied: `message.go` (its block offsets skipped codecId/channelId and
+  read the tileset subtype as a block type, so no server message decoded), replaced by
+  `decoder.go` (new, MS-RDPRFX 2.2.2, checked against FreeRDP): header state across messages,
+  quant indices checked, region clipping, tiles decoded in parallel; tested with the MS-RDPRFX 4.2
+  example and its reference image (`testdata/`).
+- `rdpgfx/codecs.go`: RemoteFX (CAVIDEO) and the alpha codec in WireToSurface1.
