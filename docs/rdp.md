@@ -96,6 +96,19 @@ Tested against Windows Server 2008 R2 (`dockur/windows`) at 1688×968.
 Prefer enabling TLS 1.2 on the server when you can; the legacy option is a client-side workaround, not
 a fix for the server.
 
+## Picture quality: the graphics pipeline (RDP 8+)
+
+Windows Server 2012 and later (and Windows 8/10/11) draw the desktop through the **RDP Graphics
+Pipeline** (MS-RDPEGFX), as `mstsc` and FreeRDP do: the client advertises versions 8 and 8.1 as a thin
+client, without H.264, and decodes RemoteFX, ClearCodec, planar, uncompressed and alpha content.
+Gradients and colored edges come out as the server encodes them, without the banding of the older
+NSCodec surface bits. Windows Server 2008 R2 and xrdp without GFX never open the pipeline and keep
+the lossless bitmap updates.
+
+Once the server opens the pipeline it sends no bitmap updates, so a pipeline problem ends the session
+with an error naming `RXT_RDP_NO_GFX=1`. Start goXterm with that variable set to fall back to the
+previous path while the problem is reported.
+
 ## Certificates and trust
 
 - TLS servers present a certificate; Windows uses a self-signed one by default. A certificate the
@@ -118,6 +131,7 @@ a fix for the server.
 | `certificate not trusted for HOST:PORT` | You rejected the certificate prompt | Connect again and compare the fingerprint |
 | `the server only offers legacy TLS (TLS 1.0/1.1)` | Old server (2008/2008 R2) that only speaks TLS 1.0 | Tick **Allow legacy TLS 1.0/1.1** |
 | `the server closed the connection before the session started` | The server dropped the connection after the logon (licensing, policy or a session limit) | Check the server's event log (TerminalServices-*) and the RD licensing mode |
+| `RDP graphics pipeline: …` | The server sent graphics data this client cannot decode (or broke the protocol) | Start goXterm with `RXT_RDP_NO_GFX=1` and report the message |
 | `dial tcp …: i/o timeout` / `connection refused` | Port 3389 blocked, RDP disabled or wrong host | Check the firewall and "Allow remote connections to this computer" |
 
 ## Testing it yourself

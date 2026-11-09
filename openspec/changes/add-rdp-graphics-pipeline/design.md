@@ -52,8 +52,16 @@ registered with `AddStaticChannel` and get header-included chunks from every rec
 - The output is the mapped surface(s) blitted into a session framebuffer; changed rectangles per frame
   are merged and PNG-encoded as today; GFX frame ids never go through `AckFrames` (that is the legacy
   surface-bits acknowledge).
-- The GFX flag (RNS_UD_CS_SUPPORT_DYNVC_GFX_PROTOCOL) is set only on connections from `rdpconn`, and
-  only once all mandatory codecs are in place (milestone 5); `RXT_RDP_NO_GFX=1` keeps it off.
+- The GFX flag (RNS_UD_CS_SUPPORT_DYNVC_GFX_PROTOCOL) is set on every `rdpconn` connection unless
+  `RXT_RDP_NO_GFX=1`; the graphics channel open is logged once.
+
+## Live findings (milestone 5)
+- Windows 11 and Windows Server 2022 confirm 8.1 with THINCLIENT and send RemoteFX (CAVIDEO) for the
+  desktop and uncompressed for small areas; neither chose ClearCodec or planar in these sessions.
+- Without THINCLIENT, Windows 11 sends progressive RemoteFX even for version 8: THINCLIENT is required,
+  and the WireToSurface2 refusal shows as the expected session error.
+- go-rdp's RLGR decoder treated the end of a component's bits as an error and its TPKT reader did
+  single `Read`s; both are fixed (`internal/rdpmit/README.md`).
 
 ## Risks
 - A server that confirms GFX but uses a codec this client does not decode: the session ends with an

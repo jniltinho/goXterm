@@ -1,5 +1,7 @@
 package rfx
 
+import "math/bits"
+
 // BitStream provides bit-level reading from a byte slice.
 // It uses a 32-bit accumulator for efficient bit extraction.
 // Bits are read MSB-first (most significant bit first).
@@ -129,270 +131,146 @@ func (bs *BitStream) RemainingBits() int {
 }
 
 // RLGRDecode decodes RLGR-encoded data into coefficient array.
-// mode: RLGR1 for Y component, RLGR3 for Cb/Cr
+// mode: RLGR1 or RLGR3, from the context (the same for all three components)
 // output: pre-allocated int16 slice of size TilePixels (4096)
+//
+// rustxterm: rewritten after MS-RDPRFX 3.1.8.1.7.3 and FreeRDP's rfx_rlgr_decode. The stream ends
+// when the bits run out in the middle of a code (encoders pad with zero bits) and the coefficients
+// not reached stay zero; upstream reported that normal end as an error, so real Windows tiles
+// failed. Values past the 4,096th coefficient are ignored.
 func RLGRDecode(data []byte, mode int, output []int16) error {
 	if len(output) < TilePixels {
 		return ErrBufferTooSmall
 	}
-
-	// Clear output buffer
-	for i := range output {
+	for i := range output[:TilePixels] {
 		output[i] = 0
 	}
-
-	if len(data) == 0 {
-		return nil
-	}
-
-	bs := NewBitStream(data)
-
-	// Initialize adaptive parameters (MS-RDPRFX 3.1.8.1.7.1)
-	k := uint32(1)   // Golomb-Rice parameter for run-length
-	kp := uint32(8)  // Scaled k parameter (k = kp >> LSGR)
-	kr := uint32(1)  // Golomb-Rice parameter for magnitudes
-	krp := uint32(8) // Scaled kr parameter
-
+	b := rlgrBits{data: data, left: 8 * len(data)}
+	k, kp := uint32(1), uint32(1<<LSGR)
+	kr, krp := uint32(1), uint32(1<<LSGR)
 	idx := 0
-
-	for idx < TilePixels && bs.RemainingBits() > 0 {
-		if k != 0 {
-			// Run/Literal mode (k > 0)
-			// Decode run of zeros followed by a non-zero value
-
-			// Count unary prefix (number of full run-length codes)
-			nIdx := bs.CountLeadingZeros()
-			if bs.RemainingBits() == 0 {
-				return ErrRLGRDecodeError
-			}
-
-			// Calculate run length
-			runLength := 0
-			for i := 0; i < nIdx; i++ {
-				runLength += 1 << k
-
-				// Update k parameter (increase after each full run)
-				kp += UP_GR
-				if kp > KPMAX {
-					kp = KPMAX
-				}
-				k = kp >> LSGR
-			}
-
-			// Read remainder bits for partial run
-			if k > 0 && bs.RemainingBits() >= int(k) {
-				remainder := bs.ReadBits(int(k))
-				runLength += int(remainder)
-			}
-
-			// Output zeros for run
-			for i := 0; i < runLength && idx < TilePixels; i++ {
-				output[idx] = 0
-				idx++
-			}
-
-			if idx >= TilePixels {
+	up := func(p *uint32, by uint32) { *p = min(*p+by, KPMAX) }
+	down := func(p *uint32, by uint32) { *p -= min(*p, by) }
+	put := func(v int16) {
+		if idx < TilePixels {
+			output[idx] = v
+		}
+		idx++
+	}
+	// grCode reads a Golomb-Rice code (unary prefix of ones, then kr bits) and adapts kr.
+	grCode := func() (uint32, bool) {
+		vk, ok := b.run(1)
+		if !ok || b.left < int(kr) {
+			return 0, false
+		}
+		code := b.read(int(kr)) | uint32(vk)<<kr // #nosec G115 -- vk is bounded by the data size
+		if vk == 0 {
+			down(&krp, 2)
+		} else if vk != 1 {
+			up(&krp, uint32(vk)) // #nosec G115
+		}
+		kr = krp >> LSGR
+		return code, true
+	}
+	for idx < TilePixels && b.left > 0 {
+		if k != 0 { // run-length mode: runs of zeros, then one nonzero value
+			vk, ok := b.run(0)
+			if !ok {
 				break
 			}
-
-			// Decode the non-zero value
-			// Sign bit first
-			if bs.RemainingBits() == 0 {
-				return ErrRLGRDecodeError
+			for ; vk > 0; vk-- {
+				idx += 1 << k
+				up(&kp, UP_GR)
+				k = kp >> LSGR
 			}
-			sign := bs.ReadBit()
-
-			// Magnitude using GR coding (count ones, then kr bits)
-			nIdx = bs.CountLeadingOnes()
-			if bs.RemainingBits() == 0 && nIdx == 0 {
-				return ErrRLGRDecodeError
+			if b.left < int(k) {
+				break
 			}
-
-			mag := uint32(0)
-			if kr > 0 && bs.RemainingBits() >= int(kr) {
-				mag = bs.ReadBits(int(kr))
+			idx += int(b.read(int(k)))
+			if b.left < 1 {
+				break
 			}
-			mag |= uint32(nIdx) << kr // #nosec G115
-
-			// Update kr parameter
-			if nIdx == 0 {
-				if krp >= 2 {
-					krp -= 2
-				} else {
-					krp = 0
-				}
-			} else if nIdx > 1 {
-				krp += uint32(nIdx) // #nosec G115
-				if krp > KPMAX {
-					krp = KPMAX
-				}
+			sign := b.read(1)
+			code, ok := grCode()
+			if !ok {
+				break
 			}
-			kr = krp >> LSGR
-
-			// Update k parameter (decrease after value)
-			if kp >= DN_GR {
-				kp -= DN_GR
+			down(&kp, DN_GR)
+			k = kp >> LSGR
+			v := int16(code + 1) // #nosec G115 -- truncation as FreeRDP's INT16 cast
+			if sign != 0 {
+				v = -v
+			}
+			put(v)
+			continue
+		}
+		code, ok := grCode() // Golomb-Rice mode
+		if !ok {
+			break
+		}
+		if mode == RLGR1 {
+			if code == 0 {
+				up(&kp, UQ_GR)
 			} else {
-				kp = 0
+				down(&kp, DQ_GR)
 			}
 			k = kp >> LSGR
-
-			// Apply sign and store (magnitude is offset by 1)
-			value := int16(mag + 1) // #nosec G115
-			if sign != 0 {
-				value = -value
-			}
-			output[idx] = value
-			idx++
-
-		} else {
-			// GR mode (k == 0) - no run-length coding
-			if mode == RLGR1 {
-				// RLGR1: Single value coding with interleaved sign
-				nIdx := bs.CountLeadingOnes()
-				if bs.RemainingBits() == 0 && nIdx == 0 {
-					return ErrRLGRDecodeError
-				}
-
-				mag := uint32(0)
-				if kr > 0 && bs.RemainingBits() >= int(kr) {
-					mag = bs.ReadBits(int(kr))
-				}
-				mag |= uint32(nIdx) << kr // #nosec G115
-
-				// Update kr
-				if nIdx == 0 {
-					if krp >= 2 {
-						krp -= 2
-					} else {
-						krp = 0
-					}
-				} else if nIdx > 1 {
-					krp += uint32(nIdx) // #nosec G115
-					if krp > KPMAX {
-						krp = KPMAX
-					}
-				}
-				kr = krp >> LSGR
-
-				// Decode signed value (sign interleaved in LSB)
-				var value int16
-				if mag == 0 {
-					value = 0
-					// Update k (increase for zero)
-					kp += UQ_GR
-					if kp > KPMAX {
-						kp = KPMAX
-					}
-					k = kp >> LSGR
-				} else {
-					// Sign is LSB of magnitude
-					if (mag & 1) != 0 {
-						value = -int16((mag + 1) >> 1) // #nosec G115
-					} else {
-						value = int16(mag >> 1) // #nosec G115
-					}
-					// Update k (decrease for non-zero)
-					if kp >= DQ_GR {
-						kp -= DQ_GR
-					} else {
-						kp = 0
-					}
-					k = kp >> LSGR
-				}
-
-				output[idx] = value
-				idx++
-
-			} else {
-				// RLGR3: Paired value coding
-				nIdx := bs.CountLeadingOnes()
-				if bs.RemainingBits() == 0 && nIdx == 0 {
-					return ErrRLGRDecodeError
-				}
-
-				code := uint32(0)
-				if kr > 0 && bs.RemainingBits() >= int(kr) {
-					code = bs.ReadBits(int(kr))
-				}
-				code |= uint32(nIdx) << kr // #nosec G115
-
-				// Update kr
-				if nIdx == 0 {
-					if krp >= 2 {
-						krp -= 2
-					} else {
-						krp = 0
-					}
-				} else if nIdx > 1 {
-					krp += uint32(nIdx) // #nosec G115
-					if krp > KPMAX {
-						krp = KPMAX
-					}
-				}
-				kr = krp >> LSGR
-
-				// Split code into two values
-				// nIdx2 = number of bits needed to represent code
-				nIdx2 := 0
-				if code > 0 {
-					temp := code
-					for temp > 0 {
-						temp >>= 1
-						nIdx2++
-					}
-				}
-
-				var val1, val2 uint32
-				if nIdx2 > 0 {
-					if bs.RemainingBits() < nIdx2 {
-						return ErrRLGRDecodeError
-					}
-					val1 = bs.ReadBits(nIdx2)
-				}
-				val2 = code - val1
-
-				// Update k based on values
-				if val1 != 0 && val2 != 0 {
-					if kp >= 2*DQ_GR {
-						kp -= 2 * DQ_GR
-					} else {
-						kp = 0
-					}
-				} else if val1 == 0 && val2 == 0 {
-					kp += 2 * UQ_GR
-					if kp > KPMAX {
-						kp = KPMAX
-					}
-				}
-				k = kp >> LSGR
-
-				// Decode and store first value
-				if val1 == 0 {
-					output[idx] = 0
-				} else if (val1 & 1) != 0 {
-					output[idx] = -int16((val1 + 1) >> 1) // #nosec G115
-				} else {
-					output[idx] = int16(val1 >> 1) // #nosec G115
-				}
-				idx++
-
-				if idx >= TilePixels {
-					break
-				}
-
-				// Decode and store second value
-				if val2 == 0 {
-					output[idx] = 0
-				} else if (val2 & 1) != 0 {
-					output[idx] = -int16((val2 + 1) >> 1) // #nosec G115
-				} else {
-					output[idx] = int16(val2 >> 1) // #nosec G115
-				}
-				idx++
-			}
+			put(twoMagSign(code))
+			continue
 		}
+		// RLGR3: the code is the sum of two values; the first is sent in as many bits as the code
+		n := bits.Len32(code)
+		if b.left < n {
+			break
+		}
+		v1 := b.read(n)
+		v2 := code - v1
+		if v1 != 0 && v2 != 0 {
+			down(&kp, 2*DQ_GR)
+		} else if v1 == 0 && v2 == 0 {
+			up(&kp, 2*UQ_GR)
+		}
+		k = kp >> LSGR
+		put(twoMagSign(v1))
+		put(twoMagSign(v2))
 	}
-
 	return nil
+}
+
+// twoMagSign decodes a value whose sign is the low bit: 2*mag - sign.
+func twoMagSign(v uint32) int16 {
+	if v&1 != 0 {
+		return -int16((v + 1) >> 1) // #nosec G115
+	}
+	return int16(v >> 1) // #nosec G115
+}
+
+// rlgrBits reads MSB-first bits; left counts the bits that remain.
+type rlgrBits struct {
+	data []byte
+	pos  int
+	left int
+}
+
+func (b *rlgrBits) read(n int) uint32 {
+	var v uint32
+	for ; n > 0; n-- {
+		v = v<<1 | uint32(b.data[b.pos>>3]>>(7-b.pos&7)&1)
+		b.pos++
+		b.left--
+	}
+	return v
+}
+
+// run counts consecutive bits equal to bit and consumes the terminating opposite bit; false when
+// the data ends first.
+func (b *rlgrBits) run(bit uint32) (int, bool) {
+	n := 0
+	for b.left > 0 {
+		if b.read(1) != bit {
+			return n, true
+		}
+		n++
+	}
+	return n, false
 }

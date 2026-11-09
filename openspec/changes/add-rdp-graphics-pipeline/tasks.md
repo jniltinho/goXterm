@@ -28,6 +28,6 @@
 
 ## 5. Live verification and enabling (milestone 5)
 
-- [ ] 5.1 `rdpconn` sets the GFX flag unless `RXT_RDP_NO_GFX=1`; one info log when the graphics channel opens
-- [ ] 5.2 Windows RDP 8+ VM: desktop over GFX (ClearCodec, planar, RemoteFX seen), gradient wallpaper not banded, input works, long session, reconnect
-- [ ] 5.3 Lab xrdp still connects (`make lab-test`); `make check test layers guard` pass
+- [x] 5.1 `rdpconn` sets the GFX flag unless `RXT_RDP_NO_GFX=1`; one log line when the graphics channel opens
+- [x] 5.2 Windows RDP 8+ VMs: Windows 11 (NLA) and Windows Server 2022 (Standard RDP Security) over GFX 8.1 THINCLIENT, gradient wallpaper not banded (vs NSCodec), input, a 2.5-minute session, repeated reconnects. Both servers chose only RemoteFX and uncompressed; ClearCodec and planar are covered by the specification examples only. Fixed on the way: RLGR end-of-stream, TPKT short reads
+- [x] 5.3 Lab xrdp still connects (`make lab-test`); `make check test layers guard` pass

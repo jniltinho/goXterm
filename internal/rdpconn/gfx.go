@@ -6,22 +6,20 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"log"
 	"os"
 
-	"rustxterm-go/internal/rdpmit/logging"
 	"rustxterm-go/internal/rdpmit/protocol/drdynvc"
 	"rustxterm-go/internal/rdpmit/rdp"
 	"rustxterm-go/internal/rdpmit/rdpgfx"
 )
 
-// gfxReady gates the graphics pipeline (MS-RDPEGFX) on real connections: once the server opens it,
-// it sends no bitmap updates, so it is advertised only when every codec Windows may use is decoded.
-const gfxReady = false
-
-// noGFXEnv disables the graphics pipeline for troubleshooting.
+// noGFXEnv disables the graphics pipeline (MS-RDPEGFX) for troubleshooting: once the server opens
+// it, it sends no bitmap updates, so a pipeline failure can only be worked around by not
+// advertising it.
 const noGFXEnv = "RXT_RDP_NO_GFX"
 
-func gfxEnabled() bool { return gfxReady && os.Getenv(noGFXEnv) != "1" }
+func gfxEnabled() bool { return os.Getenv(noGFXEnv) != "1" }
 
 // bandRows splits large changed areas into bands that are PNG-encoded in parallel.
 const bandRows = 128
@@ -37,7 +35,8 @@ func (s *Session) startGFX(c *rdp.Client) {
 			return &rdpgfx.Client{
 				OnFrame: s.gfxFrame,
 				OnOpen: func(version, flags uint32) {
-					logging.Info("RDP: graphics pipeline open (version 0x%08X, flags 0x%X)", version, flags)
+					// once per channel, at info: go-rdp's own logging is held at error level (rdpconn.go)
+					log.Printf("rdp: graphics pipeline open (version 0x%08X, flags 0x%X)", version, flags)
 				},
 			}
 		},

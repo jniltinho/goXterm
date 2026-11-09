@@ -123,3 +123,9 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   quant indices checked, region clipping, tiles decoded in parallel; tested with the MS-RDPRFX 4.2
   example and its reference image (`testdata/`).
 - `rdpgfx/codecs.go`: RemoteFX (CAVIDEO) and the alpha codec in WireToSurface1.
+- `codec/rfx/rlgr.go`: `RLGRDecode` rewritten after MS-RDPRFX 3.1.8.1.7.3 and FreeRDP: the stream
+  ends when the bits run out mid-code (encoder padding) and the rest stays zero; upstream reported
+  that as an error, so every Windows tile failed.
+- `protocol/tpkt/receive.go`: full reads of the TPKT header and payload (upstream used one `Read`;
+  a short read from the buffered connection zeroed the end of large PDUs, seen first as bad MACs
+  under standard RDP security with graphics pipeline traffic). `protocol/tpkt/receive_test.go` (new).
