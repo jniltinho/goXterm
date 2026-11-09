@@ -44,8 +44,8 @@ func TestStandardSecurityRefused(t *testing.T) {
 
 func TestAddStaticChannel(t *testing.T) {
 	c := &Client{}
-	c.AddStaticChannel("cliprdr", 0xc0200000, func([]byte) {})
-	c.AddStaticChannel("cliprdr", 0xc0200000, func([]byte) {}) // twice: requested once
+	c.AddStaticChannel("cliprdr", 0xc0200000, func([]byte) error { return nil })
+	c.AddStaticChannel("cliprdr", 0xc0200000, func([]byte) error { return nil }) // twice: requested once
 	if len(c.channels) != 1 || c.channels[0] != "cliprdr" || c.channelOptions["cliprdr"] != 0xc0200000 {
 		t.Fatalf("channels %v options %v", c.channels, c.channelOptions)
 	}

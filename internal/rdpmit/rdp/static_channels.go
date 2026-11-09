@@ -15,11 +15,13 @@ import (
 func (c *Client) SetTLSClientConfig(cfg *tls.Config) { c.tlsConfig = cfg }
 
 // AddStaticChannel requests the static virtual channel name with CHANNEL_DEF options; recv gets
-// every chunk the server sends on it (CHANNEL_PDU_HEADER included). Call it before Connect.
-func (c *Client) AddStaticChannel(name string, options uint32, recv func([]byte)) {
+// every chunk the server sends on it (CHANNEL_PDU_HEADER included). An error from recv ends the
+// receive loop that delivered the chunk (GetUpdate, or the connection sequence). Call it before
+// Connect.
+func (c *Client) AddStaticChannel(name string, options uint32, recv func([]byte) error) {
 	if c.channelOptions == nil {
 		c.channelOptions = map[string]uint32{}
-		c.channelHandlers = map[string]func([]byte){}
+		c.channelHandlers = map[string]func([]byte) error{}
 	}
 	if _, ok := c.channelHandlers[name]; !ok {
 		c.channels = append(c.channels, name)
@@ -27,6 +29,10 @@ func (c *Client) AddStaticChannel(name string, options uint32, recv func([]byte)
 	c.channelOptions[name] = options
 	c.channelHandlers[name] = recv
 }
+
+// SetEnableGFX advertises the graphics pipeline (RNS_UD_CS_SUPPORT_DYNVC_GFX_PROTOCOL in the client
+// core data); the caller runs the drdynvc channel that carries it. Set it before Connect.
+func (c *Client) SetEnableGFX(enable bool) { c.enableGFX = enable }
 
 // SendStaticChannel writes one channel chunk (CHANNEL_PDU_HEADER included) on the named channel.
 func (c *Client) SendStaticChannel(name string, chunk []byte) error {
@@ -47,7 +53,9 @@ func (c *Client) dispatchChannel(channelID uint16, wire io.Reader) (bool, error)
 			if err != nil {
 				return true, err
 			}
-			recv(data)
+			if err := recv(data); err != nil {
+				return true, fmt.Errorf("channel %s: %w", name, err)
+			}
 			return true, nil
 		}
 	}

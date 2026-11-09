@@ -146,7 +146,7 @@ func (s *Session) Start() error {
 	c.SetTLSClientConfig(tlsConfig(cfg))
 	if cfg.OnClipboard != nil {
 		s.clip.Send = func(b []byte) error { return c.SendStaticChannel(clipChannel, b) }
-		c.AddStaticChannel(clipChannel, clipOptions, s.clip.Receive)
+		c.AddStaticChannel(clipChannel, clipOptions, func(b []byte) error { s.clip.Receive(b); return nil })
 	}
 
 	s.mu.Lock()

@@ -90,3 +90,15 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
 - `rdp/nla.go`: bodgit/ntlmssp indexes AV-pair values from the server challenge without length
   checks (a 1-byte MsvAvFlags panics); the call is guarded and becomes an error. `rdp/nla_test.go`.
 - `rdp/security_test.go` (new): tests for the changes above.
+
+## Graphics pipeline (rustxterm additions, change `add-rdp-graphics-pipeline`)
+
+- `rdp/static_channels.go`: channel handlers return an error, which ends the receive loop that
+  delivered the chunk; `SetEnableGFX` sets RNS_UD_CS_SUPPORT_DYNVC_GFX_PROTOCOL in the core data
+  (`rdp/connect.go`). `rdp/get_update.go`: `GetUpdate` is a loop (upstream recursed on every PDU
+  without a bitmap). `rdp/channel_loop_test.go` (new).
+- `protocol/drdynvc` (new, written from MS-RDPEDYC): upstream's `internal/protocol/drdynvc` was not
+  vendored, its ZGFX is not the MS-RDPEGFX algorithm. Caps v2, create/close, bounded static-chunk and
+  DATA_FIRST/DATA reassembly.
+- `rdpgfx/zgfx.go`, `rdpgfx/pdu.go` (new, written from MS-RDPEGFX): RDP8 bulk decompression and
+  the RDPGFX capability PDUs (8 and 8.1, THINCLIENT, no AVC).

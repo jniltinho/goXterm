@@ -55,7 +55,7 @@ type Client struct {
 
 	// rustxterm: static virtual channels added with AddStaticChannel
 	channelOptions  map[string]uint32
-	channelHandlers map[string]func([]byte)
+	channelHandlers map[string]func([]byte) error
 
 	// NLA configuration
 	useNLA bool
@@ -78,6 +78,8 @@ type Client struct {
 
 	// RemoteFX-Image support
 	enableRFX bool
+	// rustxterm: advertise the graphics pipeline in the core data (SetEnableGFX)
+	enableGFX bool
 	// rustxterm: the server's RDP version from its core data (0x00080004 = RDP 5–7, 0x00080005+ = 8+)
 	serverVersion uint32
 

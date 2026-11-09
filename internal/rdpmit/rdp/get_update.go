@@ -17,6 +17,8 @@ var updateCounter atomic.Int64
 
 // GetUpdate reads the next screen update from the RDP server.
 // The returned Update contains raw bitmap data for rendering.
+// rustxterm: a loop instead of upstream's recursion, so a long run of PDUs that carry no bitmap
+// (graphics pipeline channel traffic, for one) cannot grow the stack.
 func (c *Client) GetUpdate() (*Update, error) {
 	// If we have a pending slow-path update, return it first
 	if c.pendingSlowPathUpdate != nil {
@@ -25,14 +27,23 @@ func (c *Client) GetUpdate() (*Update, error) {
 		return update, nil
 	}
 
-	protocol, err := receiveProtocol(c.buffReader)
-	if err != nil {
-		return nil, err
-	}
+	for {
+		protocol, err := receiveProtocol(c.buffReader)
+		if err != nil {
+			return nil, err
+		}
 
-	updateCounter.Add(1)
+		updateCounter.Add(1)
 
-	if protocol.IsX224() {
+		if !protocol.IsX224() {
+			fpUpdate, err := c.fastPath.Receive()
+			if err != nil {
+				return nil, err
+			}
+			// FastPath updates are handed over as received: [updateHeader:1] [size:2] [data...]
+			return &Update{Data: fpUpdate.Data}, nil
+		}
+
 		update, err := c.getX224Update()
 		switch {
 		case err == nil:
@@ -40,8 +51,7 @@ func (c *Client) GetUpdate() (*Update, error) {
 				// Got a converted slow-path bitmap update
 				return update, nil
 			}
-			// Non-bitmap X224 update, try again
-			return c.GetUpdate()
+			// Non-bitmap X224 update (or channel data): read the next PDU
 		case errors.Is(err, pdu.ErrDeactivateAll):
 			// rustxterm: deactivation-reactivation (MS-RDPBCGR 1.3.1.3): Windows deactivates right
 			// after the logon (2008 R2 always) and sends a new Demand Active; redo the capabilities
@@ -50,24 +60,10 @@ func (c *Client) GetUpdate() (*Update, error) {
 			if err := c.reactivate(); err != nil {
 				return nil, fmt.Errorf("reactivation: %w", err)
 			}
-			return c.GetUpdate()
-
 		default:
 			return nil, fmt.Errorf("get X.224 update: %w", err)
 		}
 	}
-
-	fpUpdate, err := c.fastPath.Receive()
-	if err != nil {
-		return nil, err
-	}
-
-	// FastPath bitmap updates already contain bitmapUpdateData with:
-	// [updateType:2] [numberRectangles:2] [rectangles...]
-	// The JS parser expects: [updateHeader:1] [size:2] [updateType:2] [numberRectangles:2] [...]
-	// which is exactly what fpUpdate.Data contains, so no modification needed.
-
-	return &Update{Data: fpUpdate.Data}, nil
 }
 
 // Slow-path update types

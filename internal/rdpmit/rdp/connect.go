@@ -180,6 +180,9 @@ func (c *Client) basicSettingsExchange() error {
 	if c.keyboardLayoutSet { // rustxterm
 		clientUserDataSet.ClientCoreData.KeyboardLayout = c.keyboardLayout
 	}
+	if c.enableGFX { // rustxterm: the server may open the graphics pipeline over drdynvc
+		clientUserDataSet.ClientCoreData.EarlyCapabilityFlags |= pdu.ECFSupportDynvcGFXProtocol
+	}
 	if c.selectedProtocol.IsRDP() { // rustxterm: standard RDP security, RC4 40/56/128 (stdsec.go)
 		clientUserDataSet.ClientSecurityData.EncryptionMethods = pdu.EncryptionFlag40Bit | pdu.EncryptionFlag56Bit | pdu.EncryptionFlag128Bit
 	}
