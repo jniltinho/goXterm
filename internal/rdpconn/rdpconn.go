@@ -31,7 +31,7 @@ const (
 	NLA Protocol = "nla" // CredSSP/NLA (modern Windows)
 	// Std is "Allow legacy RDP security": the NLA offer (CredSSP or TLS) first; a server that refuses
 	// TLS (Security Layer "RDP", SSL_NOT_ALLOWED_BY_SERVER) is retried with standard RDP security
-	// (128-bit RC4, no server authentication). The other modes refuse standard security before any
+	// (RC4, no TLS; trust is decided on the server's RSA key, VerifyLegacyKey). The other modes refuse standard security before any
 	// credential is sent (rdp.ErrStandardSecurity).
 	Std Protocol = "std"
 )
@@ -62,7 +62,14 @@ type Config struct {
 	// VerifyTLS decides whether the server certificate is trusted (tlstrust.Verifier); nil accepts
 	// any certificate (tests only). It runs inside the TLS handshake, before any credential is sent.
 	VerifyTLS func(tls.ConnectionState) error
+	// VerifyLegacyKey decides trust on the server's RSA key fingerprint ("RSA AA:BB:…",
+	// LegacyKeyPrefix) under standard RDP security (Std), before any credential is sent; nil accepts
+	// any key (tests only).
+	VerifyLegacyKey func(fingerprint string) error
 }
+
+// LegacyKeyPrefix starts a standard-security server key fingerprint.
+const LegacyKeyPrefix = rdp.LegacyKeyPrefix
 
 // Rect is a changed region as a PNG. onFrame gets all rectangles of one update together, in order,
 // and the ids of surface frames that ended in it: the caller passes those to AckFrames once the
@@ -133,6 +140,7 @@ func (s *Session) Start() error {
 	}
 	c.SetUseNLA(useNLA(cfg.Protocol))
 	c.SetAllowStandardSecurity(cfg.Protocol == Std)
+	c.SetServerKeyCheck(cfg.VerifyLegacyKey)
 	c.SetKeyboardLayout(cfg.KeyboardLayout)
 	c.SetEnableRFX(true) // surface commands + NSCodec, offered to RDP 8+ servers only
 	c.SetTLSClientConfig(tlsConfig(cfg))

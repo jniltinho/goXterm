@@ -124,7 +124,7 @@ func (c *Client) connectionInitiation() error {
 				c.useNLA, c.selectedProtocol = false, pdu.NegotiationProtocolRDP
 				return c.connectionInitiation()
 			}
-			return fmt.Errorf("%w: tick \"Allow legacy RDP security\" in the session's RDP options, or set the server's Security Layer to Negotiate or SSL", ErrStandardSecurity)
+			return fmt.Errorf("%w. Enable 'Allow legacy RDP security' in the session's RDP settings to connect (insecure), or set the server's Remote Desktop \"Security Layer\" to Negotiate or SSL (GPO: Require use of specific security layer for remote (RDP) connections)", ErrStandardSecurity)
 		case pdu.NegotiationFailureCodeSSLWithUserAuthRequired:
 			return fmt.Errorf("server requires SSL with user authentication")
 		default:
@@ -180,8 +180,8 @@ func (c *Client) basicSettingsExchange() error {
 	if c.keyboardLayoutSet { // rustxterm
 		clientUserDataSet.ClientCoreData.KeyboardLayout = c.keyboardLayout
 	}
-	if c.selectedProtocol.IsRDP() { // rustxterm: standard RDP security, 128-bit RC4 only
-		clientUserDataSet.ClientSecurityData.EncryptionMethods = pdu.EncryptionFlag128Bit
+	if c.selectedProtocol.IsRDP() { // rustxterm: standard RDP security, RC4 40/56/128 (stdsec.go)
+		clientUserDataSet.ClientSecurityData.EncryptionMethods = pdu.EncryptionFlag40Bit | pdu.EncryptionFlag56Bit | pdu.EncryptionFlag128Bit
 	}
 	for i, name := range c.channels { // rustxterm: per-channel options (CHANNEL_DEF.options)
 		clientUserDataSet.ClientNetworkData.ChannelDefArray[i].Options = c.channelOptions[name]
@@ -199,7 +199,7 @@ func (c *Client) basicSettingsExchange() error {
 	}
 
 	if c.selectedProtocol.IsRDP() { // rustxterm
-		if err := checkServerSecurity(serverUserData.ServerSecurityData); err != nil {
+		if _, err := negotiated(serverUserData.ServerSecurityData); err != nil {
 			return err
 		}
 		c.serverSecurity = serverUserData.ServerSecurityData

@@ -370,7 +370,7 @@ const ctx = ref<{ x: number; y: number; session?: Session; folder?: Folder; root
 
 // SSH host-key trust prompt (TOFU): the backend emits "ssh:trust" for an unknown key and blocks.
 // Prompts queue so concurrent connections (e.g. the SSH terminal and its SFTP pane) each get one.
-type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string; kind?: "tls"; changed?: boolean; previous?: string };
+type TrustReq = { reqId: string; host: string; port: number; algorithm: string; fingerprint: string; kind?: "tls" | "legacy"; changed?: boolean; previous?: string };
 const trustQ = ref<TrustReq[]>([]);
 const trustReq = computed(() => trustQ.value[0] ?? null);
 function respondTrust(decision: "once" | "save" | "reject") {
@@ -888,12 +888,13 @@ const tabIcon = (t: Tab) => icon(t.icon);
     <!-- SSH host-key trust (trust-on-first-use) -->
     <div v-if="trustReq" class="modal-backdrop" style="z-index: 65">
       <div class="dialog" style="width: 470px">
-        <div class="dialog-title">{{ trustReq.kind === "tls" ? (trustReq.changed ? "Certificate changed" : "Untrusted certificate") : "Unknown host key" }}</div>
+        <div class="dialog-title">{{ trustReq.kind === "legacy" ? "Legacy RDP security" : trustReq.kind === "tls" ? (trustReq.changed ? "Certificate changed" : "Untrusted certificate") : "Unknown host key" }}</div>
         <div class="dialog-body">
           <p v-if="trustReq.kind === 'tls' && trustReq.changed" class="dialog-sub warn-text">The certificate of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> differs from the one saved before. This happens after a certificate renewal, or when someone intercepts the connection.</p>
           <p v-else-if="trustReq.kind === 'tls'" class="dialog-sub">The TLS certificate of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not trusted by this system. No credentials are sent until you accept.</p>
+          <p v-else-if="trustReq.kind === 'legacy'" class="dialog-sub warn-text">{{ trustReq.host }}:{{ trustReq.port }} refused TLS and offers only legacy RDP security (RC4). The server cannot be authenticated: anyone on the network path could impersonate it and read the password. No credentials are sent until you accept its key.</p>
           <p v-else class="dialog-sub">The SSH host key of <b>{{ trustReq.host }}:{{ trustReq.port }}</b> is not known. No credentials are sent until you accept.</p>
-          <div class="fp-head"><img :src="icon(trustReq.kind === 'tls' ? 'lock' : 'key')" class="dbtn-ico" /> {{ trustReq.kind === "tls" ? `Certificate "${trustReq.algorithm}" SHA-256 fingerprint` : `${trustReq.algorithm} key fingerprint` }}</div>
+          <div class="fp-head"><img :src="icon(trustReq.kind === 'tls' ? 'lock' : 'key')" class="dbtn-ico" /> {{ trustReq.kind === "legacy" ? "Server RSA key fingerprint" : trustReq.kind === "tls" ? `Certificate "${trustReq.algorithm}" SHA-256 fingerprint` : `${trustReq.algorithm} key fingerprint` }}</div>
           <template v-if="trustReq.previous">
             <div class="fp-head">Saved before</div>
             <div class="fp">SHA256:{{ trustReq.previous }}</div>

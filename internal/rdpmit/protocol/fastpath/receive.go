@@ -195,12 +195,13 @@ func (i *Protocol) Receive() (*UpdatePDU, error) {
 		return nil, err
 	}
 
-	// rustxterm: encrypted PDUs (standard RDP security) are opened by the client's Decrypt.
-	if pdu.Flags&UpdatePDUFlagEncrypted == UpdatePDUFlagEncrypted {
-		if i.Decrypt == nil {
-			return nil, errors.New("encryption not supported")
-		}
-		data, err := i.Decrypt(pdu.Flags&UpdatePDUFlagSecureChecksum != 0, pdu.Data)
+	// rustxterm: under standard RDP security the client's Decrypt opens (or refuses) every PDU.
+	encrypted := pdu.Flags&UpdatePDUFlagEncrypted == UpdatePDUFlagEncrypted
+	if encrypted && i.Decrypt == nil {
+		return nil, errors.New("encryption not supported")
+	}
+	if i.Decrypt != nil {
+		data, err := i.Decrypt(encrypted, pdu.Flags&UpdatePDUFlagSecureChecksum != 0, pdu.Data)
 		if err != nil {
 			return nil, err
 		}

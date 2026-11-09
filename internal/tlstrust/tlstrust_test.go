@@ -55,3 +55,28 @@ func TestVerifierPinsAndAsks(t *testing.T) {
 		t.Fatal("no certificate accepted")
 	}
 }
+
+// TestLegacyVerifier: as the Rust app — unknown key asks (and pins on "save"), the pinned key
+// passes, a changed key refuses, and a host pinned over TLS refuses (downgrade).
+func TestLegacyVerifier(t *testing.T) {
+	fp := LegacyKeyPrefix + "AA:BB"
+	var asked Question
+	saved := ""
+	v := LegacyVerifier("h:3389", "", func(q Question) (bool, error) { asked = q; return true, nil }, func(s string) { saved = s })
+	if err := v(fp); err != nil || saved != fp || asked.Subject != LegacySubject || asked.Fingerprint != fp {
+		t.Fatalf("first use: %v saved %q asked %+v", err, saved, asked)
+	}
+	never := func(Question) (bool, error) { t.Fatal("asked"); return false, nil }
+	if err := LegacyVerifier("h:3389", fp, never, nil)(fp); err != nil {
+		t.Fatalf("pinned: %v", err)
+	}
+	if err := LegacyVerifier("h:3389", LegacyKeyPrefix+"CC:DD", never, nil)(fp); err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("changed: %v", err)
+	}
+	if err := LegacyVerifier("h:3389", "AA:BB:CC", never, nil)(fp); !errors.Is(err, ErrDowngrade) {
+		t.Fatalf("pinned over TLS: %v", err)
+	}
+	if err := LegacyVerifier("h:3389", "", func(Question) (bool, error) { return false, errors.New("rejected") }, nil)(fp); err == nil {
+		t.Fatal("a rejected key was accepted")
+	}
+}

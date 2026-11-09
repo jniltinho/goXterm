@@ -9,5 +9,5 @@ var (
 
 	// ErrStandardSecurity (rustxterm): the server wants standard RDP security and the session does
 	// not allow it; it is refused before any credential is sent.
-	ErrStandardSecurity = errors.New("the server only offers standard RDP security (no TLS), which this session does not allow")
+	ErrStandardSecurity = errors.New("the server only allows the legacy Standard RDP Security layer (no TLS/NLA)")
 )

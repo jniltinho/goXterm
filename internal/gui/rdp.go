@@ -62,8 +62,9 @@ func (a *App) RdpConnect(sessionID int64, tabW, tabH int) (*RdpView, error) {
 	view, err := a.rdpDial(rdpconn.Config{
 		Host: asString(m["host"]), Port: port, User: user, Password: password,
 		Width: w, Height: h, Protocol: proto, LegacyTLS: legacy,
-		KeyboardLayout: uint32(asInt64(rdp["keyboard_layout"])), // #nosec G115 -- a locale id from the editor list
-		VerifyTLS:      a.tlsVerifier(asString(m["host"]), port),
+		KeyboardLayout:  uint32(asInt64(rdp["keyboard_layout"])), // #nosec G115 -- a locale id from the editor list
+		VerifyTLS:       a.tlsVerifier(asString(m["host"]), port),
+		VerifyLegacyKey: a.legacyKeyVerifier(asString(m["host"]), port),
 	}, clipboardOn(rdp))
 	if err == nil && saver != nil {
 		a.mu.Lock()

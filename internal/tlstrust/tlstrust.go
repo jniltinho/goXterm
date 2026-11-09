@@ -68,3 +68,40 @@ func Verifier(host, pinned string, ask Ask, save func(fingerprint string)) func(
 		return nil
 	}
 }
+
+// LegacyKeyPrefix starts the fingerprint of a server key under standard (legacy) RDP security,
+// "RSA AA:BB:…", stored in the same pin table as TLS certificates (as the Rust app does).
+const LegacyKeyPrefix = "RSA "
+
+// LegacySubject is shown as the subject of the legacy RDP key prompt.
+const LegacySubject = "Legacy RDP security (no TLS): this connection is not protected against interception"
+
+// ErrDowngrade: the server refused TLS but the host was trusted over TLS before.
+var ErrDowngrade = errors.New("the server refused TLS, but this host was trusted over TLS before: the refusal may " +
+	"be a downgrade attempt, so legacy RDP security was not used. If the server's administrator really switched " +
+	"it to the legacy layer, connect with another name for it (such as its IP address): trust is saved per " +
+	"host name and port")
+
+// LegacyVerifier decides trust on a legacy RDP server key fingerprint, as the Rust app: a host
+// pinned over TLS refuses (ErrDowngrade), the pinned key passes, a changed key refuses, an unknown
+// one asks (and may be pinned). pinned is the stored fingerprint for host:port ("" = none).
+func LegacyVerifier(hostPort, pinned string, ask Ask, save func(fingerprint string)) func(fingerprint string) error {
+	return func(fp string) error {
+		switch {
+		case pinned == "":
+			pin, err := ask(Question{Fingerprint: fp, Subject: LegacySubject})
+			if err != nil {
+				return err
+			}
+			if pin && save != nil {
+				save(fp)
+			}
+			return nil
+		case !strings.HasPrefix(pinned, LegacyKeyPrefix):
+			return ErrDowngrade
+		case pinned == fp:
+			return nil
+		}
+		return fmt.Errorf("the legacy RDP key of %s changed (saved %s, now %s)", hostPort, pinned, fp)
+	}
+}

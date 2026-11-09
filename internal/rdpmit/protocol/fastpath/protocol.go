@@ -11,9 +11,9 @@ type Protocol struct {
 
 	updatePDUData []byte
 
-	// Decrypt (rustxterm) opens a FASTPATH_OUTPUT_ENCRYPTED PDU (MAC + RC4 data) under standard RDP
-	// security; nil refuses encrypted PDUs.
-	Decrypt func(saltedMAC bool, data []byte) ([]byte, error)
+	// Decrypt (rustxterm), under standard RDP security, gets every PDU's data: it opens an
+	// encrypted one (MAC + RC4) and may refuse a clear one. nil refuses encrypted PDUs.
+	Decrypt func(encrypted, saltedMAC bool, data []byte) ([]byte, error)
 }
 
 func New(conn io.ReadWriter) *Protocol {

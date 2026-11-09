@@ -379,3 +379,10 @@ func TestWheelFlags(t *testing.T) {
 		t.Fatalf("down = %#x", f)
 	}
 }
+
+// The GUI pins legacy keys with tlstrust.LegacyKeyPrefix (archtest keeps rdpconn from importing it).
+func TestLegacyKeyPrefix(t *testing.T) {
+	if LegacyKeyPrefix != "RSA " {
+		t.Fatalf("LegacyKeyPrefix %q must match tlstrust.LegacyKeyPrefix and the Rust app", LegacyKeyPrefix)
+	}
+}

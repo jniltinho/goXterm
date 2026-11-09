@@ -65,6 +65,7 @@ type Client struct {
 	redial                func() (net.Conn, error) // a fresh TCP connection, to retry the negotiation
 	serverSecurity        *pdu.ServerSecurityData
 	stdSec                *stdSecurity
+	serverKeyCheck        func(fingerprint string) error
 	closed                bool // set by Close, under mu
 
 	// rustxterm: true between a Deactivate All and the end of reactivation; input is not sent then
@@ -200,6 +201,11 @@ func (c *Client) SetUseNLA(useNLA bool) {
 // SetAllowStandardSecurity lets the client fall back to standard RDP security (RC4, no TLS, no
 // server authentication) when the server refuses TLS (SSL_NOT_ALLOWED_BY_SERVER). rustxterm.
 func (c *Client) SetAllowStandardSecurity(allow bool) { c.allowStandardSecurity = allow }
+
+// SetServerKeyCheck decides trust on the server's RSA key under standard RDP security
+// ("RSA AA:BB:…", LegacyKeyPrefix); it runs before the Security Exchange, so before any credential.
+// An error refuses the connection. rustxterm.
+func (c *Client) SetServerKeyCheck(check func(fingerprint string) error) { c.serverKeyCheck = check }
 
 // SetEnableRFX enables or disables RemoteFX-Image codec negotiation
 func (c *Client) SetEnableRFX(enable bool) {

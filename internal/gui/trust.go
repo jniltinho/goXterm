@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -68,14 +69,31 @@ func (a *App) promptTrust(host string, port int, key ssh.PublicKey, algo, keyB64
 // pass, a certificate pinned in cert_trust passes, anything else asks with the same trust dialog as
 // SSH host keys ("Accept and save" pins it, in the Rust format).
 func (a *App) tlsVerifier(host string, port int) func(tls.ConnectionState) error {
+	pinned, ask, save := a.certTrust(host, port)
+	return tlstrust.Verifier(host, pinned, ask, save)
+}
+
+// legacyKeyVerifier is the trust decision on an RDP server key under standard (legacy) RDP
+// security, pinned in cert_trust with the "RSA " prefix like the Rust app (tlstrust.LegacyVerifier).
+func (a *App) legacyKeyVerifier(host string, port int) func(fingerprint string) error {
+	pinned, ask, save := a.certTrust(host, port)
+	return tlstrust.LegacyVerifier(net.JoinHostPort(host, strconv.Itoa(port)), pinned, ask, save)
+}
+
+// certTrust is the pinned fingerprint of host:port and the trust dialog / pin store for it.
+func (a *App) certTrust(host string, port int) (string, tlstrust.Ask, func(string)) {
 	pinned := ""
 	if st, err := openStore(); err == nil {
 		pinned, _, _ = st.CertTrust(host, port)
 		st.Close()
 	}
 	ask := func(q tlstrust.Question) (bool, error) {
-		d, err := a.askTrust(map[string]any{"host": host, "port": port, "kind": "tls", "algorithm": q.Subject,
-			"fingerprint": "SHA256:" + q.Fingerprint, "changed": q.Changed, "previous": q.Previous})
+		fp, kind := "SHA256:"+q.Fingerprint, "tls"
+		if strings.HasPrefix(q.Fingerprint, tlstrust.LegacyKeyPrefix) {
+			fp, kind = q.Fingerprint, "legacy"
+		}
+		d, err := a.askTrust(map[string]any{"host": host, "port": port, "kind": kind, "algorithm": q.Subject,
+			"fingerprint": fp, "changed": q.Changed, "previous": q.Previous})
 		if err != nil || (d != "once" && d != "save") {
 			return false, fmt.Errorf("certificate not trusted for %s:%d (%s)", host, port, q.Fingerprint)
 		}
@@ -87,7 +105,7 @@ func (a *App) tlsVerifier(host string, port int) func(tls.ConnectionState) error
 			st.Close()
 		}
 	}
-	return tlstrust.Verifier(host, pinned, ask, save)
+	return pinned, ask, save
 }
 
 // askTrust shows the trust dialog ("ssh:trust" event) and waits for "once", "save" or "reject".
