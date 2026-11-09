@@ -72,7 +72,8 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   were unsigned, so no Windows tile decoded; rows are bottom-up in surface bits.
   `codec/nscodec_test.go` (new).
 - `protocol/pdu/cap_surface.go`: the Bitmap Codecs capability offers NSCodec only (id 1); upstream
-  also offered RemoteFX-Image without properties. `rdp/capabilities_exchange.go` offers surface
+  also offered RemoteFX-Image without properties. Its properties ask for color loss level 1, no chroma
+  subsampling and no dynamic fidelity (upstream: 3, on, on — banded gradients). `rdp/capabilities_exchange.go` offers surface
   commands and codecs only to RDP 8+ servers (server core version >= 0x00080005); xrdp and 2008 R2
   report 0x00080004.
 - `protocol/pdu/frame_ack.go`: PDUTYPE2_FRAME_ACKNOWLEDGE is 0x38 (upstream wrote decimal 38, and the

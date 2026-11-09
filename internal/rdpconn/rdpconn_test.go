@@ -211,7 +211,8 @@ func TestLabRDPClipboard(t *testing.T) {
 // connection details, including the password, come from env so no credentials live in the source.
 // Skipped unless RXT_RDP_REAL=1. Env: RXT_RDP_HOST, RXT_RDP_PORT (default 3389), RXT_RDP_USER,
 // RXT_RDP_PASS, RXT_RDP_PROTO (ssl|nla|std, default nla), RXT_RDP_LAYOUT (keyboard layout, e.g. 0x0416),
-// RXT_RDP_W / RXT_RDP_H (desktop size, default 1024x768), RXT_RDP_HOLD (stay connected, e.g. 15s).
+// RXT_RDP_W / RXT_RDP_H (desktop size, default 1024x768), RXT_RDP_HOLD (stay connected, e.g. 15s),
+// RXT_RDP_LEGACY=1 (TLS 1.0), RXT_RDP_WITHCLIP=1 (join cliprdr as the GUI does).
 func TestRealRDP(t *testing.T) {
 	if os.Getenv("RXT_RDP_REAL") == "" {
 		t.Skip("set RXT_RDP_REAL=1 with RXT_RDP_HOST/USER/PASS to run")
@@ -227,6 +228,12 @@ func TestRealRDP(t *testing.T) {
 		User: os.Getenv("RXT_RDP_USER"), Password: os.Getenv("RXT_RDP_PASS"),
 		Width: envInt("RXT_RDP_W", 1024), Height: envInt("RXT_RDP_H", 768), Protocol: proto,
 		LegacyTLS: os.Getenv("RXT_RDP_LEGACY") != "", KeyboardLayout: uint32(layout),
+	}
+	if d, _ := time.ParseDuration(os.Getenv("RXT_RDP_VERIFYDELAY")); d > 0 { // a slow trust check, as in the GUI
+		cfg.VerifyTLS = func(tls.ConnectionState) error { time.Sleep(d); return nil }
+	}
+	if os.Getenv("RXT_RDP_WITHCLIP") != "" { // join cliprdr as the GUI does with "Share clipboard text"
+		cfg.OnClipboard = func(string) {}
 	}
 	s, frame, closed := dial(t, cfg)
 	if path := os.Getenv("RXT_RDP_SNAPSHOT"); path != "" { // compose every rectangle, save at the end
@@ -384,5 +391,47 @@ func TestWheelFlags(t *testing.T) {
 func TestLegacyKeyPrefix(t *testing.T) {
 	if LegacyKeyPrefix != "RSA " {
 		t.Fatalf("LegacyKeyPrefix %q must match tlstrust.LegacyKeyPrefix and the Rust app", LegacyKeyPrefix)
+	}
+}
+
+// TestRealRDPConcurrent keeps one session up (RXT_RDP_HOST) while it connects RXT_RDP_HOST2 several times in the
+// same process, as the GUI does with several tabs; run it with -race. Same env as TestRealRDP (shared password),
+// plus RXT_RDP_HOST2 and RXT_RDP_ROUNDS (default 5). Skipped unless RXT_RDP_REAL=1 and RXT_RDP_HOST2 are set.
+func TestRealRDPConcurrent(t *testing.T) {
+	if os.Getenv("RXT_RDP_REAL") == "" || os.Getenv("RXT_RDP_HOST2") == "" {
+		t.Skip("set RXT_RDP_REAL=1, RXT_RDP_HOST, RXT_RDP_HOST2, RXT_RDP_USER and RXT_RDP_PASS to run")
+	}
+	cfg := Config{Host: os.Getenv("RXT_RDP_HOST"), User: os.Getenv("RXT_RDP_USER"), Password: os.Getenv("RXT_RDP_PASS"),
+		Width: 1024, Height: 768, Protocol: NLA, OnClipboard: func(string) {}}
+	held, frame, closed := dial(t, cfg)
+	defer held.Close()
+	if err := held.Start(); err != nil {
+		t.Fatalf("held session: %v", err)
+	}
+	waitFrame(t, frame, closed, 30*time.Second)
+	cfg.Host = os.Getenv("RXT_RDP_HOST2")
+	failed := 0
+	for i := range envInt("RXT_RDP_ROUNDS", 5) {
+		s, f, c := dial(t, cfg)
+		if err := s.Start(); err != nil {
+			failed++
+			t.Logf("round %d: %v", i+1, err)
+		} else {
+			select {
+			case <-f:
+				t.Logf("round %d: ok", i+1)
+			case err := <-c:
+				failed++
+				t.Logf("round %d: closed: %v", i+1, err)
+			case <-time.After(30 * time.Second):
+				failed++
+				t.Logf("round %d: no frame", i+1)
+			}
+		}
+		s.Close()
+		time.Sleep(2 * time.Second)
+	}
+	if failed > 0 {
+		t.Fatalf("%d rounds failed while another session was up", failed)
 	}
 }

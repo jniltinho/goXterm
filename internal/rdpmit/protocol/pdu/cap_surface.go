@@ -270,11 +270,7 @@ func BitmapCodecGUIDName(guid [16]byte) string {
 
 // NewBitmapCodecsCapabilitySet creates a capability set advertising NSCodec support
 func NewBitmapCodecsCapabilitySet() CapabilitySet {
-	nscodecProps := NSCodecCapabilitySet{
-		FAllowDynamicFidelity: 1, // Allow dynamic fidelity
-		FAllowSubsampling:     1, // Allow chroma subsampling
-		ColorLossLevel:        3, // Moderate color loss (1=lossless, 7=max loss)
-	}
+	nscodecProps := nsCodecProps
 
 	return CapabilitySet{
 		CapabilitySetType: CapabilitySetTypeBitmapCodecs,
@@ -299,17 +295,17 @@ func NewBitmapCodecsWithRFXCapabilitySet() CapabilitySet {
 		CapabilitySetType: CapabilitySetTypeBitmapCodecs,
 		BitmapCodecsCapabilitySet: &BitmapCodecsCapabilitySet{
 			BitmapCodecArray: []BitmapCodec{{
-				CodecGUID: NSCodecGUID,
-				CodecID:   NSCodecID,
-				CodecProperties: (&NSCodecCapabilitySet{
-					FAllowDynamicFidelity: 1,
-					FAllowSubsampling:     1,
-					ColorLossLevel:        3,
-				}).Serialize(),
+				CodecGUID:       NSCodecGUID,
+				CodecID:         NSCodecID,
+				CodecProperties: nsCodecProps.Serialize(),
 			}},
 		},
 	}
 }
+
+// nsCodecProps asks for the least lossy NSCodec (rustxterm): upstream allowed chroma subsampling, color loss
+// level 3 and dynamic fidelity, which banded gradients (wallpapers) and blurred colored edges.
+var nsCodecProps = NSCodecCapabilitySet{FAllowDynamicFidelity: 0, FAllowSubsampling: 0, ColorLossLevel: 1}
 
 // NSCodecID is the id this client gives NSCodec; the server uses it in surface bits.
 const NSCodecID = 1

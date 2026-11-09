@@ -3,11 +3,13 @@ package rdp
 import (
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 	"strings"
 	"time"
+	"unicode"
 
 	"unicode/utf16"
 
@@ -60,7 +62,10 @@ func (c *Client) StartNLA() error {
 
 	// Parse domain from username if present (DOMAIN\user or user@domain)
 	domain, user := c.parseDomainUser()
-	logging.Debug("NLA: Authenticating user")
+	// rustxterm: the account's shape (quoted, so stray spaces show) and the password's, never its value
+	pw := c.password
+	logging.Debug("NLA: user=%q domain=%q password: %d chars, edge spaces=%t, control chars=%t", user, domain,
+		len([]rune(pw)), strings.TrimSpace(pw) != pw, strings.ContainsFunc(pw, unicode.IsControl))
 
 	// rustxterm: NTLMv2 from github.com/bodgit/ntlmssp (BSD-3-Clause) instead of upstream's auth/ntlm.go,
 	// whose code follows the GPL grdp NTLM too closely.
@@ -99,6 +104,9 @@ func (c *Client) StartNLA() error {
 		return fmt.Errorf("NLA: failed to decode challenge: %w", err)
 	}
 	logging.Debug("NLA: Server version=%d, errorCode=%d", tsResp.Version, tsResp.ErrorCode)
+	if len(tsResp.NegoTokens) > 0 {
+		logging.Debug("NLA: challenge target: %s", ntlmTargetInfo(tsResp.NegoTokens[0].Data))
+	}
 	negotiatedVersion := tsResp.Version
 	if negotiatedVersion <= 0 {
 		negotiatedVersion = 6
@@ -428,4 +436,36 @@ func (c *Client) parseDomainUser() (domain, user string) {
 
 	// No domain specified
 	return c.domain, username
+}
+
+// ntlmTargetInfo names the server's identity AV pairs in an NTLM CHALLENGE message (MS-NLMP 2.2.1.2 / 2.2.2.1),
+// for the debug log: which machine answered. rustxterm.
+func ntlmTargetInfo(msg []byte) string {
+	if len(msg) < 48 || string(msg[:8]) != "NTLMSSP\x00" {
+		return "not an NTLM challenge"
+	}
+	n, off := int(binary.LittleEndian.Uint16(msg[40:])), int(binary.LittleEndian.Uint32(msg[44:]))
+	if off < 0 || n < 0 || off+n > len(msg) {
+		return "bad target info"
+	}
+	names := map[uint16]string{1: "nbComputer", 2: "nbDomain", 3: "dnsComputer", 4: "dnsDomain", 5: "dnsTree"}
+	var out []string
+	for ti := msg[off : off+n]; len(ti) >= 4; {
+		id, l := binary.LittleEndian.Uint16(ti), int(binary.LittleEndian.Uint16(ti[2:]))
+		if id == 0 || 4+l > len(ti) {
+			break
+		}
+		v := ti[4 : 4+l]
+		if name, ok := names[id]; ok {
+			u := make([]uint16, len(v)/2)
+			for i := range u {
+				u[i] = binary.LittleEndian.Uint16(v[2*i:])
+			}
+			out = append(out, fmt.Sprintf("%s=%q", name, string(utf16.Decode(u))))
+		} else {
+			out = append(out, fmt.Sprintf("av%d(%d bytes)", id, l))
+		}
+		ti = ti[4+l:]
+	}
+	return strings.Join(out, " ")
 }

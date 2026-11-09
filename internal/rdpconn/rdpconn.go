@@ -11,6 +11,7 @@ import (
 	"image"
 	"image/png"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -21,7 +22,14 @@ import (
 	"rustxterm-go/internal/rdpmit/rdp"
 )
 
-func init() { logging.SetLevel(logging.LevelError) } // go-rdp logs every phase at INFO
+// go-rdp logs every phase at INFO; RXT_RDP_DEBUG=1 turns on its debug log (sizes and steps, never secrets).
+func init() {
+	if os.Getenv("RXT_RDP_DEBUG") != "" {
+		logging.SetLevel(logging.LevelDebug)
+		return
+	}
+	logging.SetLevel(logging.LevelError)
+}
 
 // Protocol selects the RDP security negotiation.
 type Protocol string
@@ -107,8 +115,22 @@ func tlsConfig(cfg Config) *tls.Config {
 	}
 	if cfg.LegacyTLS {
 		t.MinVersion = tls.VersionTLS10 // opt-in for old servers; blocks NLA (see Config.LegacyTLS)
+		t.CipherSuites = legacySuites
 	}
 	return t
+}
+
+// legacySuites adds RSA key exchange (out of Go's defaults since 1.22) after the ECDHE suites, as the Rust app's
+// OpenSSL "DEFAULT:@SECLEVEL=0" did: Windows Server 2008 R2's self-signed RDP certificate key cannot sign, so
+// its Schannel cannot do ECDHE and answers an ECDHE-only offer with "tls: internal error".
+var legacySuites = []uint16{
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA, tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256, tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_RSA_WITH_AES_128_CBC_SHA, tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 }
 
 // Connect prepares the session but does not dial or log in yet; call Start after the caller has
