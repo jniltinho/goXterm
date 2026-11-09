@@ -22,7 +22,7 @@ tidy: image       ## resolve modules and write go.sum
 # The binary embeds internal/gui/dist (//go:embed): a fresh checkout has no SPA build yet, so the
 # compile-only targets drop a placeholder page there (git-ignored; `make frontend` replaces it).
 embed-stub:
-	@test -e internal/gui/dist/index.html || { mkdir -p internal/gui/dist && echo '<!doctype html><title>rustXterm</title>' > internal/gui/dist/index.html; }
+	@test -e internal/gui/dist/index.html || { mkdir -p internal/gui/dist && echo '<!doctype html><title>goXterm</title>' > internal/gui/dist/index.html; }
 
 check: image embed-stub ## gofmt + go vet
 	$(RUN) sh -c 'test -z "$$(gofmt -l cmd internal main.go)" || { gofmt -l cmd internal main.go; exit 1; }; go vet ./...'
@@ -62,7 +62,9 @@ appimage: build   ## the Linux app as an x86_64 AppImage → dist/
 # With the pure-Go store, Windows and macOS cross-build CGO-free from Linux — no mingw/osxcross:
 #   windows: WebView2 (CGO_ENABLED=0), -H windowsgui.
 #   macos:   Wails purego backend (CGO_ENABLED=0, -tags purego); universal joins amd64+arm64.
+# rsrc_windows_amd64.syso (git-ignored) puts the app icon into the .exe; only GOOS=windows builds link it.
 windows: image frontend ## Windows amd64 (WebView2, CGO-free) → dist/
+	$(RUN) go run ./build/winicon -icon assets/icons/rustxterm-256.png -out rsrc_windows_amd64.syso
 	$(RUN) sh -c 'CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags production -trimpath \
 	  -ldflags "$(LDFLAGS) -H windowsgui" -o dist/$(BIN)-$(VERSION)-windows-amd64.exe .'
 

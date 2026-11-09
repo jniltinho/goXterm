@@ -72,7 +72,7 @@ func appURL(s string) bool {
 
 // guardedStart is the window's first content: a blank page, so the guard is on before the app's own page and its
 // scripts load (Run then sets the URL).
-func guardedStart() (start, html string) { return "", "<!doctype html><title>rustXterm</title>" }
+func guardedStart() (start, html string) { return "", "<!doctype html><title>goXterm</title>" }
 
 // guardNavigation connects the webview's decide-policy signal (GTK main thread) so the window never leaves the app.
 func guardNavigation(w *application.WebviewWindow) error {

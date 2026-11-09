@@ -50,7 +50,7 @@ const menu = ref("");
 const sidebarCollapsed = ref(false);
 function toggleMenu(name: string) { menu.value = menu.value === name ? "" : name; }
 function runMenu(fn: () => void) { menu.value = ""; fn(); }
-function aboutApp() { void showInfo("About rustXterm", "rustXterm — native terminal & remote session manager (Go + Wails)."); }
+function aboutApp() { void showInfo("About goXterm", "goXterm — native terminal & remote session manager (Go + Wails)."); }
 
 // Global keyboard shortcuts. Chord combos (Ctrl+Shift+…, Ctrl+Tab) work anywhere; single keys
 // (Enter/F2/Delete) only when focus is not in a text field or the terminal, so terminal input is never
@@ -659,7 +659,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
       <div class="menu">
         <button class="menu-t" :class="menu === 'help' ? 'on' : ''" @click.stop="toggleMenu('help')">Help</button>
         <div v-if="menu === 'help'" class="menu-d">
-          <button class="menu-i" @click="runMenu(() => aboutApp())"><img :src="icon('help')" class="menu-ico" /> About rustXterm</button>
+          <button class="menu-i" @click="runMenu(() => aboutApp())"><img :src="icon('help')" class="menu-ico" /> About goXterm</button>
         </div>
       </div>
     </nav>
@@ -793,7 +793,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
           <!-- Home (Rust home.rs): gear top-right, logo 64 + title 32 px at 22 % height, 200x30 buttons, recents -->
           <div v-if="!active" class="home">
             <button class="home-gear" title="Settings" @click="settingsOpen = true"><img :src="icon('settings')" /></button>
-            <div class="home-brand"><img :src="icon('logo')" class="home-logo" /><span>rustXterm</span></div>
+            <div class="home-brand"><img :src="icon('logo')" class="home-logo" /><span>goXterm</span></div>
             <div class="home-actions">
               <button class="home-btn" @click="newSession()"><img :src="icon('session-new')" class="home-btn-ico" /> New session</button>
               <button class="home-btn" @click="importSessions"><img :src="icon('open')" class="home-btn-ico" /> Import sessions</button>

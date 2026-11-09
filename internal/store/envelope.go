@@ -1,12 +1,14 @@
 package store
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -55,6 +57,16 @@ func readEnvelope(dir string) (*envelope, error) {
 	return &e, nil
 }
 
+// pwCache keeps the last successful password unlock in memory: Argon2id (256 MiB, t=3) on every store open made each
+// GUI action (edit, move, reload: several opens each) take seconds. Keyed by a hash of the directory, the envelope
+// bytes and the password, so another store, a changed envelope or another password misses.
+var pwCache struct {
+	sync.Mutex
+	id  [32]byte
+	key dbKey
+	ok  bool
+}
+
 // unlockWithPassword derives the wrapping key with Argon2id and opens the master wrap.
 func unlockWithPassword(dir, password string) (dbKey, error) {
 	var key dbKey
@@ -62,6 +74,32 @@ func unlockWithPassword(dir, password string) (dbKey, error) {
 	if err != nil {
 		return key, err
 	}
+	raw, err := os.ReadFile(filepath.Join(dir, envelopeFile))
+	if err != nil {
+		return key, err
+	}
+	h := sha256.New()
+	for _, part := range [][]byte{[]byte(dir), raw, []byte(password)} {
+		h.Write([]byte(fmt.Sprint(len(part), ":")))
+		h.Write(part)
+	}
+	var id [32]byte
+	h.Sum(id[:0])
+	// held across the derivation, so concurrent opens (Folders + Sessions) derive once
+	pwCache.Lock()
+	defer pwCache.Unlock()
+	if pwCache.ok && pwCache.id == id {
+		return pwCache.key, nil
+	}
+	key, err = unlockMaster(e, password)
+	if err == nil {
+		pwCache.id, pwCache.key, pwCache.ok = id, key, true
+	}
+	return key, err
+}
+
+func unlockMaster(e *envelope, password string) (dbKey, error) {
+	var key dbKey
 	salt, err := base64.StdEncoding.DecodeString(e.Kdf.Salt)
 	if err != nil || len(salt) != 16 {
 		return key, errors.New("key envelope: salt must be 16 bytes")

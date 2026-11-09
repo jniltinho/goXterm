@@ -253,7 +253,7 @@ func (a *App) RemoteUploadPick(tabID, remoteDir string) (string, error) {
 	if a.openPath == nil {
 		return "", errors.New("no open dialog")
 	}
-	local, err := a.openPath("Upload a file")
+	local, err := a.openPath("Upload a file", "")
 	if err != nil || local == "" {
 		return "", err
 	}

@@ -156,7 +156,7 @@ watch(tab, async (t) => {
               <label class="chk"><input v-model="s.confirmClose" type="checkbox" /> Confirm before closing a connected tab</label>
             </div></section>
             <section class="grp"><div class="grp-h">Notifications</div><div class="grp-b">
-              <label class="chk"><input v-model="s.notifications" type="checkbox" /> Show desktop notifications while rustXterm is in the background</label>
+              <label class="chk"><input v-model="s.notifications" type="checkbox" /> Show desktop notifications while goXterm is in the background</label>
             </div></section>
             <section class="grp"><div class="grp-h">Remote desktop</div><div class="grp-b">
               <div class="line"><label>Keyboard release keys</label><input v-model="s.desktopRelease" class="in w160" spellcheck="false" />
@@ -223,7 +223,7 @@ watch(tab, async (t) => {
             </div></section>
             <section class="grp"><div class="grp-h">Graphics</div><div class="grp-b">
               <div class="line"><label>Rendering backend</label><Dropdown v-model="s.gpuBackend" :options="GPU" :width="130" /></div>
-              <p class="small">Applies at the next start. After a driver crash rustXterm picks a safer one.</p>
+              <p class="small">Applies at the next start. After a driver crash goXterm picks a safer one.</p>
             </div></section>
             <section class="grp"><div class="grp-h">Interface size</div><div class="grp-b">
               <div class="line"><label>Interface size</label><Dropdown v-model="s.uiScale" :options="SCALES" :width="90" /></div>

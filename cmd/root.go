@@ -74,6 +74,9 @@ func report(err error, stdout, stderr io.Writer) int {
 }
 
 func init() {
+	// Started from Explorer (double-click), cobra's mousetrap would print a "command line tool" notice and exit:
+	// with no subcommand this binary is the desktop app.
+	cobra.MousetrapHelpText = ""
 	p := rootCmd.PersistentFlags()
 	p.BoolVar(&flags.json, "json", false, "print JSON instead of tables")
 	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usage("%v", err) })

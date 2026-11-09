@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"rustxterm-go/internal/mobaini"
 	"rustxterm-go/internal/store"
@@ -21,7 +22,7 @@ func (a *App) ImportMobaPick() (*ImportPreview, error) {
 	if a.openPath == nil {
 		return nil, errors.New("no file dialog")
 	}
-	path, err := a.openPath("Import MobaXterm.ini")
+	path, err := a.openPath("Import MobaXterm.ini", mobaDir())
 	if err != nil || path == "" {
 		return nil, err
 	}
@@ -31,6 +32,19 @@ func (a *App) ImportMobaPick() (*ImportPreview, error) {
 	}
 	return &ImportPreview{Path: path, Report: r}, nil
 }
+
+// mobaDir is where the installed MobaXterm keeps MobaXterm.ini on Windows (%APPDATA%\MobaXterm, a hidden folder),
+// or "" when there is none (other systems, the portable edition keeps it next to its .exe).
+func mobaDir() string {
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		if dir := filepath.Join(appData, "MobaXterm"); isDir(dir) {
+			return dir
+		}
+	}
+	return ""
+}
+
+func isDir(p string) bool { st, err := os.Stat(p); return err == nil && st.IsDir() }
 
 // ImportMobaApply imports the previewed file's sessions into the store and returns how many.
 func (a *App) ImportMobaApply(path string) (int, error) {
@@ -97,7 +111,7 @@ func (a *App) ImportTOMLPick() (string, error) {
 	if a.openPath == nil {
 		return "", errors.New("no file dialog")
 	}
-	path, err := a.openPath("Import rustXterm sessions")
+	path, err := a.openPath("Import rustXterm sessions", "")
 	if err != nil || path == "" {
 		return "", err
 	}

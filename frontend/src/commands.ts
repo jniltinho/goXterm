@@ -12,7 +12,7 @@ export const COMMANDS: [id: string, label: string][] = [
   ["terminal.save_text", "Save terminal text"], ["app.settings", "Settings"], ["app.toggle_sidebar", "Toggle sidebar"],
   ["app.toggle_fullscreen", "Toggle fullscreen"], ["multiexec.toggle", "MultiExec"], ["tunnels.open", "Tunnels"],
   ["app.help", "Help"], ["app.exit", "Exit"], ["session.import", "Import sessions"], ["session.export", "Export sessions"],
-  ["app.about", "About rustXterm"], ["vault.change_password", "Change master password"],
+  ["app.about", "About goXterm"], ["vault.change_password", "Change master password"],
   ["view.theme_light", "Light theme"], ["view.theme_dark", "Dark theme"], ["view.theme_system", "System theme"],
   ["app.focus_menu", "Focus menu bar"], ["serial.send_break", "Serial: send break"], ["serial.set_lines", "Serial: toggle DTR"],
   ["serial.list_ports", "Serial: list ports"], ["wsl.list_distributions", "WSL: list distributions"],

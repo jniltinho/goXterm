@@ -19,8 +19,12 @@ func TestNamedDistributionUserAndCD(t *testing.T) {
 }
 
 func TestDefaultDistributionHasNoFlag(t *testing.T) {
-	if args, _, err := LaunchArgs(Options{}, true); err != nil || len(args) != 0 {
+	// and no start folder means the Linux home
+	if args, _, err := LaunchArgs(Options{}, true); err != nil || !reflect.DeepEqual(args, []string{"--cd", "~"}) {
 		t.Fatalf("%v %v", args, err)
+	}
+	if args, startup, _ := LaunchArgs(Options{}, false); len(args) != 0 || !reflect.DeepEqual(startup, []string{"cd"}) {
+		t.Fatalf("fallback home: %v %v", args, startup)
 	}
 }
 

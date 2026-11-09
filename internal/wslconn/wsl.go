@@ -103,19 +103,22 @@ func LaunchArgs(o Options, hasCD bool) (args, startup []string, err error) {
 		}
 		args = append(args, "-u", o.User)
 	}
-	if o.StartFolder != "" {
-		if err := controlFree(o.StartFolder, "start folder"); err != nil {
+	// no start folder: the Linux home, not the Windows folder wsl.exe inherits (/mnt/c/Users/<name>)
+	folder := o.StartFolder
+	if folder == "" {
+		folder = "~"
+	}
+	if err := controlFree(folder, "start folder"); err != nil {
+		return nil, nil, err
+	}
+	if hasCD {
+		args = append(args, "--cd", folder)
+	} else {
+		line, err := cdFallback(folder)
+		if err != nil {
 			return nil, nil, err
 		}
-		if hasCD {
-			args = append(args, "--cd", o.StartFolder)
-		} else {
-			line, err := cdFallback(o.StartFolder)
-			if err != nil {
-				return nil, nil, err
-			}
-			startup = append(startup, line)
-		}
+		startup = append(startup, line)
 	}
 	for _, line := range strings.Split(o.StartupCommands, "\n") {
 		if err := controlFree(line, "startup command"); err != nil {

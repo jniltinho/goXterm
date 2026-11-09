@@ -17,14 +17,14 @@ import (
 // It lists sessions/folders from the Rust store and runs SSH terminals, streaming output to the SPA
 // as Wails events (migrate-gui-to-go-wails phases 4–5).
 type App struct {
-	emit     func(name string, data any)        // set by gui.Run; emits Wails events to the SPA
-	pickFile func() (string, error)             // set by gui.Run; native open-file dialog (SSH key picker)
-	quit     func()                             // set by gui.Run; quits the app (Terminal → Exit menu)
-	savePath func(name string) (string, error)  // set by gui.Run; native save-file dialog
-	openPath func(title string) (string, error) // set by gui.Run; native open-file dialog
-	clip     clipboard                          // set by gui.Run; the system clipboard
-	zoom     func(float64)                      // set by gui.Run; the webview zoom (Interface size)
-	version  string                             // set by gui.Run, shown in Settings → Diagnostics
+	emit     func(name string, data any)             // set by gui.Run; emits Wails events to the SPA
+	pickFile func() (string, error)                  // set by gui.Run; native open-file dialog (SSH key picker)
+	quit     func()                                  // set by gui.Run; quits the app (Terminal → Exit menu)
+	savePath func(name string) (string, error)       // set by gui.Run; native save-file dialog
+	openPath func(title, dir string) (string, error) // set by gui.Run; native open-file dialog in dir (home when "")
+	clip     clipboard                               // set by gui.Run; the system clipboard
+	zoom     func(float64)                           // set by gui.Run; the webview zoom (Interface size)
+	version  string                                  // set by gui.Run, shown in Settings → Diagnostics
 
 	mu          sync.Mutex
 	seq         int

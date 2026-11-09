@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A created store opens with its password, has the full schema, takes writes, and refuses a second
@@ -368,5 +369,28 @@ func TestSetCredentialReplaces(t *testing.T) {
 	}
 	if n, _ := s.SavedCredentialCount(); n != 1 {
 		t.Fatalf("%d rows", n)
+	}
+}
+
+// The second password unlock comes from the in-memory cache (no Argon2id); a wrong password still fails.
+func TestUnlockCache(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "lab-master", nil); err != nil {
+		t.Fatal(err)
+	}
+	k1, err := unlockWithPassword(dir, "lab-master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	k2, err := unlockWithPassword(dir, "lab-master")
+	if err != nil || k1 != k2 || time.Since(start) > 50*time.Millisecond {
+		t.Fatalf("cached unlock: %v, took %v", err, time.Since(start))
+	}
+	if _, err := unlockWithPassword(dir, "wrong"); err == nil {
+		t.Fatal("wrong password unlocked after a cached unlock")
+	}
+	if k3, err := unlockWithPassword(dir, "lab-master"); err != nil || k3 != k1 {
+		t.Fatalf("unlock after a failed attempt: %v", err)
 	}
 }

@@ -20,3 +20,5 @@ frontend/public/fonts/
 internal/gui/dist/
 # archived Rust build output
 archive/rust/target/
+# Windows icon resource, written by `make windows` (build/winicon)
+/*.syso
