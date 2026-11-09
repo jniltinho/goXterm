@@ -102,3 +102,9 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
   DATA_FIRST/DATA reassembly.
 - `rdpgfx/zgfx.go`, `rdpgfx/pdu.go` (new, written from MS-RDPEGFX): RDP8 bulk decompression and
   the RDPGFX capability PDUs (8 and 8.1, THINCLIENT, no AVC).
+- `rdpgfx/client.go`, `rdpgfx/codecs.go` (new): surfaces, output mapping, solid fill,
+  surface-to-surface, surface cache, frames and acknowledgements, uncompressed and planar content,
+  with resource limits; WireToSurface2 and H.264 are refused.
+- `codec/planar.go`: `DecodePlanarGFX` (top-down, alpha kept, YCoCg with color loss and chroma
+  subsampling) for the graphics pipeline; the bitmap-update decoder is unchanged.
+  `codec/planar_gfx_test.go` (new).

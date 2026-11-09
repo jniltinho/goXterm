@@ -144,6 +144,9 @@ func (s *Session) Start() error {
 	c.SetKeyboardLayout(cfg.KeyboardLayout)
 	c.SetEnableRFX(true) // surface commands + NSCodec, offered to RDP 8+ servers only
 	c.SetTLSClientConfig(tlsConfig(cfg))
+	if gfxEnabled() {
+		s.startGFX(c)
+	}
 	if cfg.OnClipboard != nil {
 		s.clip.Send = func(b []byte) error { return c.SendStaticChannel(clipChannel, b) }
 		c.AddStaticChannel(clipChannel, clipOptions, func(b []byte) error { s.clip.Receive(b); return nil })
@@ -158,6 +161,7 @@ func (s *Session) Start() error {
 		return net.ErrClosed
 	}
 	if err := c.Connect(); err != nil {
+		err = gfxError(err)
 		s.finish(err)
 		return err
 	}
@@ -173,7 +177,7 @@ func (s *Session) loop(c *rdp.Client) {
 	for {
 		u, err := c.GetUpdate()
 		if err != nil {
-			s.finish(err)
+			s.finish(gfxError(err))
 			return
 		}
 		var (

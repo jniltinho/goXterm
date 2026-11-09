@@ -10,11 +10,11 @@
 
 ## 2. Surfaces, cache, uncompressed and planar, frame ack (milestone 2)
 
-- [ ] 2.1 ResetGraphics, Create/DeleteSurface, MapSurfaceToOutput, SolidFill, SurfaceToSurface, SurfaceToCache, CacheToSurface, EvictCacheEntry, DeleteEncodingContext, with resource limits and range checks
-- [ ] 2.2 Start/EndFrame and FrameAcknowledge (frame id, totalFramesDecoded, queueDepth 0)
-- [ ] 2.3 WireToSurface1 uncompressed and planar (top-down, alpha, color loss, subsampling); WireToSurface2 and unknown codecs end the session with an error naming RXT_RDP_NO_GFX
-- [ ] 2.4 `rdpconn` composes mapped surfaces into the framebuffer and emits PNG rectangles per frame; GFX errors end the session
-- [ ] 2.5 Fake-server sequence test: caps → reset → create surface → map → wire-to-surface → end frame → ack
+- [x] 2.1 ResetGraphics, Create/DeleteSurface, MapSurfaceToOutput, SolidFill, SurfaceToSurface, SurfaceToCache, CacheToSurface, EvictCacheEntry, DeleteEncodingContext, with resource limits and range checks
+- [x] 2.2 Start/EndFrame and FrameAcknowledge (frame id, totalFramesDecoded, queueDepth 0)
+- [x] 2.3 WireToSurface1 uncompressed and planar (top-down, alpha, color loss, subsampling); WireToSurface2 and unknown codecs end the session with an error naming RXT_RDP_NO_GFX
+- [x] 2.4 `rdpconn` composes mapped surfaces into the framebuffer and emits PNG rectangles per frame; GFX errors end the session
+- [x] 2.5 Fake-server sequence test: caps → reset → create surface → map → wire-to-surface → end frame → ack
 
 ## 3. ClearCodec (milestone 3)
 
