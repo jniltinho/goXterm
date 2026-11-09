@@ -18,8 +18,8 @@
 
 ## 3. ClearCodec (milestone 3)
 
-- [ ] 3.1 `codec/clear`: residual, bands/vBars with vBar and shortVBar caches, subcodecs (uncompressed, NSCodec, RLEX), glyph cache
-- [ ] 3.2 MS-RDPEGFX 4.1.1.1 examples, handcrafted vectors with expected pixels, malformed-input tests
+- [x] 3.1 `codec/clear`: residual, bands/vBars with vBar and shortVBar caches, subcodecs (uncompressed, NSCodec, RLEX), glyph cache
+- [x] 3.2 MS-RDPEGFX 4.1.1.1 examples, handcrafted vectors with expected pixels, malformed-input tests
 
 ## 4. RemoteFX and alpha (milestone 4)
 

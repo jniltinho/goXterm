@@ -266,3 +266,25 @@ func TestResetGraphicsAndClose(t *testing.T) {
 		t.Fatal("state survived the channel close")
 	}
 }
+
+func TestClearCodecOnSurface(t *testing.T) {
+	h := newHarness(t)
+	// 2×1 ClearCodec bitmap: residual of two red pixels
+	cc := []byte{0, 1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 2}
+	h.send(t, confirm(CapVersion81, capsThin), reset(16, 16),
+		pdu(cmdCreateSurface, uint16(1), uint16(16), uint16(16), uint8(pixelXRGB)),
+		pdu(cmdMapSurfaceToOutput, uint16(1), uint16(0), uint32(0), uint32(0)),
+		pdu(cmdStartFrame, uint32(0), uint32(1)),
+		pdu(cmdWireToSurface1, uint16(1), uint16(codecClear), uint8(pixelXRGB),
+			uint16(3), uint16(4), uint16(5), uint16(5), uint32(len(cc)), cc),
+		pdu(cmdEndFrame, uint32(1)))
+	f := h.frames[len(h.frames)-1]
+	if pixelAt(f, 3, 4) != [4]byte{255, 0, 0, 255} || pixelAt(f, 4, 4) != [4]byte{255, 0, 0, 255} {
+		t.Fatalf("pixels %v %v", pixelAt(f, 3, 4), pixelAt(f, 4, 4))
+	}
+	// a broken ClearCodec stream ends the session
+	if err := h.c.Data(raw(pdu(cmdWireToSurface1, uint16(1), uint16(codecClear), uint8(pixelXRGB),
+		uint16(0), uint16(0), uint16(1), uint16(1), uint32(2), []byte{0, 7}))); err == nil || !errors.Is(err, Err) {
+		t.Fatalf("bad stream: %v", err)
+	}
+}

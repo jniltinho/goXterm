@@ -227,6 +227,9 @@ func (c *Client) resetGraphics(r *reader) error {
 		s.invalid = nil
 	}
 	c.dirty = append(c.dirty[:0], rect{0, 0, w, h})
+	if c.codecs.clear != nil { // its caches are not tied to surfaces and survive the reset
+		c.codecs.clear.ResetSequence()
+	}
 	return nil
 }
 

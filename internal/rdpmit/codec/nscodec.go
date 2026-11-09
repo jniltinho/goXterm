@@ -69,6 +69,16 @@ func nscPlane(data []byte, size int) []byte {
 // DecodeNSCodecToRGBA decodes an NSCodec bitmap stream (MS-RDPNSC 2.2.2), whose rows are stored
 // bottom-up in surface bits, to top-down RGBA.
 func DecodeNSCodecToRGBA(data []byte, width, height int) []byte {
+	return decodeNSCodec(data, width, height, true)
+}
+
+// DecodeNSCodec decodes an NSCodec bitmap stream stored top-down with its alpha plane (ClearCodec's
+// NSCodec subcodec) to RGBA (rustxterm addition).
+func DecodeNSCodec(data []byte, width, height int) []byte {
+	return decodeNSCodec(data, width, height, false)
+}
+
+func decodeNSCodec(data []byte, width, height int, surfaceBits bool) []byte {
 	if len(data) < 20 || width <= 0 || height <= 0 {
 		return nil
 	}
@@ -109,11 +119,16 @@ func DecodeNSCodecToRGBA(data []byte, width, height int) []byte {
 			yv := int(planes[0][yi])
 			co := int(int8(planes[1][ci] << shift))
 			cg := int(int8(planes[2][ci] << shift))
-			o := ((height-1-y)*width + x) * 4 // rows are bottom-up (FreeRDP: FREERDP_FLIP_VERTICAL)
+			o := (y*width + x) * 4
+			a := planes[3][y*width+x]
+			if surfaceBits {
+				o = ((height-1-y)*width + x) * 4 // rows are bottom-up (FreeRDP: FREERDP_FLIP_VERTICAL)
+				a = 255                          // desktop alpha is not used (as with planar bitmaps)
+			}
 			rgba[o] = clampByteNS(yv + co - cg)
 			rgba[o+1] = clampByteNS(yv + cg)
 			rgba[o+2] = clampByteNS(yv - co - cg)
-			rgba[o+3] = 255 // desktop alpha is not used (as with planar bitmaps)
+			rgba[o+3] = a
 		}
 	}
 	return rgba

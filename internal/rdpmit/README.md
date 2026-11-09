@@ -108,3 +108,7 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
 - `codec/planar.go`: `DecodePlanarGFX` (top-down, alpha kept, YCoCg with color loss and chroma
   subsampling) for the graphics pipeline; the bitmap-update decoder is unchanged.
   `codec/planar_gfx_test.go` (new).
+- `codec/clear` (new, written from MS-RDPEGFX 2.2.4.1, checked against FreeRDP's behavior):
+  ClearCodec decoder with residual, bands/vBar and shortVBar caches, subcodecs (uncompressed,
+  NSCodec, RLEX) and glyph cache, all bounded; tests with the MS-RDPEGFX 4.1.1.1 examples.
+  `codec/nscodec.go`: `DecodeNSCodec` (top-down, alpha plane kept) for the NSCodec subcodec.
