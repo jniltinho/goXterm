@@ -7,4 +7,4 @@ Exec=goxterm
 Icon=goxterm
 Categories=System;TerminalEmulator;RemoteAccess;
 Terminal=false
-StartupWMClass=rustxterm
+StartupWMClass=io.github.jniltinho.goxterm

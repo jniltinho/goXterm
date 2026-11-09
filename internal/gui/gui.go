@@ -22,6 +22,10 @@ import (
 //go:embed all:dist
 var assets embed.FS
 
+// appID is the GTK application id: Wayland compositors match it to the .desktop file for the window icon
+// (installDesktopEntry), X11 to the entry's StartupWMClass.
+const appID = "io.github.jniltinho.goxterm"
+
 // Run opens the window. safeGPU (from --safe-gpu or RXT_SAFE_GPU) starts the webview with GPU acceleration off.
 func Run(version string, safeGPU bool) error {
 	dist, err := fs.Sub(assets, "dist")
@@ -30,6 +34,9 @@ func Run(version string, safeGPU bool) error {
 	}
 	svc := &App{version: version}
 	icon, _ := fs.ReadFile(dist, "icons/logo.png") // window/taskbar icon; nil (Wails default) in a stub build
+	if _, err := installDesktopEntry(icon); err != nil {
+		slog.Warn("desktop entry not installed", "error", err) // only the Linux title-bar/dock icon depends on it
+	}
 	opts := application.Options{
 		Name:        "goXterm",
 		Description: "goXterm desktop",
@@ -37,7 +44,7 @@ func Run(version string, safeGPU bool) error {
 		LogLevel:    slog.LevelInfo, // never Debug: Wails logs binding arguments there
 		Services:    []application.Service{application.NewService(svc)},
 		Assets:      application.AssetOptions{Handler: application.AssetFileServerFS(dist), DisableLogging: true},
-		Linux:       application.LinuxOptions{ProgramName: "rustxterm"},
+		Linux:       application.LinuxOptions{ApplicationID: appID}, // the program name follows it
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	}
 	winOpts := application.WebviewWindowOptions{
