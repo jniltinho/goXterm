@@ -60,6 +60,13 @@ type Client struct {
 	// NLA configuration
 	useNLA bool
 
+	// rustxterm: standard RDP security (stdsec.go), only when allowed (SetAllowStandardSecurity)
+	allowStandardSecurity bool
+	redial                func() (net.Conn, error) // a fresh TCP connection, to retry the negotiation
+	serverSecurity        *pdu.ServerSecurityData
+	stdSec                *stdSecurity
+	closed                bool // set by Close, under mu
+
 	// rustxterm: true between a Deactivate All and the end of reactivation; input is not sent then
 	// (MS-RDPBCGR 1.3.1.3)
 	inactive atomic.Bool
@@ -110,8 +117,11 @@ func NewClient(
 
 	var err error
 
-	dialer := net.Dialer{Timeout: tcpConnectionTimeout}
-	c.conn, err = dialer.DialContext(context.Background(), "tcp", hostname)
+	c.redial = func() (net.Conn, error) {
+		dialer := net.Dialer{Timeout: tcpConnectionTimeout}
+		return dialer.DialContext(context.Background(), "tcp", hostname)
+	}
+	c.conn, err = c.redial()
 	if err != nil {
 		return nil, fmt.Errorf("tcp connect: %w", err)
 	}
@@ -152,7 +162,8 @@ func NewClientWithDialContext(
 		tlsServerName:     "",
 	}
 	var err error
-	c.conn, err = dialContext(ctx, "tcp", hostname)
+	c.redial = func() (net.Conn, error) { return dialContext(ctx, "tcp", hostname) }
+	c.conn, err = c.redial()
 	if err != nil {
 		return nil, fmt.Errorf("tcp connect: %w", err)
 	}
@@ -185,6 +196,10 @@ func (c *Client) SetUseNLA(useNLA bool) {
 		c.selectedProtocol = pdu.NegotiationProtocolSSL
 	}
 }
+
+// SetAllowStandardSecurity lets the client fall back to standard RDP security (RC4, no TLS, no
+// server authentication) when the server refuses TLS (SSL_NOT_ALLOWED_BY_SERVER). rustxterm.
+func (c *Client) SetAllowStandardSecurity(allow bool) { c.allowStandardSecurity = allow }
 
 // SetEnableRFX enables or disables RemoteFX-Image codec negotiation
 func (c *Client) SetEnableRFX(enable bool) {

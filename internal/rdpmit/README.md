@@ -24,9 +24,20 @@ Non-test `.go` files of upstream `internal/rdp`, `internal/auth`, `internal/code
 - `rdp/tls.go`, `rdp/nla.go`: TLS settings no longer come from the global config / environment;
   `SetTLSClientConfig` supplies them (certificate trust is decided by the caller's
   `VerifyConnection` during the handshake). NLA keeps upstream's TLS 1.2 cap when no MaxVersion is set.
-- `rdp/connect.go`: a server that selects standard RDP security is refused (`ErrStandardSecurity`)
-  before the logon info is sent — this client does not implement standard RDP security (RC4), so
-  continuing would send the credentials unencrypted. Channel options are set per channel.
+- `rdp/connect.go`: a server that selects standard RDP security, or refuses TLS with
+  SSL_NOT_ALLOWED_BY_SERVER, is refused (`ErrStandardSecurity`) before the logon info is sent, unless
+  the session allows it (`SetAllowStandardSecurity`). Channel options are set per channel.
+- `rdp/stdsec.go` (new): Standard RDP Security (MS-RDPBCGR 5.3), opt-in: after SSL_NOT_ALLOWED_BY_SERVER
+  the negotiation is retried once on a new TCP connection offering PROTOCOL_RDP; 128-bit RC4 only
+  (40/56-bit, FIPS and "no encryption" are refused); the server key comes from the proprietary
+  certificate or the leaf of the X.509 chain (no server authentication: the proprietary signature
+  uses Microsoft's published key); Security Exchange PDU, session keys, 4096-packet key update,
+  MAC (plain and salted) on every slow-path PDU, the Client Info PDU and fast-path input/output
+  (`protocol/fastpath`: `Protocol.Decrypt`, `InputEventPDU.SetFlags`); licensing PDUs are encrypted
+  when the server sets SEC_LICENSE_ENCRYPT_CS. `protocol/pdu/basic_settings_exchange.go`: the
+  Server Security Data is parsed inside its block with full reads and bounded lengths.
+  `rdp/stdsec_test.go` (new): spec vectors (MS-RDPBCGR 4.8 RSA, 4.1.4 server data), known-answer
+  keys/MAC/RC4/key update, a fake-server handshake and the negotiation retry.
 - `rdp/licensing.go` (new) and `rdp/connect.go`: a server License Request (xrdp always sends one)
   is answered with a Client New License Request; `pdu/licensing.go` parses a LICENSE_ERROR_MESSAGE
   only for ERROR_ALERT. Full MS-RDPELE (encrypted pre-master secret, platform challenge) is not

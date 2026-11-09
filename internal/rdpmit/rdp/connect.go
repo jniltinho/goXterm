@@ -1,8 +1,11 @@
 package rdp
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"time"
 
 	"rustxterm-go/internal/rdpmit/logging"
@@ -111,6 +114,17 @@ func (c *Client) connectionInitiation() error {
 			return fmt.Errorf("server requires Network Level Authentication (NLA): turn off \"Allow legacy TLS 1.0/1.1\" in the session's RDP options")
 		case pdu.NegotiationFailureCodeSSLRequired:
 			return fmt.Errorf("server requires SSL/TLS but negotiation failed")
+		case pdu.NegotiationFailureCodeSSLNotAllowed:
+			// rustxterm: the server's Security Layer is "RDP". Retry once on a new connection
+			// offering standard RDP security (requestedProtocols 0), only when the session allows it.
+			if c.allowStandardSecurity && requestedProtocol != pdu.NegotiationProtocolRDP {
+				if err := c.reconnect(); err != nil {
+					return fmt.Errorf("reconnect for standard RDP security: %w", err)
+				}
+				c.useNLA, c.selectedProtocol = false, pdu.NegotiationProtocolRDP
+				return c.connectionInitiation()
+			}
+			return fmt.Errorf("%w: tick \"Allow legacy RDP security\" in the session's RDP options, or set the server's Security Layer to Negotiate or SSL", ErrStandardSecurity)
 		case pdu.NegotiationFailureCodeSSLWithUserAuthRequired:
 			return fmt.Errorf("server requires SSL with user authentication")
 		default:
@@ -149,10 +163,14 @@ func (c *Client) connectionInitiation() error {
 		return c.StartTLS()
 	}
 
-	// rustxterm: standard RDP security (RC4, no TLS) is not implemented by this client, so
-	// continuing would send the logon credentials unencrypted; refuse it before any credential.
+	// rustxterm: standard RDP security (RC4, no TLS, no server authentication) only when the
+	// session allows it (stdsec.go); otherwise refuse it before any credential is sent.
 	if selectedProto.IsRDP() {
-		return ErrStandardSecurity
+		if !c.allowStandardSecurity {
+			return ErrStandardSecurity
+		}
+		logging.Warn("Security: standard RDP security (RC4, no server authentication)")
+		return nil
 	}
 	return ErrUnsupportedRequestedProtocol
 }
@@ -161,6 +179,9 @@ func (c *Client) basicSettingsExchange() error {
 	clientUserDataSet := pdu.NewClientUserDataSet(uint32(c.selectedProtocol), c.desktopWidth, c.desktopHeight, c.colorDepth, c.channels)
 	if c.keyboardLayoutSet { // rustxterm
 		clientUserDataSet.ClientCoreData.KeyboardLayout = c.keyboardLayout
+	}
+	if c.selectedProtocol.IsRDP() { // rustxterm: standard RDP security, 128-bit RC4 only
+		clientUserDataSet.ClientSecurityData.EncryptionMethods = pdu.EncryptionFlag128Bit
 	}
 	for i, name := range c.channels { // rustxterm: per-channel options (CHANNEL_DEF.options)
 		clientUserDataSet.ClientNetworkData.ChannelDefArray[i].Options = c.channelOptions[name]
@@ -175,6 +196,13 @@ func (c *Client) basicSettingsExchange() error {
 	err = serverUserData.Deserialize(wire)
 	if err != nil {
 		return err
+	}
+
+	if c.selectedProtocol.IsRDP() { // rustxterm
+		if err := checkServerSecurity(serverUserData.ServerSecurityData); err != nil {
+			return err
+		}
+		c.serverSecurity = serverUserData.ServerSecurityData
 	}
 
 	c.initChannels(serverUserData.ServerNetworkData)
@@ -233,6 +261,20 @@ func (c *Client) channelConnection() error {
 func (c *Client) secureSettingsExchange() error {
 	clientInfoPDU := pdu.NewClientInfo(c.domain, c.username, c.password)
 
+	// rustxterm: standard RDP security sends the client random, then the logon info encrypted.
+	if c.selectedProtocol.IsRDP() {
+		if c.serverSecurity == nil { // never send the logon without the keys
+			return ErrStandardSecurity
+		}
+		if err := c.securityExchange(); err != nil {
+			return fmt.Errorf("security exchange: %w", err)
+		}
+		if err := c.stdSec.send(c.userID, c.channelIDMap["global"], secInfoPkt, clientInfoPDU.InfoPacket.Serialize()); err != nil {
+			return fmt.Errorf("client info: %w", err)
+		}
+		return nil
+	}
+
 	// Per MS-RDPBCGR 2.2.1.11.1.1: security header MUST NOT be present when Enhanced RDP Security (TLS) is in effect
 	useEnhancedSecurity := c.selectedProtocol.IsSSL() || c.selectedProtocol.IsHybrid()
 	data := clientInfoPDU.Serialize(useEnhancedSecurity)
@@ -241,6 +283,25 @@ func (c *Client) secureSettingsExchange() error {
 		return fmt.Errorf("client info: %w", err)
 	}
 
+	return nil
+}
+
+// reconnect replaces the TCP connection (a server that refused the negotiation closes it). rustxterm.
+func (c *Client) reconnect() error {
+	if c.redial == nil {
+		return errors.New("no dialer to reconnect")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return net.ErrClosed
+	}
+	_ = c.conn.Close()
+	conn, err := c.redial()
+	if err != nil {
+		return err
+	}
+	c.conn, c.buffReader = conn, bufio.NewReaderSize(conn, readBufferSize)
 	return nil
 }
 

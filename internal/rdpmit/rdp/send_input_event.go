@@ -9,5 +9,12 @@ func (c *Client) SendInputEvent(data []byte) error {
 	if c.inactive.Load() {
 		return nil
 	}
+	if s := c.stdSec; s != nil { // rustxterm: standard RDP security (stdsec.go)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		p := fastpath.NewInputEventPDU(s.seal(data))
+		p.SetFlags(fastPathEncrypted)
+		return c.fastPath.Send(p)
+	}
 	return c.fastPath.Send(fastpath.NewInputEventPDU(data))
 }

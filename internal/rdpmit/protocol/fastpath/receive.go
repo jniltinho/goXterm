@@ -138,14 +138,6 @@ func (pdu *UpdatePDU) Deserialize(wire io.Reader) error {
 		return ErrUnexpectedX224
 	}
 
-	if pdu.Flags&UpdatePDUFlagSecureChecksum == UpdatePDUFlagSecureChecksum {
-		return errors.New("checksum not supported")
-	}
-
-	if pdu.Flags&UpdatePDUFlagEncrypted == UpdatePDUFlagEncrypted {
-		return errors.New("encryption not supported")
-	}
-
 	var (
 		length           uint16
 		length1, length2 uint8
@@ -201,6 +193,18 @@ func (i *Protocol) Receive() (*UpdatePDU, error) {
 	pdu.Data = i.updatePDUData
 	if err := pdu.Deserialize(i.conn); err != nil {
 		return nil, err
+	}
+
+	// rustxterm: encrypted PDUs (standard RDP security) are opened by the client's Decrypt.
+	if pdu.Flags&UpdatePDUFlagEncrypted == UpdatePDUFlagEncrypted {
+		if i.Decrypt == nil {
+			return nil, errors.New("encryption not supported")
+		}
+		data, err := i.Decrypt(pdu.Flags&UpdatePDUFlagSecureChecksum != 0, pdu.Data)
+		if err != nil {
+			return nil, err
+		}
+		pdu.Data = data
 	}
 
 	return &pdu, nil

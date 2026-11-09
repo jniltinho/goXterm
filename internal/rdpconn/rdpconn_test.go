@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"rustxterm-go/internal/rdpmit/rdp"
 )
 
 // labConfig is the protocol lab's xrdp (alice / lab-alice-pass on 127.0.0.1:13389). Lab credentials
@@ -131,6 +133,37 @@ func TestLabRDPNLAOffer(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	waitFrame(t, frame, closed, 20*time.Second)
+}
+
+// TestLabRDPStandardSecurity logs in to the lab's rdp-std (xrdp with security_layer=rdp, port 13390):
+// xrdp answers the TLS offer by selecting standard RDP security (Windows refuses it with
+// SSL_NOT_ALLOWED_BY_SERVER instead, see rdp.TestStandardSecurityNotAllowed); Std goes on with
+// 128-bit RC4 and the encrypted updates decode, the NLA mode refuses before any credential is sent.
+func TestLabRDPStandardSecurity(t *testing.T) {
+	cfg := labConfig(t)
+	cfg.Port, cfg.Protocol = 13390, Std
+	cfg.VerifyTLS = func(tls.ConnectionState) error { return errors.New("no TLS expected") }
+	s, frame, closed := dial(t, cfg)
+	defer s.Close()
+	if err := s.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitFrame(t, frame, closed, 20*time.Second)
+	for i := range 20 { // encrypted fast-path input: the server keeps the session
+		s.MouseMove(100+i, 100)
+	}
+	select {
+	case e := <-closed:
+		t.Fatalf("closed after input: %v", e)
+	case <-time.After(2 * time.Second):
+	}
+
+	cfg.Protocol = NLA
+	s2, _, _ := dial(t, cfg)
+	defer s2.Close()
+	if err := s2.Start(); !errors.Is(err, rdp.ErrStandardSecurity) {
+		t.Fatalf("NLA mode: %v, want rdp.ErrStandardSecurity", err)
+	}
 }
 
 // TestLabRDPClipboard checks both clipboard directions against the lab xrdp. The remote side is

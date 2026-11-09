@@ -29,9 +29,10 @@ type Protocol string
 const (
 	SSL Protocol = "ssl" // TLS + standard logon (xrdp, most servers)
 	NLA Protocol = "nla" // CredSSP/NLA (modern Windows)
-	// Std is "Allow legacy RDP security". go-rdp does not implement standard RDP security (RC4), so
-	// Std falls back to the NLA offer (CredSSP or TLS); a server that selects standard security is
-	// refused in every mode, before any credential is sent (rdp.ErrStandardSecurity).
+	// Std is "Allow legacy RDP security": the NLA offer (CredSSP or TLS) first; a server that refuses
+	// TLS (Security Layer "RDP", SSL_NOT_ALLOWED_BY_SERVER) is retried with standard RDP security
+	// (128-bit RC4, no server authentication). The other modes refuse standard security before any
+	// credential is sent (rdp.ErrStandardSecurity).
 	Std Protocol = "std"
 )
 
@@ -131,6 +132,7 @@ func (s *Session) Start() error {
 		return err
 	}
 	c.SetUseNLA(useNLA(cfg.Protocol))
+	c.SetAllowStandardSecurity(cfg.Protocol == Std)
 	c.SetKeyboardLayout(cfg.KeyboardLayout)
 	c.SetEnableRFX(true) // surface commands + NSCodec, offered to RDP 8+ servers only
 	c.SetTLSClientConfig(tlsConfig(cfg))

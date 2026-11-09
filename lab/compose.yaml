@@ -58,6 +58,17 @@ services:
       <<: *tcp22
       test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/3389"]
 
+  # Same xrdp with Security Layer "RDP": standard RDP security only (128-bit RC4, refuses TLS).
+  rdp-std:
+    init: true
+    image: rxt-lab-rdp:dev
+    depends_on: [rdp]
+    ports: ["127.0.0.1:13390:3389"]
+    entrypoint: ["/bin/sh", "-c", "sed -i 's/^security_layer=.*/security_layer=rdp/; s/^crypt_level=.*/crypt_level=high/' /etc/xrdp/xrdp.ini; rm -f /var/run/xrdp/*.pid; xrdp-sesman && exec xrdp --nodaemon"]
+    healthcheck:
+      <<: *tcp22
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/3389"]
+
   vnc:
     init: true
     build: vnc

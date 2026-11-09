@@ -442,9 +442,12 @@ func (k *RSAPublicKey) Deserialize(wire io.Reader) error {
 		return err
 	}
 
+	if k.KeyLen > 0xFFFF { // rustxterm: the whole block is at most 64 KiB
+		return fmt.Errorf("invalid RSA key length: %d", k.KeyLen)
+	}
 	k.Modulus = make([]byte, k.KeyLen)
 
-	if _, err = wire.Read(k.Modulus); err != nil {
+	if _, err = io.ReadFull(wire, k.Modulus); err != nil {
 		return err
 	}
 
@@ -498,7 +501,7 @@ func (c *ServerProprietaryCertificate) Deserialize(wire io.Reader) error {
 
 	c.SignatureBlob = make([]byte, c.SignatureBlobLen)
 
-	if _, err = wire.Read(c.SignatureBlob); err != nil {
+	if _, err = io.ReadFull(wire, c.SignatureBlob); err != nil {
 		return err
 	}
 
@@ -530,12 +533,12 @@ func (c *ServerCertificate) Deserialize(wire io.Reader) error {
 	}
 
 	// Validate certificate length to prevent integer underflow
-	if c.ServerCertLen < 4 {
-		return fmt.Errorf("invalid certificate length: %d (minimum 4)", c.ServerCertLen)
+	if c.ServerCertLen < 4 || c.ServerCertLen > 0xFFFF {
+		return fmt.Errorf("invalid certificate length: %d", c.ServerCertLen)
 	}
 	c.X509Cert = make([]byte, c.ServerCertLen-4)
 
-	if _, err = wire.Read(c.X509Cert); err != nil {
+	if _, err = io.ReadFull(wire, c.X509Cert); err != nil {
 		return err
 	}
 
@@ -577,9 +580,12 @@ func (d *ServerSecurityData) Deserialize(wire io.Reader) error {
 		return err
 	}
 
+	if d.ServerRandomLen > 0xFFFF {
+		return fmt.Errorf("invalid server random length: %d", d.ServerRandomLen)
+	}
 	d.ServerRandom = make([]byte, d.ServerRandomLen)
 
-	if _, err = wire.Read(d.ServerRandom); err != nil {
+	if _, err = io.ReadFull(wire, d.ServerRandom); err != nil {
 		return err
 	}
 
@@ -693,7 +699,12 @@ func (ud *ServerUserData) Deserialize(wire io.Reader) error {
 		case 0x0C02:
 			ud.ServerSecurityData = &ServerSecurityData{}
 
-			if err = ud.ServerSecurityData.Deserialize(wire); err != nil {
+			// rustxterm: parse inside the block, so a bad length cannot run into the next one
+			block := make([]byte, dataLen)
+			if _, err = io.ReadFull(wire, block); err != nil {
+				return err
+			}
+			if err = ud.ServerSecurityData.Deserialize(bytes.NewReader(block)); err != nil {
 				return err
 			}
 		case 0x0C03:

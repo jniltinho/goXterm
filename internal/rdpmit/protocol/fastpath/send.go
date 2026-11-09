@@ -20,6 +20,9 @@ func NewInputEventPDU(eventData []byte) *InputEventPDU {
 	}
 }
 
+// SetFlags sets the fpInputHeader flags (FASTPATH_INPUT_ENCRYPTED = 0x2). rustxterm.
+func (pdu *InputEventPDU) SetFlags(flags uint8) { pdu.flags = flags }
+
 func (pdu *InputEventPDU) Serialize() []byte {
 	buf := new(bytes.Buffer)
 

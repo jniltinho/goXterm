@@ -26,6 +26,7 @@ ignored). Add a test name there whenever a lab test is added or renamed. The log
 | `ftp` | 2121, passive 30000-30009 | vsftpd, plain FTP and explicit FTPS (`AUTH TLS`), self-signed cert built into the image |
 | `ftps-implicit` | 2990, passive 30010-30019 | vsftpd, implicit FTPS, TLS required |
 | `rdp` | 13389 | xrdp + xorgxrdp, xterm session |
+| `rdp-std` | 13390 | the same xrdp with `security_layer=rdp` (standard RDP security only) |
 | `vnc` | 5901 | TigerVNC, VncAuth, xterm on `:1` |
 | `telnetd` | 2323 | inetutils telnetd under inetutils-inetd (`login`, NAWS, TTYPE) |
 | `echo` | 2007 | Raw TCP echo (`socat ... EXEC:cat`), same image as `telnetd` |
@@ -36,7 +37,7 @@ Host keys are generated fresh each time a container is created, so tests must no
 
 | Account | Where | Auth |
 |---|---|---|
-| `alice` / `lab-alice-pass` | sshd, bastion, internal, ftp, ftps-implicit, rdp, telnetd | password only on SSH |
+| `alice` / `lab-alice-pass` | sshd, bastion, internal, ftp, ftps-implicit, rdp, rdp-std, telnetd | password only on SSH |
 | `bob` | sshd, bastion, internal | public key only: `lab/.generated/bob_ed25519` |
 | `carol` / `lab-carol-pass` | sshd, bastion, internal | keyboard-interactive only (PAM password prompt) |
 | `dave` / `lab-dave-pass` | sshd, bastion, internal | password only; `MaxSessions 1` (remote monitoring channel refused) |

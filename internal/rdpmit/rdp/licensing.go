@@ -45,5 +45,13 @@ func (c *Client) sendNewLicenseRequest() error {
 		return err
 	}
 	_, user := c.parseDomainUser()
-	return c.mcsLayer.Send(c.userID, c.channelIDMap["global"], newLicenseRequestPDU(user, "rustxterm", random))
+	p := newLicenseRequestPDU(user, "rustxterm", random)
+	switch {
+	case c.stdSec == nil:
+		return c.mcsLayer.Send(c.userID, c.channelIDMap["global"], p)
+	case c.stdSec.licenseEncrypt: // standard RDP security, the server takes encrypted licensing PDUs
+		return c.stdSec.send(c.userID, c.channelIDMap["global"], secLicensePkt, p[4:])
+	default: // standard RDP security: licensing PDUs are not encrypted unless the server says so
+		return c.stdSec.MCSLayer.Send(c.userID, c.channelIDMap["global"], p)
+	}
 }

@@ -15,6 +15,7 @@ TestLabLocalForward
 TestLabRDP
 TestLabRDPNLAOffer
 TestLabRDPRejectedCertificate
+TestLabRDPStandardSecurity
 TestLabRemoteForward
 TestLabSFTP
 TestLabVNC
