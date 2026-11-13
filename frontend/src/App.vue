@@ -777,6 +777,7 @@ const tabIcon = (t: Tab) => icon(t.icon);
               :connect="t.connect"
               :monitor="!!tabMon[t.id]"
               :title="t.title"
+              :zoom-key="tabUrl[t.id]"
               @close="requestClose(t.id)"
               @monitor-off="tabMon[t.id] = false"
               @duplicate="duplicateTab(t)"

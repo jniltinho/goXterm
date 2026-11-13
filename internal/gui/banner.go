@@ -89,7 +89,7 @@ func (a *App) setBanner(tabID string, b *Banner) {
 // bannerHint is the bottom border, as in the Rust app (both are implemented in Terminal.vue).
 const bannerHint = "Ctrl+wheel, Ctrl+=/-/0: zoom • Ctrl+Shift+F: find"
 
-func (a *App) bannerTitle() string { return "rustXterm " + a.version }
+func (a *App) bannerTitle() string { return "goXterm " + a.version }
 
 func check(on bool, text, note string) BannerLine {
 	return BannerLine{Kind: "check", On: on, Text: text, Note: note}

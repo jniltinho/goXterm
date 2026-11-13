@@ -14,7 +14,8 @@ import { schemeName, schemeIsDark, xtermTheme } from "./schemes";
 
 // connect returns the tabId once the terminal is open; the parent decides how (session/quick/demo).
 // monitor shows the remote-monitoring bar (SSH only).
-const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean; title?: string }>();
+// zoomKey: the tab's URL (ssh://user@host:port, local://, …); the Ctrl+wheel font size is kept per key.
+const props = defineProps<{ connect: () => Promise<string>; monitor?: boolean; title?: string; zoomKey?: string }>();
 // backend: the backend tabId once connected (the side SFTP browser uses it); enter: the user pressed
 // Return (debounced, for "Follow terminal folder"); cwd: the shell reported its folder (OSC 7).
 const emit = defineEmits<{
@@ -129,6 +130,16 @@ async function saveOutput() {
 
 // Zoom (Ctrl+wheel, Ctrl+=/-/0) and find (Ctrl+Shift+F), as advertised in the session banner.
 let baseFont = 13;
+// Per-viewer zoom per host (localStorage "rxt-zoom": {url: fontSize}); Ctrl+0 forgets it.
+function zooms(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem("rxt-zoom") || "{}"); } catch { return {}; }
+}
+function saveZoom(size: number) {
+  if (!props.zoomKey) return;
+  const z = zooms();
+  if (size === baseFont) delete z[props.zoomKey]; else z[props.zoomKey] = size;
+  try { localStorage.setItem("rxt-zoom", JSON.stringify(z)); } catch { /* private mode */ }
+}
 const finding = vref(false);
 const findText = vref("");
 const findInput = ref<HTMLInputElement | null>(null);
@@ -136,6 +147,7 @@ let search: SearchAddon;
 function zoom(delta: number) {
   const next = delta === 0 ? baseFont : Math.min(40, Math.max(6, (term.options.fontSize ?? baseFont) + delta));
   term.options.fontSize = next;
+  saveZoom(next);
   fit.fit();
   if (tabId) void Resize(tabId, term.cols, term.rows);
 }
@@ -301,7 +313,7 @@ onMounted(async () => {
   term = new Terminal({
     // "" / "monospace" = the Rust default (Cascadia Mono); DejaVu Sans Mono covers missing symbols.
     fontFamily: `"${!tp.fontFamily || tp.fontFamily === "monospace" ? "Cascadia Mono" : tp.fontFamily}","DejaVu Sans Mono",monospace`,
-    fontSize: baseFont,
+    fontSize: (props.zoomKey && zooms()[props.zoomKey]) || baseFont,
     cursorBlink: tp.cursorBlink,
     cursorStyle,
     scrollback: tp.scrollbackLines || 10000,
